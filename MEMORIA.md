@@ -9,7 +9,7 @@
 
 **RICHARDS Intelligence** é um protótipo para o **Hackathon Senac Ribeirão Preto, 6 e 7 de novembro de 2026**. O nome homenageia Ellen Swallow Richards. **Nunca chamar o produto de SALVA**, que foi o nome antigo.
 
-A equipe tem 4 pessoas: 2 de desenvolvimento e 2 de IoT. Duas jornadas:
+A equipe tem 4 pessoas: 2 de desenvolvimento e 2 de IoT. O Victor cuida do ESP32 e da bancada. Duas jornadas:
 
 - **A · Água:** sensor de vazão (ESP32 + YF-S201) → API → ocorrência *suspeita* de fluxo contínuo → operador investiga e resolve → BI e PDF.
 - **B · Alimentos:** lote de excedente → verificação humana documentada → reserva para instituição → entrega confirmada com nome de quem recebeu → impacto em kg.
@@ -28,6 +28,7 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 | Plano e prompt mestre | `docs/plano/` (`16_PROMPT_MESTRE.md` traz as regras invioláveis) |
 | Registro de cada fase | `docs/FASE_0_BASELINE.md` … `docs/FASE_5_PDF_QA_DEMO.md` |
 | Roteiro de palco (cliques e falas) | `docs/ROTEIRO_DEMO.md` |
+| Kit de pitch | `presentation/`: 14 slides SVG 1920×1080, fala de 5min40 (`FALA_5MIN40.md`), roteiro (`ROTEIRO_PALCO.md`), checklist de IoT do Victor e `PLANO_FINAL.md`. PNG e PPTX saem com `python presentation/render_slides.py` em `presentation/export/`, que não vai para o git |
 | Dicionário de dados, MER e DER | `docs/dados/`, explicado em `docs/dados/README.md` |
 | Contrato do ESP32 | `docs/CONTRATO_IOT.md` |
 | Firmware | `iot/esp32_richards/esp32_richards.ino` + `secrets.h.example` |
@@ -54,6 +55,7 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 - Trabalhar e revisar direto, **sem subagentes** (pedido explícito).
 - Cada entrega termina com: arquivos alterados e por quê, testes classificados, riscos e próximos passos (P0/P1/P2).
 - Commits pequenos no `main`, mensagem em português descrevendo o porquê. O push para o GitHub usa a conta dona do repositório (Ricar66).
+- Mais de uma pessoa ou ferramenta envia para o GitHub (o kit de pitch chegou assim). **Sempre fazer `git fetch` antes de enviar** e pôr o trabalho local por cima, com rebase ou merge. **Nunca forçar o push.**
 
 ## 5. Stack
 
@@ -126,8 +128,10 @@ python scripts/docs/dicionario_de_dados.py # dicionário em Excel (depois abrir 
 | 5 · PDF, QA e demo | `f999d81`, `f4a1a94` | PDF com os mesmos filtros e números do BI, E2E no repositório, roteiro de palco, favicon |
 | Ajustes visuais | `f44dc3f`, `7aa9ba2` | Ponto de status no lugar de bordas coloridas; botão de volta na tela do V3; lint ignora `.e2e/` |
 | Modelo de dados | `7cc89d1` | Dicionário em Excel (7 abas), MER (Chen) e DER (pé de galinha), conferidos contra o banco |
+| Kit de pitch | `54d1e94`, `15ddc62`, `c9c14ef` | Pasta `presentation/` (slides, fala, roteiro, checklist de IoT, plano final), sem mudar o código |
+| Memória | este commit | `MEMORIA.md` e `CLAUDE.md` |
 
-As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estão incorporadas ao `main`.
+As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estão incorporadas ao `main`. No GitHub existe também `feat/pitch-richards-hackathon-2026`, com o kit de pitch.
 
 ## 9. Testes (últimos resultados reais)
 
@@ -181,8 +185,10 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 
 **P0 (antes de 06/11)**
 - Equipe de IoT: compilar e gravar o firmware na Arduino IDE e testar o ESP32 físico contra a plataforma.
-- Ensaiar o pitch 3 vezes com cronômetro.
+- Ensaiar o pitch 3 vezes com cronômetro, dentro de 5min40 (`presentation/FALA_5MIN40.md`).
 - Fazer a preparação da seção 11 na véspera.
+- Montar o backup de palco: simulação identificada, prints, vídeo offline e cabo HDMI.
+- **Conferir no regulamento do Hackathon Senac 2026** se é permitido usar material desenvolvido antes da abertura oficial, e ser transparente sobre o histórico do projeto.
 
 **P1**
 - A senha de acesso é de laboratório. Não expor a demo na internet aberta; trocar a senha depois do evento.
