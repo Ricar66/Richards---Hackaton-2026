@@ -1,6 +1,7 @@
 import { DatabaseUnavailableError, getDb } from "@/lib/db";
 import { DEMO_ORG_ID } from "@/lib/constants";
 import type { OverviewDTO, StatusSlice } from "../domain/types";
+import { deviceConnectivity } from "@/modules/monitoring/domain/device-connectivity";
 /** Banco acessível, mas sem a organização semeada (`pnpm db:seed` não rodou). */
 export class OverviewNotSeededError extends Error { constructor() { super("NOT_SEEDED"); } }
 // Consulta agregada por dia executada pelo PostgreSQL — não carregar milhares de leituras para o browser.
@@ -44,7 +45,7 @@ export async function getOverview(): Promise<OverviewDTO> {
         resolved:resolvedCount,averageResponseMin:response.length?Math.round(response.reduce((n,x)=>n+x,0)/response.length):null,devices:devices.length},
       trend,distribution:status,occurrences:occurrences.map(o=>({id:o.id,title:o.title,description:o.description,severity:o.severity,status:o.status,source:o.source,time:o.openedAt.toISOString(),liters:o.suspectedLiters===null?null:Number(o.suspectedLiters)})),
       donations:donations.map(d=>({id:d.id,description:d.description,kg:Number(d.weightKg),status:d.status,source:d.source,recipient:d.recipient?.name??'Aguardando',createdAt:d.createdAt.toISOString()})),
-      devices:devices.map(d=>({id:d.id,code:d.code,label:d.label,state:d.state,kind:d.kind,lastSeen:d.lastSeenAt?.toISOString()??null})),
+      devices:devices.map(d=>({id:d.id,code:d.code,label:d.label,state:deviceConnectivity(d.state,d.lastSeenAt,new Date()),kind:d.kind,lastSeen:d.lastSeenAt?.toISOString()??null})),
     };
   }catch(err){
     // Falha de banco NUNCA vira número de demonstração: quem chama mostra erro honesto (regra inviolável 1).

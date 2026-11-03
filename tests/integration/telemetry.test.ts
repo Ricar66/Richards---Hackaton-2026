@@ -107,3 +107,12 @@ test("histórico SIMULATED não sustenta alerta de DEVICE", async () => {
   assert.equal(r.alerted, false);
   assert.equal((await activeFlowOccurrences()).length, 0);
 });
+
+test("ocorrência aberta por leituras simuladas registra actor de simulador", async () => {
+  const boot = newBootId();
+  for (const [seq, ago] of [[0, 45], [1, 30], [2, 15]]) await ingest.execute(reading(boot, seq, 2.0, ago), DEVICE_KEY, true);
+  const [occ] = await activeFlowOccurrences();
+  assert.equal(occ.source, "SIMULATED");
+  const events = await db().occurrenceEvent.findMany({ where: { occurrenceId: occ.id } });
+  assert.equal(events[0].actor, "simulador:TEST-FLOW-001");
+});

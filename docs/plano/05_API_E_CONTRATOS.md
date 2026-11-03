@@ -18,6 +18,12 @@ Todas as APIs recebem/retornam JSON (exceto PDFs); timestamps ISO UTC, números 
 
 `GET /api/health` consulta o banco: `200 {healthy:true, database:"up"}` ou `503 {healthy:false, database:"down"}`.
 
+**Implementado na Fase 2:** `GET /api/occurrences/:id` (Basic Auth de operador; tenant ainda fixo). Devolve:
+
+- **Dados e sensor**: os dados da ocorrência e o `device` com `connectivity` calculada pelo último contato.
+- **`timeline`**: os eventos reais (`action`, `note`, `actor`, `at`).
+- **`evidence`**: a janela de leituras que a regra avaliou ao abrir o alerta (`windowStart`, `windowEnd`, `rule`, `readings`, `totals`) e `followUp`, as leituras da mesma origem depois da abertura. Ela vem da auditoria `CREATED`. Sem janela registrada, vem `evidence: null` com `evidenceNote` explicando, e **nenhuma leitura é associada por proximidade**.
+
 ## Endpoints existentes na V3 (consultar implementação antes de alterar)
 | Método | Caminho | Objetivo | Estado |
 |---|---|---|---|

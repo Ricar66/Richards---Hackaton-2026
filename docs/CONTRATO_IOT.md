@@ -23,14 +23,19 @@ A data acima é **exemplo de formato**, não leitura real. Utilize `UTC ISO 8601
 
 ## Respostas
 
-| HTTP | Significado |
-|---|---|
-| 202 | Aceito, `duplicate` e `alerted` indicam resultado |
-| 401 | Chave ausente/incorreta |
-| 422 | JSON inválido, faixas inválidas ou horário fora de ±5 min |
-| 503 | Banco indisponível |
+| HTTP | Significado | O que o firmware/simulador faz (Fase 2) |
+|---|---|---|
+| 202 | Aceito; `duplicate` e `alerted` indicam o resultado | retira da fila |
+| 400 | JSON malformado (`INVALID_JSON`) | **descarta** (reenviar não resolve) e loga |
+| 401 | Chave ausente ou incorreta (`DEVICE_KEY_REQUIRED`, `NOT_AUTHORIZED`) | mantém, loga orientação e espera 30 s (o simulador encerra) |
+| 422 | Faixa inválida (`VALIDATION_ERROR`) ou horário fora de ±5 min (`CLOCK_SKEW`) | **descarta** e loga |
+| 503 / sem conexão | Banco indisponível (`DATABASE_UNAVAILABLE`) ou rede | mantém e reenvia **a mesma leitura, com a mesma sequence**, em 5 s |
 
-As retransmissões com mesmo `(deviceId, bootId, sequence)` recebem `duplicate: true`, sem somar o volume novamente.
+As retransmissões com o mesmo `(deviceId, bootId, sequence)` recebem `duplicate: true` sem somar volume, inclusive quando chegam ao mesmo tempo: a constraint UNIQUE decide (`INSERT … ON CONFLICT DO NOTHING`).
+
+**Política de horário (decisão da Fase 2):** fica a tolerância de ±5 min. A fila do firmware guarda 12 leituras (cerca de 3 min a 15 s), então tudo que ela consegue segurar chega dentro da tolerância. Queda de rede mais longa perde as leituras mais antigas, e o firmware loga `DROP` com o total descartado. Nada é reconstruído nem estimado. Ingestão tardia (horas depois) exigiria marcar a leitura como atrasada e não avaliar alerta retroativo; isso fica fora do MVP.
+
+**Conectividade:** o painel calcula o estado pelo último contato (`lastSeenAt`): ONLINE até 120 s sem leitura, depois OFFLINE; NEVER_SEEN se nunca chegou pacote; MAINTENANCE só por decisão humana no banco. A telemetria não grava mais `state`.
 
 ## Cálculo do ESP32
 
@@ -56,6 +61,20 @@ As retransmissões com mesmo `(deviceId, bootId, sequence)` recebem `duplicate: 
 **Não aplicar 5V diretamente em GPIO ESP32 3,3V.** Consulte o datasheet do conjunto e aplique divisor de tensão/level shifter quando necessário. Separe bomba hidráulica e alimentação da placa, isole umidade, utilize baixa tensão e suporte da equipe IoT. Em produção, exigir HTTPS com certificado CA validado. Redes de hotspot isoladas são melhores para a apresentação; nunca transportar uma chave por HTTP na internet.
 
 Para script simulador, envie `x-richards-simulator: true`; o servidor respeita esse marcador **apenas** em `DEMO_MODE=true`, garantindo que a origem apareça como `SIMULATED`.
+
+### Simulador de bancada (`pnpm simulate`)
+
+Ele se comporta como o firmware: fila de 12, retentativa com a mesma `sequence` e a mesma tabela de status acima. Ele lê `IOT_DEMO_DEVICE_KEY` do `.env` e `RICHARDS_URL` do ambiente (padrão `http://localhost:3000`).
+
+```bash
+pnpm simulate                                              # leak: 7 amostras a cada 10 s, abre UMA ocorrência
+pnpm simulate --scenario normal --samples 12               # usos curtos: nenhuma ocorrência
+pnpm simulate --scenario low                               # contínuo abaixo de 1,5 L/min: nenhuma ocorrência
+pnpm simulate --interval 5 --samples 8 --duplicate-rate 0.3 --drop-rate 0.2   # repetição e falha de rede injetadas
+pnpm simulate --boot-id reinicio-1                         # simula reboot (novo bootId, sequence volta a 0)
+```
+
+O resumo final informa aceitas, duplicatas, retentativas, descartes e a ocorrência associada; o código de saída é 0 se a fila zerou. **Uma ocorrência de fluxo ativa bloqueia uma nova** (regra 5): resolva a anterior antes de demonstrar outra.
 
 ## Conexão do ESP32 com Docker
 

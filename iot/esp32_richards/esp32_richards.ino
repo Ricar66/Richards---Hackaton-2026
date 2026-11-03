@@ -16,6 +16,9 @@ unsigned long lastSample=0;
 uint32_t sequenceNo=0;
 struct Reading { uint32_t sequence; float flowLpm, deltaLiters; String capturedAt; };
 Reading queueData[12]; int queued=0;
+uint32_t droppedCount=0;                  // leituras perdidas por fila cheia (rede fora por mais de ~3 min)
+unsigned long lastFailAt=0, failWaitMs=0; // espera após falha: não martela a API
+void shiftQueue(){for(int i=1;i<queued;i++)queueData[i-1]=queueData[i];queued--;}
 void IRAM_ATTR pulseISR(){portENTER_CRITICAL_ISR(&pulseMux);pulseCounter++;portEXIT_CRITICAL_ISR(&pulseMux);}
 String utcNow(){
   struct tm info;
@@ -37,12 +40,13 @@ void captureSample(unsigned long elapsed){
  const float lpm=liters*60000.0f/(float)elapsed;
  const String timestamp=utcNow();
  if(timestamp.length()==0){Serial.println("Sem hora NTP; descartando medição, não inventar timestamp");return;}
- if(queued>=12){for(int i=1;i<queued;i++)queueData[i-1]=queueData[i];queued--;Serial.println("Fila cheia: descartada a medição mais antiga");}
+ if(queued>=12){shiftQueue();droppedCount++;Serial.printf("DROP: fila cheia, medicao mais antiga descartada (total descartado: %lu)\n",(unsigned long)droppedCount);}
  queueData[queued++]={sequenceNo++,lpm,liters,timestamp};
  Serial.printf("Pulse=%lu, delta=%.3f L, vazao=%.3f L/min\n",(unsigned long)pulses,liters,lpm);
 }
 void flushQueue(){
  if(WiFi.status()!=WL_CONNECTED||!queued)return;
+ if(failWaitMs&&millis()-lastFailAt<failWaitMs)return;
  Reading r=queueData[0];
  HTTPClient http;http.setTimeout(6000);http.begin(RICHARDS_API_URL);
  http.addHeader("Content-Type","application/json");
@@ -52,13 +56,22 @@ void flushQueue(){
   "\",\"sequence\":"+String(r.sequence)+",\"flowLpm\":"+String(r.flowLpm,3)+
   ",\"deltaLiters\":"+String(r.deltaLiters,3)+",\"capturedAt\":\""+r.capturedAt+"\"}";
  int status=http.POST(payload);
- Serial.printf("RICHARDS POST => %d\n",status);
+ Serial.printf("RICHARDS POST seq=%lu => %d\n",(unsigned long)r.sequence,status);
  http.end();
- if(status==202){for(int i=1;i<queued;i++)queueData[i-1]=queueData[i];queued--;}
- if(status==422){ // relógio atrasado ou validação incompatível: não prender fila indefinidamente
-   Serial.println("Registro rejeitado; revisar sincronização/contrato. Descartando este registro.");
-   for(int i=1;i<queued;i++)queueData[i-1]=queueData[i];queued--;
+ failWaitMs=0;
+ // Contrato (docs/plano/05 e 06): 202 aceito ou duplicata; 400/422 nunca vai passar -> descarta; resto -> mesma leitura depois.
+ if(status==202){shiftQueue();return;}
+ if(status==400||status==422){
+   Serial.println("Registro rejeitado (400/422): revisar relogio NTP ou contrato. Descartando este registro.");
+   shiftQueue();return;
  }
+ lastFailAt=millis();
+ if(status==401){
+   Serial.println("401: chave do dispositivo recusada. Confira RICHARDS_DEVICE_KEY (secrets.h) e IOT_DEMO_DEVICE_KEY no servidor. Nova tentativa em 30 s.");
+   failWaitMs=30000;return;
+ }
+ Serial.printf("Falha temporaria (%d): leitura mantida na fila; reenvio com a mesma sequence em 5 s.\n",status);
+ failWaitMs=5000;
 }
 void setup(){
  Serial.begin(115200);pinMode(FLOW_PIN,INPUT_PULLUP);

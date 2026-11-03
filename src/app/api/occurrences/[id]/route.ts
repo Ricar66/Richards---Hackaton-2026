@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { OccurrenceService } from "@/modules/monitoring/application/occurrence-service";
+import { getOccurrenceDetail } from "@/modules/monitoring/application/get-occurrence-detail";
 import { actorFrom } from "@/lib/actor";
 import { apiError, databaseUnavailable } from "@/lib/http";
 const schema=z.object({status:z.enum(['ACKNOWLEDGED','RESOLVED','DISMISSED']),note:z.string().max(500).default('')});
@@ -10,6 +11,12 @@ const known:Record<string,[number,string]>={
  RESOLUTION_NOTE_REQUIRED:[409,'Informe a verificação e a ação tomada'],
  CONFLICT:[409,'A ocorrência foi alterada por outra ação. Atualize e tente novamente.'],
 };
+export const dynamic='force-dynamic';
+export async function GET(_req:NextRequest,{params}:{params:Promise<{id:string}>}){
+ const {id}=await params;
+ try{return NextResponse.json(await getOccurrenceDetail(id),{headers:{'Cache-Control':'no-store'}})}
+ catch(e){if(e instanceof Error&&e.message==='NOT_FOUND')return apiError(404,'NOT_FOUND','Não encontrado');console.error('occurrence detail',e);return databaseUnavailable()}
+}
 export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}){
  const {id}=await params; let raw:unknown;try{raw=await req.json()}catch{return apiError(400,'INVALID_JSON','JSON inválido')}
  const p=schema.safeParse(raw); if(!p.success)return apiError(422,'VALIDATION_ERROR','Dados inválidos');

@@ -10,7 +10,8 @@ async function main() {
   await db.site.upsert({ where: { id: DEMO_SITE_ID }, update: {}, create: { id: DEMO_SITE_ID, organizationId: DEMO_ORG_ID, name: "Unidade Centro", description: "Bancada demonstrativa" } });
   await db.device.upsert({ where: { id: DEMO_DEVICE_ID }, update: { apiKeyHash: createHash("sha256").update(secret).digest("hex") }, create: {
     id: DEMO_DEVICE_ID, organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, code: "RICHARDS-FLOW-001",
-    label: "Sensor de vazão · Linha 01", kind: "FLOW", state: "ONLINE", lastSeenAt: new Date(),
+    label: "Sensor de vazão · Linha 01", kind: "FLOW", // sem lastSeenAt: o sensor só "comunica" quando um pacote real ou do simulador chegar
+
     apiKeyHash: createHash("sha256").update(secret).digest("hex"), minFlowLpm: 1.5, continuousSeconds: 30,
   } });
   await db.recipientOrganization.upsert({ where: { id: DEMO_RECIPIENT_ID }, update: {}, create: { id: DEMO_RECIPIENT_ID, name: "Instituição Parceira · Demonstração", city: "Ribeirão Preto" } });

@@ -32,7 +32,8 @@ export class IngestTelemetry {
       flowLpm: command.flowLpm, deltaLiters: command.deltaLiters, capturedAt: time, source,
     }], skipDuplicates: true });
     if (count === 0) return { accepted: true, duplicate: true, alerted: false };
-    await db.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date(), state: "ONLINE" } });
+    // Só o último contato: conectividade é calculada na leitura e MAINTENANCE (decisão humana) não pode ser sobrescrito.
+    await db.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });
     const since = new Date(time.getTime() - Math.max(device.continuousSeconds + 60, 120) * 1000);
     // Mesma origem da leitura atual: amostra simulada nunca sustenta alerta de DEVICE (nem o contrário).
     const history = await db.telemetryReading.findMany({ where: { deviceId: device.id, source, capturedAt: { gte: since, lte: time } }, orderBy: { capturedAt: "asc" }, take: 120 });
@@ -44,7 +45,8 @@ export class IngestTelemetry {
       title: "Fluxo contínuo fora do padrão",
       description: `Vazão igual ou superior a ${device.minFlowLpm} L/min por ${Math.round(decision.observedSeconds)} segundos. Requer verificação.`,
       suspectedLiters: decision.suspectVolumeLiters,
-      eventNote: "Gerada automaticamente a partir de leituras do sensor", actor: `dispositivo:${device.code}`,
+      eventNote: simulated ? "Gerada automaticamente a partir de leituras SIMULADAS" : "Gerada automaticamente a partir de leituras do sensor",
+      actor: `${simulated ? "simulador" : "dispositivo"}:${device.code}`,
       evidence: {
         windowStart: new Date(time.getTime() - decision.observedSeconds * 1000).toISOString(), windowEnd: time.toISOString(),
         observedSeconds: decision.observedSeconds, suspectVolumeLiters: decision.suspectVolumeLiters,

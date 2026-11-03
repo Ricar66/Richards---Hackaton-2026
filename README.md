@@ -36,7 +36,7 @@ Verificar: `pnpm typecheck`, `pnpm lint`, `pnpm test` (unitários, sem banco), `
 
 ## Status
 - Protótipo HTML offline validável no navegador.
-- Fases 0 e 1 concluídas: ver `docs/FASE_0_BASELINE.md` e `docs/FASE_1_BANCO_CONTRATOS.md`. ESP32 físico **ainda não foi testado**.
+- Fases 0, 1 e 2 concluídas: ver `docs/FASE_0_BASELINE.md`, `docs/FASE_1_BANCO_CONTRATOS.md` e `docs/FASE_2_IOT_OCORRENCIAS.md` (roteiro da Jornada A). Firmware **não compilado** e ESP32 físico **não testado**.
 - O BI V3 via iframe NÃO substitui a implementação futura React nativa/filtragem backend completa.
 - Dados SIMULATED não podem ser apresentados como resultado real nem como litros economizados.
 
