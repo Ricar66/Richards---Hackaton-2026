@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: richards
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-richards_dev_change_me}
+      POSTGRES_DB: richards
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - richards_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U richards -d richards"]
+      interval: 4s
+      timeout: 3s
+      retries: 12
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://richards:${POSTGRES_PASSWORD:-richards_dev_change_me}@db:5432/richards?schema=public"
+      DEMO_MODE: ${DEMO_MODE:-true}
+      AUTH_MODE: ${AUTH_MODE:-basic}
+      RICHARDS_OPERATOR_USER: ${RICHARDS_OPERATOR_USER:-operador}
+      RICHARDS_OPERATOR_PASSWORD: ${RICHARDS_OPERATOR_PASSWORD:-troque-esta-senha}
+      IOT_DEMO_DEVICE_KEY: ${IOT_DEMO_DEVICE_KEY:-troque-esta-chave-dispositivo}
+    ports:
+      - "127.0.0.1:3000:3000"
+volumes:
+  richards_pgdata:

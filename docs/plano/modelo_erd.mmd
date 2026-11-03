@@ -1,0 +1,15 @@
+erDiagram
+    Organization ||--o{ User : possui
+    Organization ||--o{ Site : possui
+    Organization ||--o{ Device : cadastra
+    Organization ||--o{ Occurrence : acompanha
+    Organization ||--o{ DonationBatch : oferece
+    Site ||--o{ Device : contem
+    Site ||--o{ Occurrence : registra
+    Device ||--o{ TelemetryReading : envia
+    Device ||--o{ Occurrence : provoca
+    Occurrence ||--o{ OccurrenceEvent : historico
+    RecipientOrganization o|--o{ DonationBatch : recebe
+    DonationBatch ||--o{ Mission : pode_gerar
+    Occurrence ||--o{ Mission : pode_gerar
+    Organization ||--o{ AuditEvent : audita

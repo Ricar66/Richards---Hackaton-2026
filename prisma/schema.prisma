@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+datasource db {
+  provider = "postgresql"
+}
+enum Role { OWNER OPERATOR ANALYST RECIPIENT }
+enum DeviceKind { FLOW SCALE TEMPERATURE }
+enum DeviceState { ONLINE OFFLINE MAINTENANCE }
+enum DataSource { DEVICE SIMULATED MANUAL }
+enum OccurrenceStatus { OPEN ACKNOWLEDGED RESOLVED DISMISSED }
+enum OccurrenceSeverity { LOW MEDIUM HIGH CRITICAL }
+enum OccurrenceKind { UNUSUAL_FLOW DEVICE_OFFLINE TEMPERATURE_EXCURSION MANUAL }
+enum DonationStatus { PENDING_REVIEW AVAILABLE RESERVED DELIVERED CANCELLED }
+enum MissionKind { INSPECTION PICKUP }
+enum MissionStatus { OPEN ASSIGNED DONE CANCELLED }
+model Organization {
+  id         String @id @default(cuid())
+  name       String
+  sector     String
+  city       String
+  isDemo     Boolean @default(false)
+  createdAt  DateTime @default(now())
+  users      User[]
+  sites      Site[]
+  devices    Device[]
+  occurrences Occurrence[]
+  donations  DonationBatch[]
+  missions   Mission[]
+  audit      AuditEvent[]
+}
+model User {
+  id             String @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String @unique
+  role           Role @default(OPERATOR)
+  createdAt      DateTime @default(now())
+}
+model Site {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  name String
+  description String?
+  devices Device[]
+  occurrences Occurrence[]
+}
+model Device {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  siteId String
+  site Site @relation(fields: [siteId], references: [id])
+  code String @unique
+  label String
+  kind DeviceKind
+  state DeviceState @default(OFFLINE)
+  apiKeyHash String
+  lastSeenAt DateTime?
+  calibrationPulsesPerLiter Float @default(450)
+  minFlowLpm Float @default(1.5)
+  continuousSeconds Int @default(30)
+  readings TelemetryReading[]
+  occurrences Occurrence[]
+  @@index([organizationId, kind])
+}
+model TelemetryReading {
+  id String @id @default(cuid())
+  deviceId String
+  device Device @relation(fields: [deviceId], references: [id])
+  bootId String
+  sequence Int
+  source DataSource
+  flowLpm Decimal @db.Decimal(12, 3)
+  deltaLiters Decimal @db.Decimal(12, 3)
+  capturedAt DateTime
+  receivedAt DateTime @default(now())
+  @@unique([deviceId, bootId, sequence])
+  @@index([deviceId, capturedAt(sort: Desc)])
+}
+model Occurrence {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  siteId String
+  site Site @relation(fields: [siteId], references: [id])
+  deviceId String?
+  device Device? @relation(fields: [deviceId], references: [id])
+  kind OccurrenceKind
+  severity OccurrenceSeverity @default(MEDIUM)
+  status OccurrenceStatus @default(OPEN)
+  source DataSource
+  title String
+  description String
+  suspectedLiters Decimal? @db.Decimal(12, 3)
+  verificationNote String?
+  openedAt DateTime @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt DateTime?
+  events OccurrenceEvent[]
+  missions Mission[]
+  @@index([organizationId, status, openedAt(sort: Desc)])
+}
+model OccurrenceEvent {
+  id String @id @default(cuid())
+  occurrenceId String
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  action String
+  note String?
+  at DateTime @default(now())
+}
+model RecipientOrganization {
+  id String @id @default(cuid())
+  name String
+  city String
+  active Boolean @default(true)
+  donations DonationBatch[]
+}
+model DonationBatch {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  recipientId String?
+  recipient RecipientOrganization? @relation(fields: [recipientId], references: [id])
+  description String
+  weightKg Decimal @db.Decimal(12, 3)
+  status DonationStatus @default(PENDING_REVIEW)
+  source DataSource @default(MANUAL)
+  safetyVerifiedBy String?
+  safetyVerifiedAt DateTime?
+  receivedAt DateTime?
+  createdAt DateTime @default(now())
+  missions Mission[]
+  @@index([organizationId, status, createdAt(sort: Desc)])
+}
+// Expansão preparada: encaminhar incidentes e coletas como missões.
+// CRUD e atribuições ficam fora do MVP de hackathon.
+model Mission {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  occurrenceId String?
+  occurrence Occurrence? @relation(fields: [occurrenceId], references: [id])
+  donationBatchId String?
+  donationBatch DonationBatch? @relation(fields: [donationBatchId], references: [id])
+  kind MissionKind
+  status MissionStatus @default(OPEN)
+  title String
+  assignedTo String?
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  @@index([organizationId, status, createdAt(sort: Desc)])
+}
+model AuditEvent {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  entity String
+  entityId String
+  action String
+  metadata Json?
+  at DateTime @default(now())
+  @@index([organizationId, at(sort: Desc)])
+}

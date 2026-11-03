@@ -1,0 +1,5 @@
+# Ative SOMENTE em rede isolada e confiável para conectar ESP32. NÃO expor à internet.
+services:
+  web:
+    ports:
+      - "0.0.0.0:3001:3000"

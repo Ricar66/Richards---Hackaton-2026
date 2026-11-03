@@ -1,0 +1,9 @@
+# PROMPT INICIAL — CÓPIA RÁPIDA
+
+Você vai evoluir meu repositório **RICHARDS_PLATFORM**, já iniciado e anexado, para um MVP premium de inteligência operacional com Next.js 16, TypeScript, pnpm, Docker Compose, PostgreSQL/Prisma 7, Recharts, PDF e integração ESP32. **Não comece do zero.** Leia a raiz `AGENTS.md` e todos os arquivos em `docs/plano` antes de escrever código. Seu trabalho será incremental, sob DDD modular/Clean Architecture simplificada.
+
+O produto tem dois fluxos: (A) ESP32 mede vazão, API persiste leituras com idempotência, regra detecta fluxo suspeito, operador investiga e registra intervenção, BI exibe série/drilldown e PDF; (B) lote alimentar é cadastrado, verificado por humano, reservado por instituição e entregue com confirmação, somando apenas `DELIVERED` no impacto. O BI deve parecer um produto profissional de análise, **não** um template de IA: filtros globais conectados, Recharts com tooltip, zoom/brush, drilldown do ponto até a ocorrência e timeline, gráficos verdadeiros e responsividade. O V3 usa `iframe` HTML e deve ser migrado para componentes React nativos sem perder aparência e sem quebrar a UI operacional V2.
+
+Restrições: não inventar economias, não confundir `observedLiters` e `savedLiters`, não misturar dados simulados sem rótulo, não automatizar validação sanitária, não prometer detectar qualquer microvazamento, não expor Basic Auth/HTTP de laboratório, não fazer reset destrutivo. Não inventar testes executados.
+
+**FAÇA AGORA SOMENTE A FASE 0:** inventarie o projeto real, levante problemas P0/P1/P2, rode/valide pnpm, Prisma, typecheck, lint, testes, build, Docker e health quando disponíveis; corrija somente os bloqueadores para a base executar. Entregue arquivos alterados, comandos, resultados, riscos e próximo passo. Aguarde minha aprovação antes de iniciar as fases seguintes. O detalhamento integral está em `PROMPTS/01_PROMPT_MESTRE_PARA_SUA_IA.md` no pacote e em `docs/plano`.

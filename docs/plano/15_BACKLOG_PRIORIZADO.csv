@@ -1,0 +1,56 @@
+﻿ID,Prioridade,Responsavel,Etapa,Tarefa,CriterioAceite,Dependencias,Status
+R-001,P0,DEV2,FASE0,"Auditar código, docs e configuração atual",Inventário de riscos com arquivos e severidade,,TODO
+R-002,P0,DEV2,FASE0,Instalar pnpm e dependências; gerar Prisma,pnpm install e db:generate sem erros,R-001,TODO
+R-003,P0,DEV2,FASE0,Corrigir erros typecheck/lint/test/build,Comandos executados e PASS ou falha documentada,R-002,TODO
+R-004,P0,DEV2,FASE0,Subir Compose + Postgres + seed idempotente,health e leitura de dados persistidos,R-003,TODO
+R-005,P0,IOT1,FASE0,Inventariar circuito e datasheet real,"BOM, segurança, faixa declarada e diagrama",,TODO
+R-006,P0,IOT2,FASE0,Revisar payload e conectividade do ESP32,mesmo JSON do contrato docs/plano/05,,TODO
+R-007,P0,DEV2,FASE1,Revisar seed e configuração inicial,Seed reproduzível sem duplicar registros,R-004,TODO
+R-008,P0,DEV2,FASE1,Validação Zod e erros coerentes em telemetria,202/401/422/503 testados,R-003,TODO
+R-009,P0,DEV2,FASE1,Idempotência e concorrência no banco,2 envios iguais geram uma leitura,R-008,TODO
+R-010,P0,DEV2,FASE1,Separar DEVICE de SIMULATED no pipeline,Filter source e rótulo corretos,R-008,TODO
+R-011,P0,DEV2,FASE1,Criar endpoint de series by filters,same from/to/site/device/source,R-004,TODO
+R-012,P0,DEV2,FASE1,Criar DTO tipado de filtros analytics,Paginação e validação UTC consistentes,R-011,TODO
+R-013,P0,IOT1,FASE1,Montar circuito fechado protegido,Circuito sem vazamentos externos e seguro,R-005,TODO
+R-014,P0,IOT1,FASE1,Calibrar pulsos por litro,3 repetições e erro registrado,R-013,TODO
+R-015,P0,IOT2,FASE1,Firmware WiFi NTP amostra e fila,Serial e POST com timestamps válidos,R-006,TODO
+R-016,P0,IOT2,FASE1,Validar POST real no PC e docker,Leitura DEVICE persistida,R-015|R-008,TODO
+R-017,P0,DEV2,FASE2,Testar FlowAlertPolicy com gaps,Casos normal/suspeito/interrompido,R-008,TODO
+R-018,P0,DEV2,FASE2,Garantir uma ocorrência ativa por sensor,Sem alertas ativos duplicados,R-017,TODO
+R-019,P0,DEV2,FASE2,ACK/RESOLVE com evento/auditoria,Timeline persistente com nota,R-018,TODO
+R-020,P0,DEV1,FASE2,Visualizar estado real do dispositivo,"Last seen, source, state carregados da API",R-016,TODO
+R-021,P0,DEV1,FASE3,Mapear BI V3 e componentes reutilizáveis,Inventário visual e regras de UX,R-001,TODO
+R-022,P0,DEV1,FASE3,Criar AppShell React responsivo,"Sidebar, header, estado mobile",R-021,TODO
+R-023,P0,DEV1,FASE3,Filtros globais por URL,from/to/site/device/source sincronizados,R-012,TODO
+R-024,P0,DEV1,FASE3,KPIs vinculados a filtros reais,Valores do mesmo DTO agregado,R-023,TODO
+R-025,P0,DEV1,FASE3,WaterTimeseries Recharts,"Tooltip, eixo em L, source legend",R-023,TODO
+R-026,P0,DEV1,FASE3,FlowTimeseries separada de volume,L/min sem confundir L,R-025,TODO
+R-027,P0,DEV1,FASE3,Drilldown clicável com drawer,ponto->amostra->dispositivo->ocorrência,R-025|R-011,TODO
+R-028,P0,DEV2,FASE3,GET drilldown com relação verificável,sem associação fictícia,R-011|R-018,TODO
+R-029,P0,DEV1,FASE3,Estados loading/empty/error/demo,Não esconder falha banco com dados fake,R-024,TODO
+R-030,P0,DEV1,FASE3,Preservar fallback operacional V2,Rotas existentes continuam funcionando,R-022,TODO
+R-031,P0,DEV2,FASE4,Garantir workflow e verificação humana,Transições inválidas dão 409,R-004,TODO
+R-032,P0,DEV2,FASE4,Registrar reserva e entrega real no banco,Recipient link e receivedAt definidos,R-031,TODO
+R-033,P0,DEV1,FASE4,Form/lote/etapas de doação,Visual e feedback de API corretos,R-032,TODO
+R-034,P0,DEV2,FASE4,Agregação kg DELIVERED por receivedAt,Não contar AVAILABLE,R-032,TODO
+R-035,P0,DEV1,FASE4,Atualizar KPI de impacto após entrega,UI e backend mostram o mesmo peso,R-034,TODO
+R-036,P0,DEV2,FASE5,"PDF com filtros, fontes e notas",Números iguais ao BI,R-024|R-034,TODO
+R-037,P0,DEV1,FASE5,Tela de relatório e botão exportar,PDF gerado e baixado,R-036,TODO
+R-038,P0,TODOS,FASE5,Executar 30 testes aceitação,Resultado de PASS/FALHA por ID,R-036,TODO
+R-039,P0,TODOS,FASE5,Ensaio pitch 4 pessoas e demo,3-6 minutos com plano B,R-038,TODO
+R-040,P0,IOT2,FASE5,Preparar simulador offline rotulado,Fonte SIMULATED evidente,R-015,TODO
+R-041,P1,DEV1,POLIMENTO,Adicionar brush/zoom e comparação série,Interatividade sem dados inventados,R-025,TODO
+R-042,P1,DEV1,POLIMENTO,Microanimações e reduced motion,Sem perda de usabilidade,R-022,TODO
+R-043,P1,DEV1,POLIMENTO,Acessibilidade completa de drawers,Foco e teclado,R-027,TODO
+R-044,P1,DEV2,PILOTO,Auth de sessão + RBAC multi-tenant,Negativa cross-org testada,R-004,TODO
+R-045,P1,DEV2,PILOTO,Gestão de rotação de chaves IoT,Revogar chave antiga,R-008,TODO
+R-046,P1,DEV2,PILOTO,Migrations versionadas e backup,Sem resets destrutivos,R-004,TODO
+R-047,P1,DEV2,PILOTO,Identificar dispositivos offline por tempo,Último contato e janela configurável,R-016,TODO
+R-048,P1,IOT1,PILOTO,Comparar sensores e calibrar por vazão,Laudo de bancada das faixas,R-014,TODO
+R-049,P1,TODOS,PILOTO,Entrevistar 3 estabelecimentos e entidade,"Dores, barreiras e hipótese receita",,TODO
+R-050,P1,DEV2,PILOTO,Observabilidade de eventos e falhas,Logs estruturados sem segredos,R-004,TODO
+R-051,P2,TODOS,FUTURO,Integração de missões remuneradas,"Escopo validado, sem precarização",R-049,TODO
+R-052,P2,IOT2,FUTURO,Balança com HX711,Calibração e origem registrada,R-016,TODO
+R-053,P2,IOT1,FUTURO,Sensor temperatura de refrigeração,Alertas sem certificar alimento,R-013,TODO
+R-054,P2,DEV2,FUTURO,Agregações escaláveis e streaming,Necessidade provada por carga,R-046,TODO
+R-055,P2,TODOS,FUTURO,IA preditiva com dataset validado,Métricas de erro e baseline,R-049,TODO
