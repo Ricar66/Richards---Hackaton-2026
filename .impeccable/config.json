@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "plus jakarta sans",
+        "createdAt": "2026-11-03T13:18:32.542Z",
+        "reason": "identidade tipográfica herdada do BI V3 original da equipe (src/app/globals.css desde o commit de7c41f); regra do CLAUDE.md global manda respeitar o design system existente; a Fase 2 só adicionou fallback de sistema, não escolheu a fonte"
+      }
+    ]
+  }
+}

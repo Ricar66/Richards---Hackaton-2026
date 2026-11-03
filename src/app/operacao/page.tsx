@@ -1,4 +1,3 @@
-import { getOverview } from "@/modules/analytics/application/get-overview";
-import { WorkspaceV2 } from "@/components/workspace-v2";
-export const dynamic = "force-dynamic";
-export default async function OperacaoPage(){ return <WorkspaceV2 initialData={await getOverview()} />; }
+import { redirect } from "next/navigation";
+/** Rota da V2 (antes da Fase 3): links antigos caem no Centro de controle nativo. */
+export default function OperacaoPage() { redirect("/"); }

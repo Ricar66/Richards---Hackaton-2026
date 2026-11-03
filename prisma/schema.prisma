@@ -181,6 +181,9 @@ model DonationBatch {
   safetyVerifiedBy String?
   safetyVerifiedAt DateTime?
   receivedAt DateTime?
+  // Pessoa da instituição que confirmou o recebimento (obrigatória para DELIVERED desde a Fase 4).
+  receivedBy String?
+  cancelReason String?
   createdAt DateTime @default(now())
   missions Mission[]
   @@index([organizationId, status, createdAt(sort: Desc)])

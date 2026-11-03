@@ -41,3 +41,12 @@ test("sem amostras ou última abaixo do limiar: não suspeito",()=>{
  assert.equal(p.evaluate([0,10,20,40].map((sec,i)=>({capturedAt:t(sec),flowLpm:i===3?1.4:2,deltaLiters:0.25}))).suspicious,false);
  assert.throws(()=>new FlowAlertPolicy(0,30));
 });
+
+test("cada etapa da doação exige a declaração humana correspondente",()=>{
+ assert.throws(()=>DonationWorkflow.assertDetails('AVAILABLE',{verifiedBy:'  '}),/verificação/);
+ assert.throws(()=>DonationWorkflow.assertDetails('RESERVED',{}),/instituição/);
+ assert.throws(()=>DonationWorkflow.assertDetails('DELIVERED',{receivedBy:'ab'}),/recebeu/);
+ assert.throws(()=>DonationWorkflow.assertDetails('CANCELLED',{reason:'ok'}),/motivo/);
+ assert.doesNotThrow(()=>DonationWorkflow.assertDetails('DELIVERED',{receivedBy:'Ana Lima'}));
+ assert.throws(()=>DonationWorkflow.assertTransition('DELIVERED','CANCELLED',true,true),/Transição inválida/);
+});

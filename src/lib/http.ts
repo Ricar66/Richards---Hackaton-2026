@@ -5,3 +5,4 @@ export function apiError(status: number, code: string, error: string) {
 }
 export const databaseUnavailable = () =>
   apiError(503, "DATABASE_UNAVAILABLE", "Banco de dados indisponível. Nenhum número é exibido para não apresentar dado falso.");
+export const notSeeded = () => apiError(503, "NOT_SEEDED", "Base não preparada: execute pnpm db:seed.");
