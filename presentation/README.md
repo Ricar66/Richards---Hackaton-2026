@@ -1,56 +1,37 @@
-# RICHARDS Intelligence — Kit de pitch Full HD
+# RICHARDS Intelligence — Apresentação em imagens
 
-**Status:** material de apresentação e documentação de demonstração (não altera o MVP).
+A versão visual oficial para o Hackathon Senac 2026 agora é composta por **10 imagens cinematográficas individuais**, em **1920 × 1080 (Full HD)**, sem necessidade de PowerPoint.
 
-14 slides em **SVG vetorial 1920 × 1080** em [slides/](slides/). Os mesmos slides podem ser exportados em **PNG Full HD**, **PowerPoint** e ZIP com o renderizador abaixo. A apresentação foi concebida para projetor 16:9 e cerca de 5 min 40 s com demo.
+![RICHARDS Intelligence — Capa](imagens/01_capa.webp)
 
-## Veja a narrativa em ordem
+## [Abrir a galeria completa de imagens](imagens/README.md)
 
-- [Perceber antes. Agir melhor. Comprovar resultados.](slides/01_capa.svg)
-- [Quanto custa perceber tarde demais?](slides/02_problema.svg)
-- [Escala global: desperdício alimentar, PNUMA](slides/03_dado_global.svg)
-- [A história de Ellen Swallow Richards](slides/04_nome_ellen.svg)
-- [Da medição à decisão verificável](slides/05_solucao.svg)
-- [ESP32, API, PostgreSQL, regra, ocorrência e PDF](slides/06_arquitetura.svg)
-- [Vazão persistente: evidência para investigação](slides/07_agua.svg)
-- [Lote alimentar: confirmação de entrega](slides/08_alimentos.svg)
-- [Visualização conceitual do centro de controle](slides/09_painel.svg)
-- [O dado não termina no gráfico](slides/10_diferencial.svg)
-- [O que já existe; o que ainda exige dados e validação](slides/11_inovacao.svg)
-- [Operacional, ambiental e social](slides/12_impacto.svg)
-- [Piloto, calibração e impacto comprovável](slides/13_viabilidade.svg)
-- [A demonstração e o fechamento](slides/14_encerramento.svg)
+| Ordem | Arte | Assunto |
+|---|---|---|
+| 01 | [01_capa.webp](imagens/01_capa.webp) | Abertura — RICHARDS Intelligence |
+| 02 | [02_problema.webp](imagens/02_problema.webp) | O custo de perceber tarde demais |
+| 03 | [03_origem_nome.webp](imagens/03_origem_nome.webp) | Origem do nome — Ellen Swallow Richards |
+| 04 | [04_solucao.webp](imagens/04_solucao.webp) | Da medição à ação verificável |
+| 05 | [05_agua.webp](imagens/05_agua.webp) | Jornada da água — IoT do Victor |
+| 06 | [06_alimentos.webp](imagens/06_alimentos.webp) | Jornada dos alimentos — doação com confirmação |
+| 07 | [07_plataforma.webp](imagens/07_plataforma.webp) | Plataforma — exemplo visual do painel |
+| 08 | [08_diferencial.webp](imagens/08_diferencial.webp) | Nosso diferencial — dado em ação |
+| 09 | [09_impacto.webp](imagens/09_impacto.webp) | Impacto operacional, ambiental e social |
+| 10 | [10_encerramento.webp](imagens/10_encerramento.webp) | Encerramento — propósito e evidência |
 
-### Capa
+## Narrativa e integração
 
-![Slide de abertura](slides/01_capa.svg)
+- [Fala natural para apresentação (5 min 40 s)](FALA_5MIN40.md)
+- [Roteiro de palco e contingências](ROTEIRO_PALCO.md)
+- [Checklist de integração IoT do Victor](CHECKLIST_VICTOR_IOT.md)
+- [Plano final de qualidade e testes](PLANO_FINAL.md)
 
-## Como gerar imagens PNG e PPTX
+A apresentação conecta **problema → inspiração do nome → solução → sensor e ação → alimento e impacto → diferencial → fechamento**. No palco, use as imagens para contar a história e **o sistema real** para comprovar funcionamento.
 
-```bash
-python -m pip install -r presentation/requirements-pitch.txt
-python presentation/render_slides.py
-```
+> **Integridade dos resultados:** os números inseridos pela geração de imagens nos quadros e telas são apenas ilustrativos. Não representam água economizada, alimentos entregues ou resultados de pilotos. A versão atual detecta fluxo suspeito por regra configurável, sem modelo preditivo treinado. Não apresentar como IA preditiva validada.
 
-Os arquivos serão gerados em `presentation/export/` (não versionados, para não inflar o repositório). Os SVGs são os arquivos de imagem editáveis e independentes de dependências.
+## Material anterior (arquivo histórico)
 
-## Organização
+A antiga sequência de 14 [peças vetoriais SVG](slides/) foi preservada como referência histórica, mas **não é mais a apresentação principal**. O script [render_slides.py](render_slides.py) pertence à versão anterior. A atual é acessada pelas imagens acima.
 
-- [ROTEIRO_PALCO.md](ROTEIRO_PALCO.md) — história, minutagem, cliques, plano B e respostas à banca.
-- [FALA_5MIN40.md](FALA_5MIN40.md) — texto natural para ensaiar a apresentação com demo.
-- [CHECKLIST_VICTOR_IOT.md](CHECKLIST_VICTOR_IOT.md) — contrato, hardware, sensores, rede, calibração e evidência.
-- [PLANO_FINAL.md](PLANO_FINAL.md) — cronograma de P0, riscos, qualidade e teste de aceite.
-- [slides/](slides/) — 14 imagens vetoriais 1920 × 1080.
-- `render_slides.py` — gerador local de PNG, PPTX e ZIP.
-
-## Por que RICHARDS?
-
-Homenagem a **Ellen Swallow Richards (1842–1911)**, pioneira da química sanitária, da qualidade da água e dos estudos de ambiente, alimentação e saúde. Fontes: [MIT Libraries](https://digital-exhibits.libraries.mit.edu/s/under-the-lens/page/Richards) e [Science History Institute](https://www.sciencehistory.org/education/scientific-biographies/ellen-h-swallow-richards/).
-
-## Honestidade técnica
-
-**Hoje:** telemetria, regra de vazão, ocorrências, intervenções, doações e PDF. **Depois:** modelos de IA somente após séries confiáveis, rótulos e validação. Litros monitorados não são litros economizados; quilos cadastrados não são doações confirmadas. Os valores do histórico simulado precisam continuar identificados como SIMULATED.
-
-**Dado global do slide 03:** 1,05 bilhão de toneladas em 2022, em varejo, serviços de alimentação e domicílios; o total inclui partes não comestíveis. Fonte: [PNUMA/UNEP Food Waste Index 2024](https://www.unep.org/en/news-and-stories/press-release/world-squanders-over-1-billion-meals-day-un-report).
-
-**Escopo do código:** intocado neste pacote. Testes integrados, ESP32 e hardware precisam ser verificados pelo time; ver [docs/ROTEIRO_DEMO.md](../docs/ROTEIRO_DEMO.md).
+**O código da plataforma, contratos da API e firmware ESP32 não foram alterados nesta atualização visual.**
