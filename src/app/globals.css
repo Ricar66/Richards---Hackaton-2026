@@ -73,6 +73,9 @@ code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-siz
 .side-card p { margin: 0; font-size: 12px; line-height: 1.5; }
 .side-legacy { font-size: 12px; color: #7fa2aa; text-decoration: underline; text-underline-offset: 3px; padding: 0 4px; }
 .side-legacy:hover { color: #d3ece6; }
+.legacy-back { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); white-space: nowrap; z-index: 20; padding: 9px 14px; border-radius: 999px; background: var(--nav); color: #eef8f5; font-size: 13px; font-weight: 700; box-shadow: var(--shadow-pop); }
+.legacy-back:hover { background: var(--accent); }
+@media (max-width: 640px) { .legacy-back { top: 72px; left: auto; right: 12px; transform: none; padding: 7px 12px; font-size: 12px; } }
 .side-foot small { font-size: 11px; color: #4f6e77; padding: 0 4px; }
 .nav-scrim { display: none; }
 

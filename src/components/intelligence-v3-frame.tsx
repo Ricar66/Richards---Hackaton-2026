@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { OverviewDTO } from "@/modules/analytics/domain/types";
 import { timeBR } from "@/lib/format";
 
@@ -46,6 +47,7 @@ export function IntelligenceV3Frame({ initialData }: { initialData: OverviewDTO 
           Sem conexão com o servidor desde {staleSince}. Os números exibidos não estão sendo atualizados.
         </div>
       )}
+      <Link className="legacy-back" href="/">← Voltar ao BI</Link>
       <iframe
         ref={frame}
         src="/richards-bi-v3.html"
