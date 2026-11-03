@@ -1,5 +1,7 @@
 # RICHARDS — regras para agentes de IA de programação
 
+**Comece por `MEMORIA.md`:** estado atual, decisões, pendências e armadilhas, atualizados a cada entrega.
+
 **LEIA ANTES DE EDITAR.** Este projeto possui uma base Next.js/Prisma/ESP32 existente, um BI V3 HTML (provisório) e uma UI operacional V2. O nome oficial de trabalho é **RICHARDS Intelligence**; não renomear para SALVA.
 
 ## Fonte de verdade
