@@ -29,3 +29,4 @@
 .toast{display:flex;gap:15px;align-items:center;cursor:pointer}
 .activity-table tbody tr:focus-visible{outline:2px solid #16a783;outline-offset:-2px}
 @media(max-width:760px){.chart-container{height:200px}}
+.stale-banner{display:flex;gap:9px;align-items:center;background:#fff7eb;border:1px solid #f1dcb5;color:#8a5a14;border-radius:9px;padding:10px 14px;font-size:11px;font-weight:700;margin-bottom:14px}

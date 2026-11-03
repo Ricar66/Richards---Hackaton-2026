@@ -22,3 +22,22 @@ test("não pode entregar sem receptor",()=>{
  assert.throws(()=>DonationWorkflow.assertTransition('RESERVED','DELIVERED',true,false));
  assert.doesNotThrow(()=>DonationWorkflow.assertTransition('RESERVED','DELIVERED',true,true));
 });
+
+test("amostras fora de ordem são ordenadas antes da avaliação",()=>{
+ const p=new FlowAlertPolicy(1.5,30);
+ const shuffled=[30,0,20,10].map(sec=>({capturedAt:t(sec),flowLpm:2,deltaLiters:0.25}));
+ const r=p.evaluate(shuffled);
+ assert.equal(r.suspicious,true);assert.equal(r.observedSeconds,30);assert.equal(r.suspectVolumeLiters,1);
+});
+test("buraco maior que 45 s entre leituras quebra a continuidade",()=>{
+ const p=new FlowAlertPolicy(1.5,30);
+ const gap=[0,60,70].map(sec=>({capturedAt:t(sec),flowLpm:2,deltaLiters:0.25}));
+ const r=p.evaluate(gap);
+ assert.equal(r.suspicious,false);assert.equal(r.observedSeconds,10);
+});
+test("sem amostras ou última abaixo do limiar: não suspeito",()=>{
+ const p=new FlowAlertPolicy(1.5,30);
+ assert.equal(p.evaluate([]).suspicious,false);
+ assert.equal(p.evaluate([0,10,20,40].map((sec,i)=>({capturedAt:t(sec),flowLpm:i===3?1.4:2,deltaLiters:0.25}))).suspicious,false);
+ assert.throws(()=>new FlowAlertPolicy(0,30));
+});

@@ -13,9 +13,12 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "test": "tsx --test tests/*.test.ts",
+    "test:db": "node scripts/test-db-prepare.mjs",
+    "test:integration": "pnpm test:db && tsx --test --test-concurrency=1 tests/integration/*.test.ts",
     "simulate": "node scripts/iot-simulator.mjs"
   },
   "dependencies": {

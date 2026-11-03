@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { getOverview } from '@/modules/analytics/application/get-overview';
+import { getOverview, OverviewNotSeededError } from '@/modules/analytics/application/get-overview';
+import { apiError, databaseUnavailable } from '@/lib/http';
 export const runtime='nodejs';
 export async function GET(){
- const overview=await getOverview();
+ let overview;
+ try{overview=await getOverview()}
+ catch(e){if(e instanceof OverviewNotSeededError)return apiError(503,'NOT_SEEDED','Base não preparada: execute pnpm db:seed.');console.error('reports summary',e);return databaseUnavailable()}
  const pdf=await PDFDocument.create();const page=pdf.addPage([595,842]);const font=await pdf.embedFont(StandardFonts.Helvetica);const bold=await pdf.embedFont(StandardFonts.HelveticaBold);
  const dark=rgb(.06,.16,.2),teal=rgb(.07,.52,.42),muted=rgb(.42,.49,.51);
  page.drawRectangle({x:0,y:760,width:595,height:82,color:dark});page.drawText('RICHARDS / INTELLIGENCE',{x:40,y:802,size:22,font:bold,color:rgb(1,1,1)});
  page.drawText('Relatorio operacional  |  Hackathon Senac 2026',{x:40,y:777,size:10,font,color:rgb(.83,.91,.89)});
  page.drawText(overview.business.replaceAll('·','-'),{x:40,y:726,size:15,font:bold,color:dark});
  page.drawText('Origem: '+(overview.dataset==='SIMULATED'?'DADOS SIMULADOS':overview.dataset==='MIXED'?'DADOS MISTOS':'LEITURAS DE DISPOSITIVO'),{x:40,y:700,size:10,font:bold,color:teal});
- const items=[['Volume monitorado (7 dias)',`${overview.metrics.observedLiters.toFixed(1)} L`],['Ocorrencias em aberto',String(overview.metrics.openAlerts)],['Alimentos entregues',`${overview.metrics.deliveredKg.toFixed(1)} kg`],['Ocorrencias resolvidas',String(overview.metrics.resolved)]];
+ const items=[['Volume monitorado (7 dias)',`${overview.metrics.observedLiters.toFixed(1)} L`],['Ocorrencias ativas (abertas + em analise)',String(overview.metrics.openAlerts)],['Alimentos entregues',`${overview.metrics.deliveredKg.toFixed(1)} kg`],['Ocorrencias resolvidas',String(overview.metrics.resolved)]];
  items.forEach(([label,value],i)=>{const y=647-i*61;page.drawRectangle({x:40,y:y-13,width:515,height:49,color:rgb(.95,.97,.96)});page.drawText(label,{x:54,y:y+13,size:11,font,color:dark});page.drawText(value,{x:425,y:y+10,size:17,font:bold,color:teal});});
  page.drawText('Ocorrencias recentes',{x:40,y:380,size:14,font:bold,color:dark});
  overview.occurrences.slice(0,5).forEach((o,i)=>{const y=355-i*34;page.drawText(o.title.replaceAll('·','-').slice(0,62),{x:42,y,size:10,font,color:dark});page.drawText(o.status,{x:448,y,size:8,font:bold,color:muted})});

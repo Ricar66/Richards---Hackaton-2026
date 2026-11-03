@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
 import { DEMO_ORG_ID,DEMO_SITE_ID,DEMO_DEVICE_ID,isDemo } from '@/lib/constants';
+import { actorFrom } from '@/lib/actor';
+import { apiError, databaseUnavailable } from '@/lib/http';
+import { openFlowOccurrence } from '@/modules/monitoring/application/open-flow-occurrence';
 export const runtime='nodejs';
 /** DEMO ONLY: never enable on a public environment. Protected by operator HTTP Basic auth in proxy. */
 export async function POST(req:NextRequest){
- if(!isDemo)return NextResponse.json({error:'Desabilitado'},{status:404});
- const json=await req.json().catch(()=>({}));if(json?.scenario!=='flow')return NextResponse.json({error:'Cenário não suportado'},{status:422});
- try{const db=getDb();const occ=await db.occurrence.create({data:{organizationId:DEMO_ORG_ID,siteId:DEMO_SITE_ID,deviceId:DEMO_DEVICE_ID,kind:'UNUSUAL_FLOW',severity:'HIGH',status:'OPEN',source:'SIMULATED',title:'Alerta de demonstração · fluxo suspeito',description:'Ocorrência simulada via painel. Não representa medição física.',suspectedLiters:3.6,events:{create:{action:'CREATED',note:'Gerado pelo simulador, sem sensor físico'}}}});
- return NextResponse.json({id:occ.id,status:occ.status,source:'SIMULATED'},{status:201})}
- catch{return NextResponse.json({error:'Banco não disponível'},{status:503})}
+ if(!isDemo)return apiError(404,'DISABLED','Desabilitado');
+ const json=await req.json().catch(()=>({}));if(json?.scenario!=='flow')return apiError(422,'UNSUPPORTED_SCENARIO','Cenário não suportado');
+ const actor=actorFrom(req);
+ try{
+  // Mesma regra da telemetria: não abre segunda ocorrência enquanto houver uma ativa para o sensor.
+  const r=await openFlowOccurrence({organizationId:DEMO_ORG_ID,siteId:DEMO_SITE_ID,deviceId:DEMO_DEVICE_ID,source:'SIMULATED',
+   title:'Alerta de demonstração · fluxo suspeito',description:'Ocorrência simulada via painel. Não representa medição física.',suspectedLiters:3.6,
+   eventNote:'Gerado pelo simulador, sem sensor físico',actor:`simulador:${actor}`,evidence:{scenario:'flow'}});
+  if(!r.created)return apiError(409,'ACTIVE_OCCURRENCE_EXISTS','Já existe uma ocorrência de fluxo ativa para este sensor. Resolva-a antes de simular outra.');
+  return NextResponse.json({id:r.occurrenceId,status:'OPEN',source:'SIMULATED'},{status:201});
+ }catch(e){console.error('simulate',e);return databaseUnavailable()}
 }

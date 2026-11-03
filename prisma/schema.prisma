@@ -157,6 +157,8 @@ model OccurrenceEvent {
   occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
   action String
   note String?
+  // Quem executou: "operador:<usuario>", "dispositivo:<codigo>" ou "simulador:<usuario>".
+  actor String?
   at DateTime @default(now())
 }
 model RecipientOrganization {

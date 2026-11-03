@@ -3,6 +3,21 @@
 ## Padrão de APIs
 Todas as APIs recebem/retornam JSON (exceto PDFs); timestamps ISO UTC, números decimais como número apropriado para UI e arredondamento de exibição separado do banco; paginação cursor ou limite máximo. Resposta de erro estável: `{ "error": "CODE", "message": "Explicação objetiva", "requestId": "..." }`; em demo pode manter payload legado até refatorar front. **Nunca expor stack traces/chaves/tokens.**
 
+**Implementado na Fase 1 (03/11/2026):** como a UI V2 exibe `error` direto no toast, o formato atual é `{ "error": "<mensagem legível>", "code": "<CODIGO>" }`. O `code` é o campo estável para máquinas. `requestId` ainda não existe. Códigos em uso:
+
+| Código | HTTP | Onde |
+|---|---|---|
+| `INVALID_JSON` | 400 | todas as escritas |
+| `DEVICE_KEY_REQUIRED`, `NOT_AUTHORIZED` | 401 | telemetria |
+| `CROSS_SITE_WRITE` | 403 | proxy: escrita em `/api/*` vinda de outra origem |
+| `NOT_FOUND` | 404 | ocorrência/lote fora do tenant ou inexistente |
+| `INVALID_TRANSITION`, `RESOLUTION_NOTE_REQUIRED`, `CONFLICT`, `ACTIVE_OCCURRENCE_EXISTS` | 409 | ocorrências, lotes, simulador |
+| `JSON_REQUIRED` | 415 | proxy: escrita em `/api/*` sem `Content-Type: application/json` |
+| `VALIDATION_ERROR`, `CLOCK_SKEW` | 422 | Zod / telemetria |
+| `DATABASE_UNAVAILABLE`, `NOT_SEEDED` | 503 | qualquer rota quando o banco falha. **Nunca** substituído por dados de demonstração |
+
+`GET /api/health` consulta o banco: `200 {healthy:true, database:"up"}` ou `503 {healthy:false, database:"down"}`.
+
 ## Endpoints existentes na V3 (consultar implementação antes de alterar)
 | Método | Caminho | Objetivo | Estado |
 |---|---|---|---|
