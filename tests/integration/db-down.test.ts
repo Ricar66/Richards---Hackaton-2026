@@ -18,6 +18,10 @@ test("T25 rotas respondem 503 honesto: health e analytics", async () => {
   const overview = await (await import("../../src/app/api/analytics/overview/route")).GET();
   assert.equal(overview.status, 503);
   assert.equal((await overview.json()).code, "DATABASE_UNAVAILABLE");
-  const pdf = await (await import("../../src/app/api/reports/summary/route")).GET();
+  const { NextRequest } = await import("next/server");
+  const pdf = await (await import("../../src/app/api/reports/summary/route")).GET(new NextRequest("http://localhost/api/reports/summary?range=24h"));
   assert.equal(pdf.status, 503, "PDF não é gerado com números inventados");
+  const dash = await (await import("../../src/app/api/analytics/dashboard/route")).GET(new NextRequest("http://localhost/api/analytics/dashboard"));
+  assert.equal(dash.status, 503);
+  assert.equal((await dash.json()).code, "DATABASE_UNAVAILABLE", "BI nativo também não inventa números");
 });

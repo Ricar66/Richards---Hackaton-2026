@@ -19,6 +19,7 @@
     "test": "tsx --test tests/*.test.ts",
     "test:db": "node scripts/test-db-prepare.mjs",
     "test:integration": "pnpm test:db && tsx --test --test-concurrency=1 tests/integration/*.test.ts",
+    "test:e2e": "node scripts/e2e/run.mjs",
     "simulate": "node scripts/iot-simulator.mjs"
   },
   "dependencies": {
@@ -44,6 +45,7 @@
     "eslint": "^9.25.0",
     "eslint-config-next": "^16.2.0",
     "prisma": "7.10.1",
+    "puppeteer-core": "24.43.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.0"
   }

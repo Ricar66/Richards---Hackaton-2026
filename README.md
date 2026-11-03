@@ -6,11 +6,20 @@
 Next.js App Router + React/TypeScript + pnpm + PostgreSQL/Prisma + Docker Compose + regra de vazão orientada a objetos + API IoT + export PDF.
 
 ## Rotas
-- `/`: **RICHARDS BI V3** — interface investigativa principal, com iframe HTML e ponte de **leitura** via `postMessage`. Demonstrações locais são simuladas; no modo conectado, filtros não suportados ficam inativos e ações de escrita ficam no módulo operacional.
-- `/operacao`: UI React V2 ligada aos endpoints existentes; serve como fallback operacional.
-- `/ocorrencias`, `/doacoes`, `/monitoramento`, `/relatorios`, `/dispositivos`: rotas operacionais persistidas.
-- `/intelligence`: alternativa de acesso ao mesmo BI V3.
-- `/api/iot/telemetry`: recepção de hardware real.
+O BI nativo em React é a interface principal desde a Fase 3. Os filtros ficam na URL: `?range=24h|7d|30d` ou `from`/`to`, mais `deviceId` e `source`.
+
+| Rota | Tela |
+|---|---|
+| `/` | Centro de controle: KPIs, gráfico investigativo, fila de atenção, padrão semanal, sinal ao vivo |
+| `/monitoramento` | Volume e vazão (gráficos sincronizados, limiar da regra) |
+| `/ocorrencias` | Central com busca, filtros e paginação |
+| `/doacoes` | Quadro de lotes, da verificação humana à entrega confirmada |
+| `/relatorios` | Prévia + PDF com o mesmo filtro |
+| `/dispositivos` | Comunicação calculada pelo último contato |
+
+- `/intelligence`: BI V3 em iframe, mantido só como **contingência**.
+- `/operacao`: redireciona para `/`.
+- `/api/iot/telemetry`: recepção do ESP32. Contrato em `docs/CONTRATO_IOT.md`; demais APIs em `docs/plano/05_API_E_CONTRATOS.md`.
 
 ## Instalação com Docker
 ```
@@ -32,13 +41,20 @@ pnpm dev              # hot reload em http://localhost:3000
 ```
 Mudou o `schema.prisma`? Gere uma migration nova em `prisma/migrations/` (`pnpm db:migrate`, interativo) e versione junto com o código. `pnpm db:push` fica só para banco descartável.
 
-Verificar: `pnpm typecheck`, `pnpm lint`, `pnpm test` (unitários, sem banco), `pnpm test:integration` (Postgres real no banco separado `TEST_DATABASE_URL`, cujo nome precisa terminar em `_test`; os testes apagam os dados **desse** banco), `pnpm build`.
+Verificar:
+- `pnpm typecheck`, `pnpm lint` e `pnpm build`.
+- `pnpm test`: unitários, sem banco.
+- `pnpm test:integration`: Postgres real no banco separado `TEST_DATABASE_URL`, cujo nome precisa terminar em `_test`. Os testes apagam os dados **desse** banco.
+- `pnpm test:e2e`: jornadas no Chrome, depois de `pnpm build`.
+  - Sobe uma instância isolada em :3100 no banco de teste.
+  - `--with-db-outage` também derruba o container do banco por alguns segundos.
+  - As capturas ficam em `.e2e/`.
 
 ## Status
-- Protótipo HTML offline validável no navegador.
-- Fases 0, 1 e 2 concluídas: ver `docs/FASE_0_BASELINE.md`, `docs/FASE_1_BANCO_CONTRATOS.md` e `docs/FASE_2_IOT_OCORRENCIAS.md` (roteiro da Jornada A). Firmware **não compilado** e ESP32 físico **não testado**.
-- O BI V3 via iframe NÃO substitui a implementação futura React nativa/filtragem backend completa.
-- Dados SIMULATED não podem ser apresentados como resultado real nem como litros economizados.
+- Fases 0 a 5 concluídas. Registros em `docs/FASE_0_BASELINE.md`, `docs/FASE_1_BANCO_CONTRATOS.md`, `docs/FASE_2_IOT_OCORRENCIAS.md`, `docs/FASE_3_BI_NATIVO.md`, `docs/FASE_4_DOACOES_IMPACTO.md` e `docs/FASE_5_PDF_QA_DEMO.md`.
+- Roteiro de palco com cliques e contingências: `docs/ROTEIRO_DEMO.md`.
+- Firmware **não compilado** e ESP32 físico **não testado**. A equipe de IoT precisa compilar e gravar na Arduino IDE.
+- Dados SIMULATED nunca podem ser apresentados como resultado real nem como litros economizados. O BI e o PDF carimbam a origem.
 
 Consulte os documentos da raiz do pacote para briefings, custos, riscos, datas e pitch.
 

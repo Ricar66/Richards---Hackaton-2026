@@ -14,6 +14,7 @@ Todas as APIs recebem/retornam JSON (exceto PDFs); timestamps ISO UTC, números 
 | `INVALID_TRANSITION`, `RESOLUTION_NOTE_REQUIRED`, `CONFLICT`, `ACTIVE_OCCURRENCE_EXISTS` | 409 | ocorrências, lotes, simulador |
 | `JSON_REQUIRED` | 415 | proxy: escrita em `/api/*` sem `Content-Type: application/json` |
 | `VALIDATION_ERROR`, `CLOCK_SKEW` | 422 | Zod / telemetria |
+| `INVALID_FILTER` | 422 | filtros do BI e do PDF (`range`, `from`/`to`, `source`, ids) |
 | `DATABASE_UNAVAILABLE`, `NOT_SEEDED` | 503 | qualquer rota quando o banco falha. **Nunca** substituído por dados de demonstração |
 
 `GET /api/health` consulta o banco: `200 {healthy:true, database:"up"}` ou `503 {healthy:false, database:"down"}`.
@@ -24,16 +25,42 @@ Todas as APIs recebem/retornam JSON (exceto PDFs); timestamps ISO UTC, números 
 - **`timeline`**: os eventos reais (`action`, `note`, `actor`, `at`).
 - **`evidence`**: a janela de leituras que a regra avaliou ao abrir o alerta (`windowStart`, `windowEnd`, `rule`, `readings`, `totals`) e `followUp`, as leituras da mesma origem depois da abertura. Ela vem da auditoria `CREATED`. Sem janela registrada, vem `evidence: null` com `evidenceNote` explicando, e **nenhuma leitura é associada por proximidade**.
 
+**Implementado nas Fases 3 a 5 (03/11/2026).** Filtro comum, lido da URL do BI: `range=24h|7d|30d` (padrão 7d) ou `from`/`to` ISO (até 92 dias; fim no futuro é cortado em agora), mais `siteId`, `deviceId` e `source=ALL|DEVICE|SIMULATED|MANUAL`. A agregação é por 15 min (até 36 h), 1 h (até 10 dias) ou 1 dia, sempre no fuso de São Paulo.
+
+| Método | Caminho | Devolve |
+|---|---|---|
+| GET | `/api/analytics/dashboard` | `DashboardDTO` (`src/modules/analytics/domain/dashboard.ts`), ver a lista abaixo |
+| GET | `/api/analytics/interval?start&end` + filtro | leituras de um intervalo (até 500, `truncated`), totais e ocorrências ligadas por registro: `OPENED_IN_INTERVAL` ou `EVIDENCE_OVERLAPS`. Máximo de 26 h |
+| GET | `/api/analytics/live` | última leitura, as leituras dos últimos 30 min e as ocorrências ativas (o BI consulta a cada 5 s; não é streaming) |
+| GET | `/api/donations/:id` | o lote com a trilha de auditoria (autor e detalhe de cada etapa) |
+| PATCH | `/api/donations/:id` | `{status, verifiedBy?, recipientId?, receivedBy?, reason?, note?}` |
+| GET | `/api/recipients` | as instituições receptoras ativas |
+| GET | `/api/reports/summary` + filtro | PDF A4 de 2 páginas, `richards-relatorio-AAAA-MM-DD.pdf`, cabeçalho `X-Report-Provenance` |
+
+O `DashboardDTO` traz:
+- **`kpis`**: o volume e o volume do período anterior (`previousSamples` para julgar a cobertura), as ativas agora, as abertas e as resolvidas no período, os tempos médios, os kg entregues no período e os kg a caminho.
+- **`series`**: os intervalos, com `liters: null` quando não houve leitura e `partial: true` no intervalo em andamento.
+- **`markers`**: as ocorrências com a janela de evidência.
+- **`heatmap`**: dia da semana × hora.
+- **`provenance`**: `DEVICE`, `SIMULATED`, `MIXED`, `MANUAL` ou `NONE`.
+- **`statusBreakdown`**, **`donations.pipeline`** e **`devices`**.
+
+Regras de doação (409 `INVALID_TRANSITION` com mensagem legível):
+- **`AVAILABLE`** exige `verifiedBy` com 3 caracteres ou mais.
+- **`RESERVED`** exige um `recipientId` de instituição ativa.
+- **`DELIVERED`** exige `receivedBy`.
+- **`CANCELLED`** exige `reason`.
+
 ## Endpoints existentes na V3 (consultar implementação antes de alterar)
 | Método | Caminho | Objetivo | Estado |
 |---|---|---|---|
 | GET | `/api/health` | Saúde da API | existente, conferir com banco |
 | POST | `/api/iot/telemetry` | Dados ESP32 idempotentes | implementado, testar hardware |
-| GET | `/api/analytics/overview` | KPIs e séries básicos | implementado, sem filtro consistente |
+| GET | `/api/analytics/overview` | KPIs e séries básicos | legado: só o BI V3 de contingência (`/intelligence`) usa; o BI nativo usa `/api/analytics/dashboard` |
 | PATCH | `/api/occurrences/:id` | Transição de ocorrência | implementado, demo org fixa |
 | POST | `/api/donations` | Cadastrar lote | implementado, demo org fixa |
 | PATCH | `/api/donations/:id` | Mudar status do lote | implementado, demo org fixa |
-| GET | `/api/reports/summary` | PDF consolidado | implementado, conferir filtros |
+| GET | `/api/reports/summary` | PDF consolidado | Fase 5: mesmos filtros e serviço do BI |
 | POST | `/api/admin/simulate` | Evento DEMO | isolar/desativar fora de lab |
 
 ## Endpoints-alvo e payloads (quando necessários)
