@@ -12,3 +12,4 @@ iot/**/secrets.h
 # estado local do oh-my-claudecode
 .omc/
 .e2e/
+__pycache__/

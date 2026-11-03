@@ -1,0 +1,71 @@
+%% MER conceitual do RICHARDS Intelligence (notação de Chen, cardinalidade (mín,máx)).
+%% Retângulo = entidade · losango = relacionamento · ● identificador · ○ atributo.
+%% (mín,máx) ao lado de uma entidade = com quantas ocorrências DELA uma ocorrência da outra ponta se relaciona.
+%% Fonte: prisma/schema.prisma + migrations aplicadas. Atualizado em 03/11/2026.
+flowchart LR
+  classDef ent fill:#ffffff,stroke:#0f2128,stroke-width:2px,color:#0f2128,text-align:left
+  classDef rel fill:#e3f1ee,stroke:#137e77,stroke-width:1.5px,color:#0f2128
+  classDef fut fill:#f6f7f8,stroke:#8b989d,stroke-width:1.5px,stroke-dasharray:6 4,color:#55656b,text-align:left
+  classDef relfut fill:#f6f7f8,stroke:#8b989d,stroke-width:1.2px,stroke-dasharray:6 4,color:#55656b
+
+  ORG["<b>ORGANIZAÇÃO</b><br/>● id<br/>○ nome<br/>○ setor<br/>○ cidade<br/>○ é demonstração"]:::ent
+  USR["<b>USUÁRIO</b><br/>● id<br/>○ nome<br/>○ e-mail (único)<br/>○ papel"]:::ent
+  UNI["<b>UNIDADE</b><br/>● id<br/>○ nome<br/>○ descrição"]:::ent
+  DSP["<b>DISPOSITIVO</b><br/>● id<br/>○ código (único)<br/>○ rótulo · tipo · estado<br/>○ último contato<br/>○ vazão mínima de alerta<br/>○ tempo contínuo de alerta<br/>○ calibração"]:::ent
+  LEI["<b>LEITURA</b><br/>● id<br/>○ boot · sequência (únicos)<br/>○ vazão (L/min)<br/>○ litros observados<br/>○ origem<br/>○ capturada em<br/>○ recebida em"]:::ent
+  OCO["<b>OCORRÊNCIA</b><br/>● id<br/>○ tipo · severidade · status<br/>○ origem<br/>○ título · descrição<br/>○ litros suspeitos<br/>○ nota de verificação<br/>○ aberta em<br/>○ assumida em<br/>○ encerrada em"]:::ent
+  EVT["<b>EVENTO DA OCORRÊNCIA</b><br/>● id<br/>○ ação<br/>○ nota<br/>○ autor<br/>○ data"]:::ent
+  INS["<b>INSTITUIÇÃO RECEPTORA</b><br/>● id<br/>○ nome<br/>○ cidade<br/>○ ativa"]:::ent
+  LOT["<b>LOTE DE DOAÇÃO</b><br/>● id<br/>○ descrição<br/>○ peso (kg)<br/>○ status · origem<br/>○ verificado por / em<br/>○ recebido por / em<br/>○ motivo do cancelamento"]:::ent
+  MIS["<b>MISSÃO</b> (expansão)<br/>● id<br/>○ tipo · status<br/>○ título<br/>○ responsável<br/>○ criada em<br/>○ concluída em"]:::fut
+  AUD["<b>EVENTO DE AUDITORIA</b><br/>● id<br/>○ entidade + registro<br/>○ ação<br/>○ metadados (autor, evidência)<br/>○ data"]:::ent
+
+  R1{"possui"}:::rel
+  R2{"mantém"}:::rel
+  R3{"cadastra"}:::rel
+  R4{"abriga"}:::rel
+  R5{"envia"}:::rel
+  R6{"acompanha"}:::rel
+  R7{"registra"}:::rel
+  R8{"origina"}:::rel
+  R9{"tem histórico"}:::rel
+  R10{"oferta"}:::rel
+  R11{"recebe"}:::rel
+  R12{"planeja"}:::relfut
+  R13{"gera"}:::relfut
+  R14{"gera"}:::relfut
+  R15{"audita"}:::rel
+  R16{"rastreia"}:::relfut
+
+  ORG -- "(1,1)" --- R1
+  R1 -- "(0,N)" --- USR
+  ORG -- "(1,1)" --- R2
+  R2 -- "(0,N)" --- UNI
+  ORG -- "(1,1)" --- R3
+  R3 -- "(0,N)" --- DSP
+  UNI -- "(1,1)" --- R4
+  R4 -- "(0,N)" --- DSP
+  DSP -- "(1,1)" --- R5
+  R5 -- "(0,N)" --- LEI
+  ORG -- "(1,1)" --- R6
+  R6 -- "(0,N)" --- OCO
+  UNI -- "(1,1)" --- R7
+  R7 -- "(0,N)" --- OCO
+  DSP -- "(0,1)" --- R8
+  R8 -- "(0,N)" --- OCO
+  OCO -- "(1,1)" --- R9
+  R9 -- "(0,N)" --- EVT
+  ORG -- "(1,1)" --- R10
+  R10 -- "(0,N)" --- LOT
+  INS -- "(0,1)" --- R11
+  R11 -- "(0,N)" --- LOT
+  ORG -. "(1,1)" .- R12
+  R12 -. "(0,N)" .- MIS
+  OCO -. "(0,1)" .- R13
+  R13 -. "(0,N)" .- MIS
+  LOT -. "(0,1)" .- R14
+  R14 -. "(0,N)" .- MIS
+  ORG -- "(1,1)" --- R15
+  R15 -- "(0,N)" --- AUD
+  AUD -. "(0,N)" .- R16
+  R16 -. "(1,1) ocorrência ou lote<br/>referência lógica, sem FK" .- OCO

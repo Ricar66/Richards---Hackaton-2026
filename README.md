@@ -53,6 +53,7 @@ Verificar:
 ## Status
 - Fases 0 a 5 concluídas. Registros em `docs/FASE_0_BASELINE.md`, `docs/FASE_1_BANCO_CONTRATOS.md`, `docs/FASE_2_IOT_OCORRENCIAS.md`, `docs/FASE_3_BI_NATIVO.md`, `docs/FASE_4_DOACOES_IMPACTO.md` e `docs/FASE_5_PDF_QA_DEMO.md`.
 - Roteiro de palco com cliques e contingências: `docs/ROTEIRO_DEMO.md`.
+- Modelo de dados: dicionário em Excel, MER e DER em `docs/dados/` (ver `docs/dados/README.md`).
 - Firmware **não compilado** e ESP32 físico **não testado**. A equipe de IoT precisa compilar e gravar na Arduino IDE.
 - Dados SIMULATED nunca podem ser apresentados como resultado real nem como litros economizados. O BI e o PDF carimbam a origem.
 

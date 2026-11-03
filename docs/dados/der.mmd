@@ -1,0 +1,135 @@
+%% DER lógico do RICHARDS Intelligence (PostgreSQL 16, schema public), pé de galinha.
+%% Nomes físicos das tabelas e colunas. PK = chave primária · FK = chave estrangeira · UK = único.
+%% "opcional" = aceita nulo. Tipos e padrões completos no DICIONARIO_DE_DADOS.xlsx.
+%% Fonte: prisma/schema.prisma + migrations aplicadas (conferido no banco em 03/11/2026).
+erDiagram
+  Organization ||--o{ User : "organizationId"
+  Organization ||--o{ Site : "organizationId"
+  Organization ||--o{ Device : "organizationId"
+  Site ||--o{ Device : "siteId"
+  Device ||--o{ TelemetryReading : "deviceId"
+  Organization ||--o{ Occurrence : "organizationId"
+  Site ||--o{ Occurrence : "siteId"
+  Device |o--o{ Occurrence : "deviceId"
+  Occurrence ||--o{ OccurrenceEvent : "occurrenceId (cascade)"
+  Organization ||--o{ DonationBatch : "organizationId"
+  RecipientOrganization |o--o{ DonationBatch : "recipientId"
+  Organization ||--o{ Mission : "organizationId"
+  Occurrence |o--o{ Mission : "occurrenceId"
+  DonationBatch |o--o{ Mission : "donationBatchId"
+  Organization ||--o{ AuditEvent : "organizationId"
+
+  Organization {
+    text id PK
+    text name
+    text sector
+    text city
+    boolean isDemo
+    timestamp createdAt
+  }
+  User {
+    text id PK
+    text organizationId FK
+    text name
+    text email UK
+    Role role
+    timestamp createdAt
+  }
+  Site {
+    text id PK
+    text organizationId FK
+    text name
+    text description "opcional"
+  }
+  Device {
+    text id PK
+    text organizationId FK
+    text siteId FK
+    text code UK
+    text label
+    DeviceKind kind
+    DeviceState state
+    text apiKeyHash "SHA-256"
+    timestamp lastSeenAt "opcional"
+    float8 calibrationPulsesPerLiter
+    float8 minFlowLpm
+    integer continuousSeconds
+  }
+  TelemetryReading {
+    text id PK
+    text deviceId FK, UK "único: deviceId + bootId + sequence"
+    text bootId UK
+    integer sequence UK
+    DataSource source
+    numeric flowLpm "12,3"
+    numeric deltaLiters "12,3"
+    timestamp capturedAt
+    timestamp receivedAt
+  }
+  Occurrence {
+    text id PK
+    text organizationId FK
+    text siteId FK
+    text deviceId FK "opcional"
+    OccurrenceKind kind
+    OccurrenceSeverity severity
+    OccurrenceStatus status
+    DataSource source
+    text title
+    text description
+    numeric suspectedLiters "12,3 · opcional"
+    text verificationNote "opcional"
+    timestamp openedAt
+    timestamp acknowledgedAt "opcional"
+    timestamp resolvedAt "opcional"
+  }
+  OccurrenceEvent {
+    text id PK
+    text occurrenceId FK
+    text action
+    text note "opcional"
+    timestamp at
+    text actor "opcional"
+  }
+  RecipientOrganization {
+    text id PK
+    text name
+    text city
+    boolean active
+  }
+  DonationBatch {
+    text id PK
+    text organizationId FK
+    text recipientId FK "opcional"
+    text description
+    numeric weightKg "12,3"
+    DonationStatus status
+    DataSource source
+    text safetyVerifiedBy "opcional"
+    timestamp safetyVerifiedAt "opcional"
+    timestamp receivedAt "opcional"
+    timestamp createdAt
+    text receivedBy "opcional"
+    text cancelReason "opcional"
+  }
+  Mission {
+    text id PK
+    text organizationId FK
+    text occurrenceId FK "opcional"
+    text donationBatchId FK "opcional"
+    MissionKind kind
+    MissionStatus status
+    text title
+    text assignedTo "opcional"
+    timestamp createdAt
+    timestamp completedAt "opcional"
+  }
+  AuditEvent {
+    text id PK
+    text organizationId FK
+    text entity "Occurrence ou DonationBatch"
+    text entityId "referência lógica"
+    text action
+    jsonb metadata "opcional"
+    timestamp at
+  }
