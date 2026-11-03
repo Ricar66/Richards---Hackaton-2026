@@ -40,6 +40,7 @@
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.25.0",
     "eslint-config-next": "^16.2.0",
+    "prisma": "7.10.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.0"
   }

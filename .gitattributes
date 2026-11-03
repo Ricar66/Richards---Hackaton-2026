@@ -1,0 +1,4 @@
+# LF em tudo: Dockerfile/scripts rodam em Linux e o firmware é compilado fora do Windows.
+* text=auto eol=lf
+*.png binary
+*.pdf binary

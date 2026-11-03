@@ -1,8 +1,8 @@
 FROM node:22-alpine
 WORKDIR /app
 RUN corepack enable
-COPY package.json ./
-RUN pnpm install --no-frozen-lockfile
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm db:generate
 EXPOSE 3000

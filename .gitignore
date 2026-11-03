@@ -8,3 +8,6 @@ src/generated/
 coverage/
 
 iot/**/secrets.h
+
+# estado local do oh-my-claudecode
+.omc/

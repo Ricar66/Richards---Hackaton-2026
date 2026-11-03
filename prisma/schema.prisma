@@ -5,16 +5,63 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-enum Role { OWNER OPERATOR ANALYST RECIPIENT }
-enum DeviceKind { FLOW SCALE TEMPERATURE }
-enum DeviceState { ONLINE OFFLINE MAINTENANCE }
-enum DataSource { DEVICE SIMULATED MANUAL }
-enum OccurrenceStatus { OPEN ACKNOWLEDGED RESOLVED DISMISSED }
-enum OccurrenceSeverity { LOW MEDIUM HIGH CRITICAL }
-enum OccurrenceKind { UNUSUAL_FLOW DEVICE_OFFLINE TEMPERATURE_EXCURSION MANUAL }
-enum DonationStatus { PENDING_REVIEW AVAILABLE RESERVED DELIVERED CANCELLED }
-enum MissionKind { INSPECTION PICKUP }
-enum MissionStatus { OPEN ASSIGNED DONE CANCELLED }
+// Prisma exige um valor de enum por linha (forma em linha única não valida).
+enum Role {
+  OWNER
+  OPERATOR
+  ANALYST
+  RECIPIENT
+}
+enum DeviceKind {
+  FLOW
+  SCALE
+  TEMPERATURE
+}
+enum DeviceState {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+enum DataSource {
+  DEVICE
+  SIMULATED
+  MANUAL
+}
+enum OccurrenceStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+enum OccurrenceSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+enum OccurrenceKind {
+  UNUSUAL_FLOW
+  DEVICE_OFFLINE
+  TEMPERATURE_EXCURSION
+  MANUAL
+}
+enum DonationStatus {
+  PENDING_REVIEW
+  AVAILABLE
+  RESERVED
+  DELIVERED
+  CANCELLED
+}
+enum MissionKind {
+  INSPECTION
+  PICKUP
+}
+enum MissionStatus {
+  OPEN
+  ASSIGNED
+  DONE
+  CANCELLED
+}
 model Organization {
   id         String @id @default(cuid())
   name       String

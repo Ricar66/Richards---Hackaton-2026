@@ -11,9 +11,9 @@ export async function GET(){
  page.drawText(overview.business.replaceAll('·','-'),{x:40,y:726,size:15,font:bold,color:dark});
  page.drawText('Origem: '+(overview.dataset==='SIMULATED'?'DADOS SIMULADOS':overview.dataset==='MIXED'?'DADOS MISTOS':'LEITURAS DE DISPOSITIVO'),{x:40,y:700,size:10,font:bold,color:teal});
  const items=[['Volume monitorado (7 dias)',`${overview.metrics.observedLiters.toFixed(1)} L`],['Ocorrencias em aberto',String(overview.metrics.openAlerts)],['Alimentos entregues',`${overview.metrics.deliveredKg.toFixed(1)} kg`],['Ocorrencias resolvidas',String(overview.metrics.resolved)]];
- items.forEach(([label,value],i)=>{let y=647-i*61;page.drawRectangle({x:40,y:y-13,width:515,height:49,color:rgb(.95,.97,.96)});page.drawText(label,{x:54,y:y+13,size:11,font,color:dark});page.drawText(value,{x:425,y:y+10,size:17,font:bold,color:teal});});
+ items.forEach(([label,value],i)=>{const y=647-i*61;page.drawRectangle({x:40,y:y-13,width:515,height:49,color:rgb(.95,.97,.96)});page.drawText(label,{x:54,y:y+13,size:11,font,color:dark});page.drawText(value,{x:425,y:y+10,size:17,font:bold,color:teal});});
  page.drawText('Ocorrencias recentes',{x:40,y:380,size:14,font:bold,color:dark});
- overview.occurrences.slice(0,5).forEach((o,i)=>{let y=355-i*34;page.drawText(o.title.replaceAll('·','-').slice(0,62),{x:42,y,size:10,font,color:dark});page.drawText(o.status,{x:448,y,size:8,font:bold,color:muted})});
+ overview.occurrences.slice(0,5).forEach((o,i)=>{const y=355-i*34;page.drawText(o.title.replaceAll('·','-').slice(0,62),{x:42,y,size:10,font,color:dark});page.drawText(o.status,{x:448,y,size:8,font:bold,color:muted})});
  page.drawLine({start:{x:40,y:145},end:{x:555,y:145},thickness:1,color:rgb(.84,.89,.88)});
  page.drawText('IMPORTANTE',{x:40,y:125,size:10,font:bold,color:teal});
  page.drawText('Volume monitorado nao significa agua economizada. Alertas exigem verificacao.',{x:40,y:108,size:9,font,color:muted});
