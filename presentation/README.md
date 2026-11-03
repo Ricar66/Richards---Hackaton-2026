@@ -36,7 +36,8 @@ Os arquivos serão gerados em `presentation/export/` (não versionados, para nã
 
 ## Organização
 
-- [ROTEIRO_PALCO.md](ROTEIRO_PALCO.md) — história, minutagem, fala, cliques, plano B e respostas à banca.
+- [ROTEIRO_PALCO.md](ROTEIRO_PALCO.md) — história, minutagem, cliques, plano B e respostas à banca.
+- [FALA_5MIN40.md](FALA_5MIN40.md) — texto natural para ensaiar a apresentação com demo.
 - [CHECKLIST_VICTOR_IOT.md](CHECKLIST_VICTOR_IOT.md) — contrato, hardware, sensores, rede, calibração e evidência.
 - [PLANO_FINAL.md](PLANO_FINAL.md) — cronograma de P0, riscos, qualidade e teste de aceite.
 - [slides/](slides/) — 14 imagens vetoriais 1920 × 1080.
