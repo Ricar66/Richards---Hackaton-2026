@@ -16,6 +16,9 @@ Complementa `docs/plano/13_PITCH_JORNADA_DEMO.md` (tese, falas de abertura, slid
    - Basic Auth já digitada;
    - abas abertas: `/`, `/monitoramento?range=24h`, `/doacoes` e `/relatorios`.
 6. Deixar o terminal pronto com `pnpm simulate --scenario leak --samples 14 --interval 4` (contingência).
+7. **O histórico do seed envelhece.** Ele cobre de 27/10 a 03/11. Em 06/11, o filtro "7 dias" mostra só a parte final dele, e "24 h" fica vazio até o sensor ou o simulador enviar.
+   - Use **30 dias** para mostrar o histórico.
+   - Recriar o banco da demo apaga dados: só com autorização expressa da equipe.
 
 ## Demonstração (2 min, Dev 1, depois da fala de IoT)
 
