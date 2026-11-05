@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { DEMO_ORG_ID } from "@/lib/constants";
 import { auditRecord } from "@/modules/audit/infrastructure/audit-record";
@@ -21,6 +22,32 @@ export class DonationService {
       await tx.auditEvent.create({ data: auditRecord({ organizationId: DEMO_ORG_ID, entity: "DonationBatch", entityId: item.id, action: "CREATED", actor, metadata: { weightKg: input.weightKg } }) });
       return { id: item.id, status: item.status };
     });
+  }
+
+  /**
+   * Lote pesado pela balança da bancada. Entra SEMPRE em PENDING_REVIEW (regra 6: só fica disponível com
+   * verificação humana documentada). No máximo UM lote da mesma balança aguarda verificação por vez: leitura
+   * repetida ou ponte reiniciada com o peso ainda na balança não duplica kg.
+   */
+  async createFromScale(input: {
+    organizationId: string; deviceId: string; deviceCode: string; weightKg: number; source: "DEVICE" | "SIMULATED";
+    evidence: Record<string, Prisma.InputJsonValue | null>;
+  }, actor: string): Promise<{ created: boolean; id: string }> {
+    return getDb().$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`scale-donation:${input.deviceId}`}))`;
+      // O lote não tem coluna de dispositivo: a autoria fica na auditoria de criação.
+      const mine = await tx.auditEvent.findMany({ where: { organizationId: input.organizationId, entity: "DonationBatch", action: "CREATED", metadata: { path: ["deviceCode"], equals: input.deviceCode } }, select: { entityId: true } });
+      const pending = mine.length ? await tx.donationBatch.findFirst({ where: { id: { in: mine.map(m => m.entityId) }, status: "PENDING_REVIEW" }, select: { id: true } }) : null;
+      if (pending) return { created: false, id: pending.id };
+      const item = await tx.donationBatch.create({ data: {
+        organizationId: input.organizationId, description: `Excedente pesado na balança · ${input.deviceCode}`,
+        weightKg: input.weightKg, status: "PENDING_REVIEW", source: input.source,
+      } });
+      await tx.auditEvent.create({ data: auditRecord({ organizationId: input.organizationId, entity: "DonationBatch", entityId: item.id, action: "CREATED", actor, metadata: {
+        weightKg: input.weightKg, deviceCode: input.deviceCode, source: input.source, ...input.evidence,
+      } }) });
+      return { created: true, id: item.id };
+    }, { maxWait: 5_000, timeout: 10_000 });
   }
 
   async transition(id: string, input: DonationTransitionInput, actor: string) {

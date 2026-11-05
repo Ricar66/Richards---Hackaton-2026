@@ -34,8 +34,11 @@ export async function getOccurrenceDetail(id: string): Promise<OccurrenceDetailD
   const ruleMeta = meta?.rule as { minFlowLpm?: unknown; continuousSeconds?: unknown } | undefined;
 
   let evidence: OccurrenceDetailDTO["evidence"] = null;
-  let evidenceNote = "Sem janela de leituras registrada para esta ocorrência (simulação pelo painel, cadastro manual ou registro anterior à Fase 1). Nenhuma leitura é associada para não inventar evidência.";
-  if (o.deviceId && windowStart && windowEnd && o.source !== "MANUAL") {
+  let evidenceNote = o.kind === "TEMPERATURE_EXCURSION"
+    ? "Alerta de temperatura: as leituras do DHT11 que dispararam a regra estão resumidas na descrição e guardadas na auditoria. O BI ainda não grafa temperatura; leituras de vazão não servem de evidência aqui."
+    : "Sem janela de leituras registrada para esta ocorrência (simulação pelo painel, cadastro manual ou registro anterior à Fase 1). Nenhuma leitura é associada para não inventar evidência.";
+  // Janela de vazão só é evidência de ocorrência de vazão.
+  if (o.kind === "UNUSUAL_FLOW" && o.deviceId && windowStart && windowEnd && o.source !== "MANUAL") {
     const scope = { deviceId: o.deviceId, source: o.source };
     const [inWindow, after] = await Promise.all([
       db.telemetryReading.findMany({ where: { ...scope, capturedAt: { gte: windowStart, lte: windowEnd } }, orderBy: { capturedAt: "asc" }, take: MAX_READINGS }),
