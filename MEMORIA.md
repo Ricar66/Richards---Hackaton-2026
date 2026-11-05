@@ -1,7 +1,7 @@
 # MEMÓRIA DO PROJETO — RICHARDS Intelligence
 
 > **Leia isto primeiro.** É o estado completo do projeto: o que é, onde está cada coisa, como rodar, o que foi decidido, o que falta e o que já deu errado.
-> Atualizado em **03/11/2026**. Este arquivo **não contém senhas nem chaves**: elas ficam só no `.env` local, que nunca vai para o git.
+> Atualizado em **04/11/2026**. Este arquivo **não contém senhas nem chaves**: elas ficam só no `.env` local, que nunca vai para o git.
 
 ---
 
@@ -12,6 +12,7 @@
 A equipe tem 4 pessoas: 2 de desenvolvimento e 2 de IoT. O Victor cuida do ESP32 e da bancada. Duas jornadas:
 
 - **A · Água:** sensor de vazão (ESP32 + YF-S201) → API → ocorrência *suspeita* de fluxo contínuo → operador investiga e resolve → BI e PDF.
+- **Bancada MQTT do Victor (PR #3):** um ESP32 com vazão (potenciômetro), DHT11 e balança HX711 publica num broker. A ponte `pnpm mqtt` grava pelos mesmos casos de uso do HTTP: fluxo, temperatura e lote de doação aguardando verificação.
 - **B · Alimentos:** lote de excedente → verificação humana documentada → reserva para instituição → entrega confirmada com nome de quem recebeu → impacto em kg.
 
 Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o que aconteceu depois"*. Rastreabilidade honesta, nunca número inventado.
@@ -31,7 +32,8 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 | Kit de pitch | `presentation/`: 14 slides SVG 1920×1080, fala de 5min40 (`FALA_5MIN40.md`), roteiro (`ROTEIRO_PALCO.md`), checklist de IoT do Victor e `PLANO_FINAL.md`. PNG e PPTX saem com `python presentation/render_slides.py` em `presentation/export/`, que não vai para o git |
 | Dicionário de dados, MER e DER | `docs/dados/`, explicado em `docs/dados/README.md` |
 | Contrato do ESP32 | `docs/CONTRATO_IOT.md` |
-| Firmware | `iot/esp32_richards/esp32_richards.ino` + `secrets.h.example` |
+| Firmware | `iot/esp32_richards/esp32_richards.ino` + `secrets.h.example` (HTTP). O firmware MQTT do Victor **ainda não está no repositório** |
+| Ponte MQTT | `src/iot/` (`pnpm mqtt`); contrato em `docs/CONTRATO_IOT.md`, seção "Canal MQTT" |
 
 ## 3. Regras invioláveis (do prompt mestre)
 
@@ -63,6 +65,8 @@ Next.js 16 (App Router) · React 19 · TypeScript strict · pnpm 10.16.1 · Post
 
 Dependência só de desenvolvimento: `puppeteer-core` 24.43.1, para o E2E. Usa o Chrome instalado e não baixa navegador.
 
+`mqtt` 5.16.1 (MIT, cerca de 2 MB, 32 pacotes): cliente MQTT da ponte da bancada. Roda só no processo `pnpm mqtt` e não entra no bundle do Next.
+
 ## 6. Mapa do código
 
 | Pasta | Conteúdo |
@@ -78,6 +82,7 @@ Dependência só de desenvolvimento: `puppeteer-core` 24.43.1, para o E2E. Usa o
 | `src/proxy.ts` | Basic Auth do operador; define o autor (`x-richards-actor`) e descarta o valor vindo do cliente |
 | `prisma/` | `schema.prisma`, 3 migrations e `seed.ts` (idempotente, tudo `SIMULATED`) |
 | `iot/esp32_richards/` | Firmware: fila de 12, retentativa com a mesma `sequence`, NTP, 401 espera 30 s |
+| `src/iot/` | Ponte MQTT: `mqtt-payload.ts` (JSON e configuração), `mqtt-ingestion.ts` (adaptador para os casos de uso), `mqtt-connection.ts`, `run-mqtt.ts` |
 | `scripts/` | `iot-simulator.mjs` (se comporta como o firmware), `e2e/` (jornadas no Chrome), `test-db-prepare.mjs`, `docs/` (geradores do dicionário e dos diagramas) |
 | `tests/` | Unitários (`*.test.ts`) e integração no Postgres (`integration/`) |
 
@@ -100,6 +105,9 @@ pnpm test:e2e                          # Chrome em :3100 no banco de teste; --wi
 
 # Simulador do sensor (contingência no palco)
 pnpm simulate --scenario leak --samples 14 --interval 4
+
+# Ponte MQTT da bancada (processo separado; broker e variáveis MQTT_* no .env, ver .env.example)
+pnpm mqtt
 
 # Documentação de dados
 node scripts/docs/render-diagramas.mjs     # MER/DER → PNG, SVG e PDF (precisa de internet, Mermaid 11.12.0 via CDN)
@@ -129,7 +137,9 @@ python scripts/docs/dicionario_de_dados.py # dicionário em Excel (depois abrir 
 | Ajustes visuais | `f44dc3f`, `7aa9ba2` | Ponto de status no lugar de bordas coloridas; botão de volta na tela do V3; lint ignora `.e2e/` |
 | Modelo de dados | `7cc89d1` | Dicionário em Excel (7 abas), MER (Chen) e DER (pé de galinha), conferidos contra o banco |
 | Kit de pitch | `54d1e94`, `15ddc62`, `c9c14ef` | Pasta `presentation/` (slides, fala, roteiro, checklist de IoT, plano final), sem mudar o código |
-| Memória | este commit | `MEMORIA.md` e `CLAUDE.md` |
+| Memória | `ea40f3b`, `866e53b` | `MEMORIA.md` e `CLAUDE.md` |
+| Galeria do pitch | `1940d59`, `012ebc5` | 10 imagens Full HD em `presentation/imagens/` |
+| Unificação IoT (PR #3) | `37d5182` (Victor) + commits seguintes | Ponte MQTT do Victor passando pela ingestão existente: regra por dispositivo, regra 5 por tipo, lote da balança em `PENDING_REVIEW`, auditoria, origem SIMULATED para o potenciômetro |
 
 As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estão incorporadas ao `main`. No GitHub existe também `feat/pitch-richards-hackathon-2026`, com o kit de pitch.
 
@@ -137,11 +147,13 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 
 | Verificação | Resultado | Data |
 |---|---|---|
-| typecheck, lint e build | PASSOU | 03/11/2026 |
-| `pnpm test` (unitários) | PASSOU 22/22 | 03/11/2026 |
-| `pnpm test:integration` (Postgres real) | PASSOU 37/37 | 03/11/2026 |
+| typecheck, lint e build | PASSOU | 04/11/2026 (unificação MQTT) |
+| `pnpm test` (unitários) | PASSOU 26/26 | 04/11/2026 |
+| `pnpm test:integration` (Postgres real) | PASSOU 44/44 (7 da ponte MQTT) | 04/11/2026 |
 | `pnpm test:e2e --with-db-outage` | PASSOU 30/30 | 03/11/2026 (Fase 5) |
-| `pnpm test:e2e` (sem queda de banco) | PASSOU 26/26 | 03/11/2026 (depois dos ajustes visuais) |
+| `pnpm test:e2e` (sem queda de banco) | PASSOU 26/26 | 04/11/2026 (unificação MQTT) |
+| Ponte MQTT de ponta a ponta (Mosquitto 2.1.2 em Docker + `pnpm mqtt` no banco de teste) | PASSOU: JSON inválido e id desconhecido descartados, 7 leituras SIMULATED, 1 ocorrência de temperatura e 1 lote PENDING_REVIEW de 6,2 kg, com auditoria | 04/11/2026 |
+| ESP32 MQTT do Victor contra a ponte | **NÃO EXECUTADO** (sem placa nesta máquina; firmware MQTT fora do repositório) | — |
 | Dicionário × banco (colunas, tipos, nulos, padrões, ordem, enums, FKs, índices) | PASSOU, 0 divergências | 03/11/2026 |
 | Compilação do firmware | **NÃO EXECUTADO** (download do arduino-cli bloqueado) | — |
 | ESP32 físico com a plataforma | **NÃO EXECUTADO** (sem placa) | — |
@@ -162,6 +174,15 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Mudança de status usa guarda otimista**: atualiza só se o status ainda é o lido; senão responde conflito.
 - **Kg entregues contam pela data de entrega** (`receivedAt`), não pela de cadastro.
 
+**Ponte MQTT (PR #3)**
+- **A ponte é só um adaptador** (revisão do ADR-004). Vazão, temperatura e balança passam por `ingestReading`, `openDeviceOccurrence` e `DonationService.createFromScale`, os mesmos caminhos e regras do HTTP. O código do PR que gravava direto no banco saiu.
+- **Potenciômetro é SIMULATED** (`MQTT_SIMULATED_SENSORS="VAZAO"` por padrão). Ele não mede água. Com o YF-S201 ligado, troque para `""`.
+- **Id desconhecido é descartado.** O PR caía no primeiro Device do banco; agora vale o mapa explícito `MQTT_DEVICE_ALIASES`.
+- **Temperatura alerta só sustentada** (acima de 28 °C por 30 s, configurável), com no máximo uma ativa por dispositivo. As leituras ficam na auditoria; o BI ainda não grafa temperatura e não usa vazão como evidência dela.
+- **Balança cria lote `PENDING_REVIEW`**, nunca `AVAILABLE`. O peso é a menor leitura estável, arredondada para baixo. Há um lote pendente por balança, e ela só rearma depois de esvaziada.
+- **Missões não são criadas** pela ponte, porque não têm tela (P2).
+- **Tópico renomeado** para `richards/comercio/telemetria`, sem o nome antigo do produto. A consulta do histórico de fluxo passou a pegar as leituras mais recentes primeiro, para leituras a cada 2 s não cortarem a ponta da janela.
+
 **Ferramentas e documentação**
 - **E2E com `puppeteer-core` em vez de Playwright**: usa o Chrome instalado e não baixa navegador. O Edge headless não funcionou.
 - **Diagramas em Mermaid**, para serem editáveis e versionáveis. A versão 11.4.1 desenha seta em linha que deveria ser reta, por isso fixamos a 11.12.0.
@@ -180,11 +201,19 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
    - NTP sincronizado;
    - ver `POST 202` na serial.
 5. Contingência: `pnpm simulate --scenario leak --samples 14 --interval 4`.
+6. Se a bancada MQTT for usada:
+   - broker na rede isolada;
+   - `.env` com `MQTT_BROKER_URL`, `MQTT_TOPIC` e `MQTT_DEVICE_ALIASES`;
+   - `MQTT_SIMULATED_SENSORS` de acordo com o que está ligado;
+   - `pnpm mqtt` mostrando `Ouvindo richards/comercio/telemetria`.
+   - Para mostrar a balança: o seed já tem um lote SIMULATED pendente, mas ele **não** bloqueia a balança.
 
 ## 12. Pendências
 
 **P0 (antes de 06/11)**
 - Equipe de IoT: compilar e gravar o firmware na Arduino IDE e testar o ESP32 físico contra a plataforma.
+- Victor: trocar o tópico do firmware MQTT para `richards/comercio/telemetria` (ou definir `MQTT_TOPIC`), conferir `dispositivo_id` × `MQTT_DEVICE_ALIASES` e rodar o teste de bancada MQTT do `presentation/CHECKLIST_VICTOR_IOT.md`.
+- Victor: subir o `.ino` do firmware MQTT em `iot/esp32_richards_mqtt/`, com `secrets.h.example` e sem senha.
 - Ensaiar o pitch 3 vezes com cronômetro, dentro de 5min40 (`presentation/FALA_5MIN40.md`).
 - Fazer a preparação da seção 11 na véspera.
 - Montar o backup de palco: simulação identificada, prints, vídeo offline e cabo HDMI.
@@ -193,6 +222,9 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 **P1**
 - A senha de acesso é de laboratório. Não expor a demo na internet aberta; trocar a senha depois do evento.
 - A instituição não tem login próprio: quem confirma a entrega é o operador.
+- Broker MQTT da bancada sem usuário e senha aceita leitura de qualquer equipamento da rede. Configurar `MQTT_USERNAME`/`MQTT_PASSWORD` no Mosquitto.
+- Firmware MQTT mandar `bootId` e `sequence` (idempotência igual à do HTTP).
+- Temperatura no BI: guardar a série e mostrar a evidência na gaveta (hoje fica só na auditoria e na descrição).
 
 **P2 (depois do hackathon)**
 - Fase 6, que hoje é só proposta.
@@ -220,4 +252,6 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Fontes padrão do pdf-lib só têm WinAnsi.** Por isso existe `safe()` no gerador do PDF.
 - **Planilha gerada pelo openpyxl não guarda o resultado das fórmulas.** Abra no Excel e salve. Não há LibreOffice na máquina.
 - **Python dentro de heredoc no Bash come barra invertida.** Use um arquivo `.py`.
-- **Git Bash converte `/` em caminho do Windows.** Use `MSYS_NO_PATHCONV=1` quando precisar.
+- **Git Bash converte `/` em caminho do Windows.** Use `MSYS_NO_PATHCONV=1` quando precisar (inclusive no `docker run ... mosquitto -c /mosquitto-no-auth.conf`).
+- **Parar `pnpm mqtt` rodando em segundo plano pelo terminal da IA deixa `node.exe` órfão no Windows.** Procure por `run-mqtt` na linha de comando dos processos e encerre.
+- **O build do Next tipa `process.env` com `NODE_ENV` obrigatório** e checa também `tests/`. Rode `pnpm typecheck` depois de escrever os testes, não antes.

@@ -17,6 +17,27 @@ POST `/api/iot/telemetry` — `Content-Type: application/json`, `x-device-key` n
 
 Esse JSON é exemplo de contrato, **não medição real**. Enviar horário UTC/NTP. `deltaLiters` mede somente o intervalo de 15s, não o volume acumulado da inicialização. Credencial única fora do Git. A origem `DEVICE` ou `SIMULATED` é atribuída pelo servidor.
 
+## Canal MQTT da bancada (PR #3, mesclado em 04/11)
+
+A ponte `pnpm mqtt` aceita o JSON que o firmware já publica (`dispositivo_id`, `PESO`, `VAZAO`, `TEMP`, `UMIDADE`) e grava pelos mesmos casos de uso do HTTP. **O que mudou em relação ao PR:**
+
+- **Tópico padrão:** `richards/comercio/telemetria` (o nome antigo do produto não aparece mais). Troque no firmware ou defina `MQTT_TOPIC` no `.env`.
+- **`dispositivo_id`:** precisa ser `RICHARDS-FLOW-001` ou estar mapeado em `MQTT_DEVICE_ALIASES="hortifruti_01=RICHARDS-FLOW-001"`. Id desconhecido é descartado (não cai mais no primeiro sensor do banco).
+- **Vazão:** alerta pela regra do dispositivo (≥ 1,5 L/min por 30 s), não por 8 L/min numa leitura só. Com potenciômetro, a leitura sai **SIMULATED** (`MQTT_SIMULATED_SENSORS="VAZAO"`). Com o YF-S201 ligado, use `""`.
+- **Temperatura:** alerta quando fica acima de 28 °C por 30 s seguidos (pico isolado não alerta).
+- **Balança:** a partir de 5 kg estáveis por 6 s cria lote **aguardando verificação** (não mais "disponível"). Só cria outro depois de esvaziar a balança, e há no máximo um lote pendente por balança.
+- **Missões** não são criadas por enquanto: não há tela para elas (P2).
+- **Opcional, recomendado:** mandar `"bootId"` (aleatório a cada boot) e `"sequence"` (contador) no JSON deixa a retransmissão idempotente como no HTTP.
+- **Falta no repositório:** o `.ino` do firmware MQTT. Suba em `iot/esp32_richards_mqtt/`, com um `secrets.h.example` e sem senha.
+
+Teste de bancada MQTT:
+
+- [ ] Broker na rede isolada; `pnpm mqtt` mostra `Ouvindo richards/comercio/telemetria`.
+- [ ] Log mostra `vazão seq N gravada` a cada mensagem, e o BI mostra o sinal ao vivo.
+- [ ] Vazão acima de 1,5 L/min por 30 s abre UMA ocorrência; zerar a vazão não abre.
+- [ ] Aquecer o DHT11 acima de 28 °C por 30 s abre UMA ocorrência de temperatura.
+- [ ] 5 kg na balança criam UM lote "aguardando verificação"; tirar e pôr de novo, com o lote ainda pendente, não cria outro.
+
 ## Checklist de ensaio conjunto
 
 - [ ] Montagem hidráulica de baixa tensão, sem vazamentos na bancada e fora de áreas molhadas elétricas.

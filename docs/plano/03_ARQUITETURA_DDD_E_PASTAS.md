@@ -91,6 +91,7 @@ sequenceDiagram
 - **ADR-002**: PostgreSQL + Prisma 7; migrations versionadas, `db push` apenas laboratório descartável.
 - **ADR-003**: `Recharts` para BI, componentes React nativos. O HTML V3 em `iframe` é **referência/transição**, não destino final.
 - **ADR-004**: HTTP/JSON ESP32 como opção suficiente. MQTT e broker só em escala futura.
+  - **Revisão de 04/11/2026 (PR #3):** a bancada da equipe de IoT publica em MQTT. Entrou uma **ponte MQTT** (`pnpm mqtt`, processo separado) que é só um adaptador: chama os mesmos casos de uso do HTTP (`ingestReading`, `openDeviceOccurrence`, `DonationService.createFromScale`). O HTTP continua o contrato principal do firmware. Ver `docs/CONTRATO_IOT.md`, seção "Canal MQTT".
 - **ADR-005**: detecção via regras calibráveis, não rotular como IA preditiva sem modelo treinado.
 - **ADR-006**: sem controle remoto da bomba/circuito de água pela plataforma.
 - **ADR-007**: relatórios gerados no servidor, respeitando escopo, proveniência e filtros.
