@@ -20,18 +20,19 @@
     "test:db": "node scripts/test-db-prepare.mjs",
     "test:integration": "pnpm test:db && tsx --test --test-concurrency=1 tests/integration/*.test.ts",
     "test:e2e": "node scripts/e2e/run.mjs",
-    "simulate": "node scripts/iot-simulator.mjs"
+    "simulate": "node scripts/iot-simulator.mjs",
+    "mqtt": "tsx src/iot/run-mqtt.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "@tailwindcss/postcss": "^4.1.0",
-    "dotenv": "^16.6.1",
+    "dotenv": "^16.4.7",
     "lucide-react": "^0.468.0",
-    "mqtt": "^5.16.1",
+    "mqtt": "5.16.1",
     "next": "^16.2.0",
     "pdf-lib": "^1.17.1",
-    "pg": "^8.23.1",
+    "pg": "^8.16.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^2.15.4",
@@ -39,15 +40,15 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.20.5",
-    "@types/pg": "^8.23.1",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.15.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.25.0",
     "eslint-config-next": "^16.2.0",
     "prisma": "7.10.1",
     "puppeteer-core": "24.43.1",
-    "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0"
   }
 }
