@@ -10,7 +10,8 @@ export const mqttPayloadSchema = z.object({
   PESO: z.number().finite().min(-50).max(1000).optional(),  // kg, HX711 (oscila um pouco abaixo de zero depois da tara)
   TEMP: z.number().finite().min(-40).max(125).optional(),   // °C, DHT11
   UMIDADE: z.number().finite().min(0).max(100).optional(),  // %, DHT11
-  bootId: z.string().min(4).max(80).optional(),
+  // O prefixo "mqtt-" é da sessão da ponte: aceitar do cliente deixaria marcar leituras legítimas como duplicadas.
+  bootId: z.string().min(4).max(80).refine(b => !b.toLowerCase().startsWith("mqtt-"), { message: "bootId com prefixo reservado da ponte (mqtt-)" }).optional(),
   sequence: z.number().int().min(0).optional(),
 })
   .refine(p => p.VAZAO !== undefined || p.PESO !== undefined || p.TEMP !== undefined, { message: "payload sem VAZAO, PESO nem TEMP" })
@@ -68,4 +69,13 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
     scaleMinKg: number(env, "MQTT_SCALE_MIN_KG", 5, 0.1, 500),
     scaleStableSeconds: number(env, "MQTT_SCALE_STABLE_SECONDS", 6, 1, 600),
   };
+}
+
+/**
+ * Fecha por padrão. O MQTT não leva chave por dispositivo como o HTTP (`x-device-key`): quem publica no broker
+ * pode se passar por qualquer Device. Sem usuário e senha no broker, a ponte só sobe em bancada de demonstração.
+ */
+export function assertBrokerAuth(cfg: MqttBridgeConfig, env: Env = process.env) {
+  if ((!cfg.username || !cfg.password) && env.DEMO_MODE !== "true")
+    throw new Error("Broker MQTT sem MQTT_USERNAME/MQTT_PASSWORD: isso só é aceito em bancada de demonstração (DEMO_MODE=\"true\"). Configure usuário e senha no broker.");
 }

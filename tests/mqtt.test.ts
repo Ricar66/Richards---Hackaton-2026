@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadMqttConfig, mqttPayloadSchema } from "../src/iot/mqtt-payload";
+import { assertBrokerAuth, loadMqttConfig, mqttPayloadSchema } from "../src/iot/mqtt-payload";
 import { TemperatureAlertPolicy } from "../src/modules/monitoring/domain/temperature-alert-policy";
 import { ScaleSurplusDetector } from "../src/modules/monitoring/domain/scale-surplus-detector";
 
@@ -12,6 +12,8 @@ test("payload do firmware MQTT (PR #3) é aceito como veio; sem sensor ou com bo
   assert.equal(mqttPayloadSchema.safeParse({ dispositivo_id: "hortifruti_01", TEMP: 26 }).success, true, "cada sensor é opcional");
   assert.equal(mqttPayloadSchema.safeParse({ dispositivo_id: "hortifruti_01", UMIDADE: 60 }).success, false, "umidade sozinha não é leitura");
   assert.equal(mqttPayloadSchema.safeParse({ dispositivo_id: "x", VAZAO: 1, bootId: "boot-1" }).success, false);
+  assert.equal(mqttPayloadSchema.safeParse({ dispositivo_id: "x", VAZAO: 1, bootId: "esp32-ab12", sequence: 3 }).success, true);
+  assert.equal(mqttPayloadSchema.safeParse({ dispositivo_id: "x", VAZAO: 1, bootId: "MQTT-1234abcd", sequence: 3 }).success, false, "prefixo da sessão da ponte é reservado");
   assert.equal(mqttPayloadSchema.safeParse({ dispositivo_id: "x", VAZAO: -1 }).success, false);
   assert.equal(mqttPayloadSchema.safeParse({ dispositivo_id: "x", VAZAO: "3" }).success, false, "texto não vira número");
 });
@@ -28,6 +30,15 @@ test("configuração da ponte: padrões honestos, apelidos explícitos e valor i
   assert.throws(() => loadMqttConfig({ MQTT_SIMULATED_SENSORS: "UMIDADE" }), /MQTT_SIMULATED_SENSORS/);
   assert.throws(() => loadMqttConfig({ MQTT_TEMP_LIMIT_C: "quente" }), /MQTT_TEMP_LIMIT_C/);
   assert.equal(loadMqttConfig({ MQTT_SCALE_MIN_KG: "2.5" }).scaleMinKg, 2.5);
+});
+
+test("broker sem usuário e senha só é aceito em bancada de demonstração (fail-closed)", () => {
+  const open = loadMqttConfig({});
+  assert.throws(() => assertBrokerAuth(open, {}), /MQTT_USERNAME/);
+  assert.throws(() => assertBrokerAuth(open, { DEMO_MODE: "verdadeiro" }), /MQTT_USERNAME/, "erro de digitação não abre o canal");
+  assert.doesNotThrow(() => assertBrokerAuth(open, { DEMO_MODE: "true" }));
+  assert.throws(() => assertBrokerAuth(loadMqttConfig({ MQTT_USERNAME: "ponte" }), {}), /MQTT_PASSWORD/, "usuário sem senha não basta");
+  assert.doesNotThrow(() => assertBrokerAuth(loadMqttConfig({ MQTT_USERNAME: "ponte", MQTT_PASSWORD: "segredo" }), {}));
 });
 
 test("temperatura: só alerta acima do limite de forma sustentada; pico isolado e buraco não alertam", () => {

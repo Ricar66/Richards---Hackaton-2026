@@ -1,6 +1,6 @@
 import { connect, type MqttClient } from "mqtt";
 import { MqttIngestion, type MqttProcessed } from "./mqtt-ingestion";
-import { loadMqttConfig, type MqttBridgeConfig } from "./mqtt-payload";
+import { assertBrokerAuth, loadMqttConfig, type MqttBridgeConfig } from "./mqtt-payload";
 
 const kg = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 function describe(o: MqttProcessed) {
@@ -30,6 +30,7 @@ async function processMessage(ingestion: MqttIngestion, message: Buffer) {
 
 /** Assina o tópico da bancada e entrega cada mensagem, em ordem, aos mesmos casos de uso do HTTP. */
 export function startMqttBridge(cfg: MqttBridgeConfig = loadMqttConfig()): MqttClient {
+  assertBrokerAuth(cfg);
   const ingestion = new MqttIngestion(cfg);
   const aliases = Object.entries(cfg.aliases).map(([from, to]) => `${from}→${to}`).join(", ");
   console.log(`[MQTT] Ponte RICHARDS · broker ${cfg.brokerUrl} · tópico ${cfg.topic} · sessão ${ingestion.bootId}`);

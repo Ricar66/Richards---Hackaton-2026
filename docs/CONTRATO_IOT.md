@@ -100,7 +100,7 @@ Payload que o firmware publica (exemplo de formato, não medição real):
 - **`dispositivo_id` precisa existir como `Device.code`**, ou ser mapeado em `MQTT_DEVICE_ALIASES` (ex.: `hortifruti_01=RICHARDS-FLOW-001`). Id desconhecido é descartado. A leitura **nunca** é atribuída a outro sensor.
 - **Origem:** sensor que não mede o fenômeno real na bancada é gravado como `SIMULATED`. O padrão é `MQTT_SIMULATED_SENSORS="VAZAO"`, porque a vazão vem de um potenciômetro. Com o YF-S201 ligado, use `MQTT_SIMULATED_SENSORS=""` e a vazão passa a sair como `DEVICE`. Leitura simulada nunca sustenta alerta de leitura real.
 - **Horário:** `capturedAt` é a hora em que a ponte recebeu a mensagem. O volume do intervalo é `vazão × tempo desde a leitura anterior`. Na primeira leitura, ou depois de mais de 45 s sem mensagem, usa-se o intervalo declarado do firmware (`MQTT_SAMPLE_SECONDS`, padrão 2 s).
-- **Idempotência:** sem `bootId`/`sequence` no payload, a ponte numera as leituras na própria sessão (`bootId = mqtt-xxxxxxxx`). Com o QoS 0 do ESP32 não há reenvio, mas uma mensagem repetida pelo broker contaria duas vezes. Para idempotência igual à do HTTP, o firmware pode mandar `"bootId"` e `"sequence"` (os dois juntos): a repetição volta como duplicata e não soma volume.
+- **Idempotência:** sem `bootId`/`sequence` no payload, a ponte numera as leituras na própria sessão (`bootId = mqtt-xxxxxxxx`). Com o QoS 0 do ESP32 não há reenvio, mas uma mensagem repetida pelo broker contaria duas vezes. Para idempotência igual à do HTTP, o firmware pode mandar `"bootId"` e `"sequence"` (os dois juntos): a repetição volta como duplicata e não soma volume. O prefixo `mqtt-` no `bootId` é reservado à ponte e é recusado.
 - **Balança:** o peso do lote é a **menor** leitura do trecho estável, arredondada para baixo em 0,1 kg, para nunca superestimar. Depois de criar um lote, a balança só gera outro quando é esvaziada (peso abaixo da metade do mínimo). Cada balança mantém no máximo **um** lote aguardando verificação. O autor fica na auditoria (`dispositivo:<código>`, `deviceCode`).
 - **Conectividade:** a ponte só atualiza `lastSeenAt`. Não grava `ONLINE`, e `MAINTENANCE` continua sendo decisão humana.
 - **Banco fora:** a entrega já foi confirmada ao broker, então a leitura se perde. Isso fica registrado no log (`Falha ao gravar`), e nada é reconstruído depois.
@@ -118,4 +118,14 @@ pnpm mqtt
 
 O log mostra cada mensagem (`vazão seq N gravada [SIMULATED]`, `OCORRÊNCIA ... aberta`, `LOTE de X kg criado`) e o motivo de cada descarte. **O tópico padrão é `richards/comercio/telemetria`.** Se o firmware ainda publicar no tópico antigo, ajuste o firmware ou defina `MQTT_TOPIC` no `.env`.
 
-**Segurança:** a confiança do canal é o broker. Sem `MQTT_USERNAME`/`MQTT_PASSWORD`, qualquer equipamento da rede publica leituras, e a ponte avisa isso na partida. Use só em rede de bancada isolada. Em produção: broker com TLS, usuário por dispositivo e ACL por tópico.
+**Segurança:** diferente do HTTP, o MQTT não leva chave por dispositivo. A confiança do canal é o broker: quem consegue publicar no tópico pode se passar por qualquer `Device` da organização da demo. Por isso a ponte **fecha por padrão**:
+
+- sem `MQTT_USERNAME` **e** `MQTT_PASSWORD`, ela só sobe com `DEMO_MODE="true"` (bancada) e avisa na partida;
+- fora disso, recusa iniciar.
+
+A ponte também só alimenta dispositivos da organização da bancada. Use só em rede de bancada isolada. Em produção:
+
+- broker com TLS;
+- usuário por dispositivo;
+- ACL por tópico, ligando o tópico ao código do dispositivo;
+- ou HMAC com a chave do dispositivo no payload.

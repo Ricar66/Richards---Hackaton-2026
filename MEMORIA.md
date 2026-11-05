@@ -222,7 +222,7 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 **P1**
 - A senha de acesso é de laboratório. Não expor a demo na internet aberta; trocar a senha depois do evento.
 - A instituição não tem login próprio: quem confirma a entrega é o operador.
-- Broker MQTT da bancada sem usuário e senha aceita leitura de qualquer equipamento da rede. Configurar `MQTT_USERNAME`/`MQTT_PASSWORD` no Mosquitto.
+- Broker MQTT da bancada sem usuário e senha aceita leitura de qualquer equipamento da rede (a ponte só sobe assim com `DEMO_MODE="true"`). Configurar `MQTT_USERNAME`/`MQTT_PASSWORD` no Mosquitto. Autenticação por dispositivo no MQTT (usuário/ACL por dispositivo ou HMAC com a chave) fica para depois do evento.
 - Firmware MQTT mandar `bootId` e `sequence` (idempotência igual à do HTTP).
 - Temperatura no BI: guardar a série e mostrar a evidência na gaveta (hoje fica só na auditoria e na descrição).
 

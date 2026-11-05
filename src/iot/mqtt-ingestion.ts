@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { DEMO_ORG_ID } from "@/lib/constants";
 import { getDb } from "@/lib/db";
 import { DonationService } from "@/modules/donations/application/donation-service";
 import { ingestReading, type IngestResult } from "@/modules/monitoring/application/ingest-telemetry";
@@ -50,7 +51,8 @@ export class MqttIngestion {
     const p = parsed.data;
     const code = this.cfg.aliases[p.dispositivo_id] ?? p.dispositivo_id;
     // Sem fallback para "o primeiro dispositivo": leitura sem dono certo é descartada, nunca atribuída a outro sensor.
-    const device = await getDb().device.findUnique({ where: { code } });
+    // Escopo da demonstração: a ponte só alimenta dispositivos da organização da bancada.
+    const device = await getDb().device.findFirst({ where: { code, organizationId: DEMO_ORG_ID } });
     if (!device) return { status: "rejected", reason: `dispositivo "${p.dispositivo_id}"${code !== p.dispositivo_id ? ` (apelido de ${code})` : ""} não cadastrado: cadastre o Device ou mapeie em MQTT_DEVICE_ALIASES` };
     const at = this.now();
     const mem = this.remember(device.id);
