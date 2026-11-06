@@ -97,11 +97,12 @@ test("bancada virtual · --checar só lê; --preparar encerra só o SIMULADO, co
   assert.deepEqual(await contar(), antes, "--checar não grava nada");
   const falhas = itens.filter(i => i.nivel === "FALHA").map(i => i.texto).join("\n");
   assert.match(falhas, /UNUSUAL_FLOW.*bloqueia/);
-  // A temperatura do sensor REAL (assumida) não bloqueia a bancada simulada (regra 5 por origem): vira aviso.
-  assert.doesNotMatch(falhas, /TEMPERATURE_EXCURSION/);
+  // A temperatura do sensor REAL (assumida) não bloqueia a bancada simulada (regra 5 por origem), mas impede o alerta ao
+  // vivo do sensor real: com o palco de dados reais (06/11) é FALHA, e a preparação não toca nela.
   const tempItem = itens.find(i => i.texto.startsWith("TEMPERATURE_EXCURSION"))!;
-  assert.equal(tempItem.nivel, "AVISO");
-  assert.match(tempItem.texto, /REAL ativa.*NÃO é tocada pela preparação/);
+  assert.equal(tempItem.nivel, "FALHA");
+  assert.match(tempItem.texto, /REAL ativa.*NÃO é tocada pela preparação.*resolva pelo BI/);
+  assert.doesNotMatch(tempItem.texto, /bancada --preparar/, "não manda rodar a preparação para registro real");
   assert.match(falhas, /lote SIMULADO da balança aguardando verificação/);
   assert.match(falhas, /nenhum lote RESERVED/);
   assert.match(itens.find(i => i.texto.startsWith("DEVICE_OFFLINE"))!.texto, /não bloqueia/);
@@ -129,6 +130,22 @@ test("bancada virtual · --checar só lê; --preparar encerra só o SIMULADO, co
   const [ev] = await db().occurrenceEvent.findMany({ where: { occurrenceId: f.id, action: "DISMISSED" } });
   assert.equal(ev.actor, "preparacao:teste");
   assert.deepEqual(bloqueios(cenario("palco"), new Set(MQTT_SENSORS), await pendencias(d)), []);
+});
+
+test("bancada virtual · palco de dados reais: lote REAL da balança pendente e falta de instituição são FALHA; a preparação não toca no real", async () => {
+  const real = await new DonationService().createFromScale({ organizationId: DEMO_ORG_ID, deviceId: DEMO_DEVICE_ID, deviceCode: DEVICE_CODE, weightKg: 5.4, source: "DEVICE", evidence: { channel: "mqtt" } }, "dispositivo:teste");
+  await db().telemetryReading.create({ data: { deviceId: DEMO_DEVICE_ID, bootId: "ensaio", sequence: 1, source: "SIMULATED", flowLpm: 1, deltaLiters: 0.03, capturedAt: new Date() } });
+  await db().recipientOrganization.updateMany({ data: { active: false } });
+  const itens = await checar(DEVICE_CODE, cfg(), { DEMO_MODE: "true" });
+  const falhas = itens.filter(i => i.nivel === "FALHA").map(i => i.texto).join("\n");
+  assert.match(falhas, /lote REAL da balança aguardando verificação.*verifique ou cancele pelo BI/, "antes ficava invisível (só o SIMULADO era procurado)");
+  assert.match(falhas, /nenhuma instituição ativa.*instituicao:cadastrar/);
+  assert.ok(itens.some(i => i.nivel === "AVISO" && /1 leitura\(s\) SIMULATED.*dados:limpar-simulados/.test(i.texto)));
+  assert.doesNotMatch(itens.map(i => i.texto).join("\n"), /seed/, "o pré-voo não fala mais em histórico do seed");
+  const d = await acharDispositivo(DEVICE_CODE, cfg());
+  assert.deepEqual(bloqueios(cenario("palco"), new Set(MQTT_SENSORS), await pendencias(d)), [], "lote real não bloqueia a bancada (origem diferente)");
+  await preparar(d, "preparacao:teste");
+  assert.equal((await db().donationBatch.findUniqueOrThrow({ where: { id: real.id } })).status, "PENDING_REVIEW", "registro REAL não é mexido");
 });
 
 test("bancada virtual · capturedAt é o instante agendado da leitura, nunca no futuro nem mais de 1 s atrás do envio", async () => {

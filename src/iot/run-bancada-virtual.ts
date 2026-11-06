@@ -61,10 +61,17 @@ export async function pendencias(d: Dispositivo): Promise<Pendencias> {
     where: { organizationId: DEMO_ORG_ID, deviceId: d.id, kind: { in: [...TIPOS_DA_BANCADA] }, source: "SIMULATED", status: { in: ["OPEN", "ACKNOWLEDGED"] } },
     select: { id: true, kind: true, status: true, source: true, title: true }, orderBy: { openedAt: "asc" },
   });
+  return { ocorrencias, lotes: await lotesDaBalanca(d, "simulado") };
+}
+
+/** Lotes da balança deste dispositivo aguardando verificação, por origem. SÓ LEITURA. */
+async function lotesDaBalanca(d: Dispositivo, origem: "simulado" | "real") {
+  const db = getDb();
   // Mesmo critério do DonationService.createFromScale: o lote não tem coluna de dispositivo, a autoria fica na auditoria.
   const criados = await db.auditEvent.findMany({ where: { organizationId: DEMO_ORG_ID, entity: "DonationBatch", action: "CREATED", metadata: { path: ["deviceCode"], equals: d.code } }, select: { entityId: true } });
-  const lotes = criados.length ? await db.donationBatch.findMany({ where: { id: { in: criados.map(c => c.entityId) }, status: "PENDING_REVIEW", source: "SIMULATED" }, select: { id: true, weightKg: true, source: true } }) : [];
-  return { ocorrencias, lotes: lotes.map(l => ({ ...l, weightKg: Number(l.weightKg) })) };
+  if (!criados.length) return [];
+  const lotes = await db.donationBatch.findMany({ where: { id: { in: criados.map(c => c.entityId) }, status: "PENDING_REVIEW", source: origem === "simulado" ? "SIMULATED" : { not: "SIMULATED" } }, select: { id: true, weightKg: true, source: true } });
+  return lotes.map(l => ({ ...l, weightKg: Number(l.weightKg) }));
 }
 
 /** O que impediria o cenário de mostrar o que promete: regra 5 (ocorrência ativa do mesmo tipo) e um lote pendente por balança. */
@@ -152,22 +159,27 @@ export async function checar(id: string, cfg: MqttBridgeConfig, env: Readonly<Re
     const lista = ativas.filter(o => o.kind === kind);
     const daBancada = (TIPOS_DA_BANCADA as readonly string[]).includes(kind);
     const bloqueia = daBancada && lista.some(o => o.deviceId === d.id && o.source === "SIMULATED");
-    const real = daBancada && lista.some(o => o.deviceId === d.id && o.source === "DEVICE");
-    add(bloqueia ? "FALHA" : real ? "AVISO" : "OK", `${kind}: ${lista.length} ativa(s) (${lista.map(o => `${o.id} ${o.status} ${o.source}`).join("; ")})${bloqueia ? ": a SIMULADA bloqueia a bancada pela regra 5, rode pnpm bancada --preparar" : ": não bloqueia a bancada"}${real ? ". Há ocorrência REAL ativa neste sensor: ela impede o sensor real de abrir outra (regra 5 por origem) e NÃO é tocada pela preparação; se for de ensaio, resolva pelo BI com nota" : ""}`);
+    // Desde 06/11 o palco é com dados reais: ocorrência REAL ativa deste tipo impede o alerta ao vivo do sensor real
+    // (regra 5 por origem). É FALHA do palco, mas a preparação não toca nela: quem resolve é o operador, pelo BI, com nota.
+    const real = daBancada && lista.some(o => o.deviceId === d.id && o.source !== "SIMULATED");
+    add(bloqueia || real ? "FALHA" : "OK", `${kind}: ${lista.length} ativa(s) (${lista.map(o => `${o.id} ${o.status} ${o.source}`).join("; ")})${bloqueia ? ": a SIMULADA bloqueia a bancada pela regra 5, rode pnpm bancada --preparar" : ""}${real ? `${bloqueia ? "." : ":"} Há ocorrência REAL ativa neste sensor: o alerta ao vivo do sensor real não abre (regra 5 por origem). Ela NÃO é tocada pela preparação; resolva pelo BI, com nota` : ""}${!bloqueia && !real ? ": não bloqueia o palco" : ""}`);
   }
   const { lotes } = await pendencias(d);
   if (lotes.length) add("FALHA", `lote SIMULADO da balança aguardando verificação (${lotes.map(l => `${l.id} ${br(l.weightKg)} kg ${l.source}`).join("; ")}): a bancada não cria outro, rode pnpm bancada --preparar`);
-  else add("OK", "nenhum lote da balança aguardando verificação");
+  const reaisPendentes = await lotesDaBalanca(d, "real");
+  if (reaisPendentes.length) add("FALHA", `lote REAL da balança aguardando verificação (${reaisPendentes.map(l => `${l.id} ${br(l.weightKg)} kg ${l.source}`).join("; ")}): a balança real não cria outro. A preparação não toca em registro real: verifique ou cancele pelo BI`);
+  if (!lotes.length && !reaisPendentes.length) add("OK", "nenhum lote da balança aguardando verificação");
+  const instituicoes = await db.recipientOrganization.count({ where: { active: true } });
+  if (!instituicoes) add("FALHA", 'nenhuma instituição ativa: a reserva da doação não tem destino. Cadastre a real: pnpm instituicao:cadastrar --nome "..." --cidade "..."');
+  else add("OK", `${instituicoes} instituição(ões) ativa(s) para receber doação`);
   const reservados = await db.donationBatch.findMany({ where: { organizationId: DEMO_ORG_ID, status: "RESERVED" }, select: { description: true, weightKg: true, source: true }, orderBy: { createdAt: "asc" } });
   if (reservados.length) add("OK", `${reservados.length} lote(s) RESERVED para confirmar a entrega: ${reservados.map(r => `${r.description} (${br(Number(r.weightKg))} kg, ${r.source})`).join("; ")}`);
   else add("FALHA", "nenhum lote RESERVED: prepare um pela tela antes do palco (verificar → reservar), com auditoria");
 
-  const seed = await db.telemetryReading.findFirst({ where: { deviceId: d.id, bootId: "seed-2026" }, orderBy: { capturedAt: "desc" }, select: { capturedAt: true } });
-  if (!seed) add("AVISO", "este dispositivo não tem leituras do seed");
-  else {
-    const dias = (Date.now() - seed.capturedAt.getTime()) / 86_400_000;
-    add(dias > 1 ? "AVISO" : "OK", `última leitura do seed em ${sp(seed.capturedAt)}${dias > 1 ? ` (há ${br(dias)} dias): para o histórico, use o filtro 30 dias` : ""}`);
-  }
+  // Só dados reais (docs/DADOS_REAIS.md): dado SIMULATED no banco não bloqueia, mas aparece com o carimbo roxo.
+  const simuladas = await db.telemetryReading.count({ where: { deviceId: d.id, source: "SIMULATED" } });
+  if (simuladas) add("AVISO", `${simuladas} leitura(s) SIMULATED deste dispositivo no banco (aparecem com o carimbo roxo): para só dados reais, pnpm dados:limpar-simulados`);
+  else add("OK", "nenhuma leitura SIMULATED deste dispositivo: o histórico é só do sensor");
   const ultima = await db.telemetryReading.findFirst({ where: { deviceId: d.id }, orderBy: { capturedAt: "desc" }, select: { capturedAt: true, source: true, bootId: true } });
   if (ultima) add("OK", `última leitura do dispositivo em ${sp(ultima.capturedAt)} (${ultima.source}, sessão ${ultima.bootId})`);
   const reais = await db.telemetryReading.count({ where: { deviceId: d.id, source: "DEVICE", capturedAt: { gte: new Date(Date.now() - 60_000) } } });

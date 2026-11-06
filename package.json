@@ -24,6 +24,8 @@
     "mqtt": "tsx src/iot/run-mqtt.ts",
     "bancada": "tsx src/iot/run-bancada-virtual.ts",
     "palco:checar": "tsx src/iot/run-bancada-virtual.ts --checar",
+    "dados:limpar-simulados": "tsx src/admin/run-dados-reais.ts limpar",
+    "instituicao:cadastrar": "tsx src/admin/run-dados-reais.ts instituicao",
     "test:mqtt-broker": "tsx scripts/mqtt-fumaca.mts"
   },
   "dependencies": {

@@ -35,7 +35,8 @@ const { rows: [{ name }] } = await client.query("SELECT current_database() AS na
 if (!name.endsWith("_test")) { console.error(`Recusado: conectado em ${name}`); process.exit(1); }
 await client.query(`TRUNCATE "AuditEvent","Mission","OccurrenceEvent","Occurrence","TelemetryReading","DonationBatch","RecipientOrganization","Device","Site","User","Organization" CASCADE`);
 await client.end();
-const seed = spawnSync("pnpm db:seed", { cwd: project, stdio: "inherit", shell: true, env: { ...process.env, DATABASE_URL: url } });
+// SEED_DEMO_DATA: as jornadas medem o cenário de demonstração (histórico SIMULATED, ocorrências e lotes do seed); a demo não o grava.
+const seed = spawnSync("pnpm db:seed", { cwd: project, stdio: "inherit", shell: true, env: { ...process.env, DATABASE_URL: url, SEED_DEMO_DATA: "true" } });
 if (seed.status !== 0) process.exit(seed.status ?? 1);
 
 // 2. instância de produção isolada (porta precisa estar livre: servidor antigo serviria chunks de outro build)

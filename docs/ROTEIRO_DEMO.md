@@ -30,15 +30,18 @@ Complementa `docs/plano/13_PITCH_JORNADA_DEMO.md` (tese, falas de abertura, slid
 6. Deixar dois terminais prontos (contingência, ver abaixo):
    - `pnpm bancada --cenario palco --inicio-em 5`, que move vazão, temperatura e balança (só depois de parar a ponte `pnpm mqtt`: `pnpm palco:checar --sensores VAZAO` acusa FALHA se houver leitura de vazão dela nos últimos 10 s; se você acabou de pará-la, espere 10 s e rode de novo);
    - `pnpm simulate --scenario leak --samples 14 --interval 4`, que só move a vazão, pelo HTTP.
-7. **O histórico do seed envelhece.** Ele cobre de 27/10 a 03/11. Em 06/11, o filtro "7 dias" mostra só a parte final dele, e "24 h" fica vazio até o sensor ou o simulador enviar.
-   - Use **30 dias** para mostrar o histórico.
+7. **Só dados reais desde 06/11** (`docs/DADOS_REAIS.md`). A demo não tem mais histórico fictício.
+   - O BI começa em "sem dados" e se enche com as leituras do ESP32.
+   - Use o filtro **24 h**.
+   - A doação precisa de uma instituição real: `pnpm instituicao:cadastrar --nome "..." --cidade "..."`.
+   - O carimbo roxo SIMULADO só aparece se a contingência for usada. Depois do evento, `pnpm dados:limpar-simulados --apagar`.
    - Recriar o banco da demo apaga dados: só com autorização expressa da equipe.
 
 ## Demonstração (2 min, Dev 1, depois da fala de IoT)
 
 | Tempo | Clique | Fala-guia |
 |---|---|---|
-| 0:00 | **Centro de controle**, filtro **7 dias** | "Tudo aqui vem do banco. Este carimbo roxo diz que o histórico é simulado. A plataforma nunca esconde a origem." |
+| 0:00 | **Centro de controle**, filtro **24 h** | "Tudo aqui vem do banco e do sensor. Sem leitura, o painel diz 'sem dados', nunca zero. A plataforma nunca esconde a origem: se algo for simulado, ganha o carimbo roxo." |
 | 0:10 | Passar o cursor no gráfico; mostrar o **mapa de calor** e a faixa da madrugada | "Vazão na madrugada é onde o desperdício contínuo aparece primeiro." |
 | 0:20 | Filtro **24 h** + origem **Sensor** | "Agora só o que o sensor mediu, sem simulação." |
 | 0:25 | IoT abre a torneira da bancada (fluxo ≥ 1,5 L/min por 30 s) | "A regra não dispara com um pico: espera fluxo contínuo." |

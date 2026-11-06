@@ -109,7 +109,7 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
               <option value="">{recipients ? "Escolha a instituição" : "Carregando instituições…"}</option>
               {recipients?.map(r => <option key={r.id} value={r.id}>{r.name} · {r.city}</option>)}
             </select>
-            {recipients && !recipients.length && <p className="form-error">Nenhuma instituição ativa cadastrada.</p>}
+            {recipients && !recipients.length && <p className="form-error">Nenhuma instituição ativa cadastrada. Cadastre a instituição real no terminal: <code>{'pnpm instituicao:cadastrar --nome "…" --cidade "…"'}</code></p>}
           </>}
           {status === "RESERVED" && <>
             <label className="field-label" htmlFor="don-recv">Quem recebeu na instituição</label>
