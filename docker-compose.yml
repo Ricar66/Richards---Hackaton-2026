@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-richards_dev_change_me}
       POSTGRES_DB: richards
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5432:5432"   # só o notebook: o banco nunca fica exposto na rede
     volumes:
       - richards_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +26,52 @@ services:
       RICHARDS_OPERATOR_USER: ${RICHARDS_OPERATOR_USER:-operador}
       RICHARDS_OPERATOR_PASSWORD: ${RICHARDS_OPERATOR_PASSWORD:-troque-esta-senha}
       IOT_DEMO_DEVICE_KEY: ${IOT_DEMO_DEVICE_KEY:-troque-esta-chave-dispositivo}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 120s
     ports:
       - "127.0.0.1:3000:3000"
+
+  # ---- Bancada MQTT (opcional): docker compose --profile iot up -d ----
+  # Ideia do PR #4 (Victor). Broker com usuário e senha (sem anônimo) + a ponte `pnpm mqtt`, que é quem grava.
+  # Para o ESP32 da rede do evento alcançar o broker: MQTT_BIND_ADDR=0.0.0.0 no .env (rede isolada).
+  mqtt:
+    profiles: ["iot"]
+    build: ./mosquitto
+    restart: unless-stopped
+    environment:
+      MQTT_TOPIC: ${MQTT_TOPIC:-richards/comercio/telemetria}
+      MQTT_BRIDGE_USER: ${MQTT_USERNAME:-richards-ponte}
+      MQTT_BRIDGE_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_DEVICE_USER: ${MQTT_DEVICE_USER:-hortifruti_01}
+      MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD:-}
+    ports:
+      - "${MQTT_BIND_ADDR:-127.0.0.1}:1883:1883"
+  ponte:
+    profiles: ["iot"]
+    build: .
+    command: ["pnpm", "mqtt"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    environment:
+      DATABASE_URL: "postgresql://richards:${POSTGRES_PASSWORD:-richards_dev_change_me}@db:5432/richards?schema=public"
+      DEMO_MODE: ${DEMO_MODE:-true}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-richards-ponte}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TOPIC: ${MQTT_TOPIC:-richards/comercio/telemetria}
+      MQTT_DEVICE_ALIASES: ${MQTT_DEVICE_ALIASES:-hortifruti_01=RICHARDS-FLOW-001}
+      MQTT_SIMULATED_SENSORS: ${MQTT_SIMULATED_SENSORS:-VAZAO}
+      MQTT_DEAD_LETTER: /data/carta-morta.ndjson
+    volumes:
+      - richards_mqtt_data:/data
 volumes:
   richards_pgdata:
+  richards_mqtt_data:

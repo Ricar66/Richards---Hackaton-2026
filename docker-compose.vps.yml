@@ -46,5 +46,45 @@ services:
       # VPS_BIND_ADDR: 0.0.0.0 (padrão, acesso direto por IP em http) ou 127.0.0.1 (só o túnel/proxy local alcança).
       # Trocar = mudar a variável no Coolify e fazer Redeploy; voltar = o mesmo, ao contrário. Ver docs/DEPLOY_VPS_TETRIA.md.
       - "${VPS_BIND_ADDR:-0.0.0.0}:8090:3000"
+
+  # ---- Broker MQTT da bancada do Victor (autorizado pelo Ricardo em 06/11; ideia do PR #4) ----
+  # Usuário e senha obrigatórios (sem anônimo) e ACL: o dispositivo só ESCREVE no tópico da bancada e no próprio; a
+  # ponte só LÊ. Risco aceito até 08/11: MQTT sem TLS (a senha trafega aberta). Desmontar e trocar as senhas depois.
+  # A porta publicada pelo Docker passa por cima do ufw: 1883 fica aberta na internet (por isso a senha e a ACL).
+  richards-mqtt:
+    build: ./mosquitto
+    restart: unless-stopped
+    environment:
+      MQTT_TOPIC: richards/comercio/telemetria
+      MQTT_BRIDGE_USER: richards-ponte
+      MQTT_BRIDGE_PASSWORD: ${VPS_MQTT_BRIDGE_PASSWORD:?defina VPS_MQTT_BRIDGE_PASSWORD}
+      MQTT_DEVICE_USER: ${VPS_MQTT_DEVICE_USER:-hortifruti_01}
+      MQTT_DEVICE_PASSWORD: ${VPS_MQTT_DEVICE_PASSWORD:?defina VPS_MQTT_DEVICE_PASSWORD}
+    ports:
+      - "${VPS_MQTT_BIND_ADDR:-0.0.0.0}:1883:1883"
+  # A ponte (`pnpm mqtt`) é quem grava: mesmos casos de uso do HTTP, fila com retentativa e carta morta.
+  richards-ponte:
+    build: .
+    command: ["pnpm", "mqtt"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+      richards-mqtt:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://richards:${VPS_POSTGRES_PASSWORD:?defina VPS_POSTGRES_PASSWORD}@richards-db:5432/richards?schema=public
+      DEMO_MODE: "true"
+      MQTT_BROKER_URL: mqtt://richards-mqtt:1883
+      MQTT_USERNAME: richards-ponte
+      MQTT_PASSWORD: ${VPS_MQTT_BRIDGE_PASSWORD:?defina VPS_MQTT_BRIDGE_PASSWORD}
+      MQTT_TOPIC: richards/comercio/telemetria
+      MQTT_DEVICE_ALIASES: ${VPS_MQTT_DEVICE_ALIASES:-hortifruti_01=RICHARDS-FLOW-001}
+      # Potenciômetro no lugar do YF-S201 (confirmado pelo Victor em 06/11): a vazão sai carimbada SIMULADO.
+      MQTT_SIMULATED_SENSORS: ${VPS_MQTT_SIMULATED_SENSORS:-VAZAO}
+      MQTT_DEAD_LETTER: /data/carta-morta.ndjson
+    volumes:
+      - richards_vps_mqtt:/data
 volumes:
   richards_vps_pgdata:
+  richards_vps_mqtt:

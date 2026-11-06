@@ -69,8 +69,9 @@ journalctl -u richards-quick-tunnel -n 50 | grep -o 'https://[a-z0-9-]*\.tryclou
 | Código | repositório público `Ricar66/Richards---Hackaton-2026`, branch congelada **`deploy/vps-hackathon`**, compose `/docker-compose.vps.yml` |
 | Deploy automático | **Desligado.** A VPS não segue o `main`; publicar de novo é Redeploy manual no Coolify |
 | Outras opções do recurso | "Inject Build Args to Dockerfile" e "Connect to Predefined Network" desligados; valores das variáveis ocultos nos logs; nenhum domínio no proxy |
-| Banco | `richards-db` (Postgres 16) só na rede do compose, volume `richards_vps_pgdata`, seed SIMULATED |
-| Variáveis | `VPS_POSTGRES_PASSWORD`, `VPS_OPERATOR_USER` (`equipe`), `VPS_OPERATOR_PASSWORD` e `VPS_IOT_DEVICE_KEY`, só de execução |
+| Banco | `richards-db` (Postgres 16) só na rede do compose, volume `richards_vps_pgdata`. **Só dados reais desde 06/11** (`docs/DADOS_REAIS.md`); backup antes da limpeza em `/root/.richards-deploy/backups/` |
+| Broker MQTT | `richards-mqtt` na porta **1883** (pública), com senha e ACL, mais a ponte `richards-ponte`. Ver "Broker MQTT da bancada" abaixo |
+| Variáveis | `VPS_POSTGRES_PASSWORD`, `VPS_OPERATOR_USER` (`equipe`), `VPS_OPERATOR_PASSWORD`, `VPS_IOT_DEVICE_KEY`, `VPS_MQTT_BRIDGE_PASSWORD`, `VPS_MQTT_DEVICE_USER` (`hortifruti_01`) e `VPS_MQTT_DEVICE_PASSWORD`, só de execução |
 | Credenciais | Geradas na VPS (`openssl rand -hex`), em `/root/.richards-deploy/credenciais.env` (600). Cópia local em `.env.vps.local`, fora do git. Guardar no Passbolt |
 
 ## Riscos aceitos (acesso por IP)
@@ -81,6 +82,54 @@ journalctl -u richards-quick-tunnel -n 50 | grep -o 'https://[a-z0-9-]*\.tryclou
   - Qualquer porta nova em `0.0.0.0` fica pública na hora.
 - A rota de telemetria (`/api/iot/telemetry`) aceita POST de qualquer origem com a chave do dispositivo. A chave da VPS é aleatória e diferente da do notebook. **Não ligar o ESP32 na VPS durante o evento:** o firmware HTTP não tem TLS.
 - Não há limite de tentativas no Basic Auth. Com 96 bits de senha aleatória, tentar por força bruta não é viável.
+
+## Broker MQTT da bancada (06/11, noite; autorizado pelo Ricardo)
+
+O Victor manda os dados dos sensores da bancada dele para a VPS desde a noite de 06/11, para o histórico de 07/11 nascer do sensor. A ideia veio do PR #4, incorporada sem as partes inseguras: Postgres exposto, broker anônimo e Grafana `latest` com admin padrão.
+
+- **`richards-mqtt`:**
+  - imagem própria (`mosquitto/`): Mosquitto 2.1.2 travado por digest;
+  - `allow_anonymous false`;
+  - senha e ACL geradas na partida a partir das variáveis.
+- **ACL:**
+  - o usuário do dispositivo (`hortifruti_01`, igual ao `dispositivo_id` do firmware) só **escreve** em `richards/comercio/telemetria` e `richards/comercio/telemetria/hortifruti_01`;
+  - a ponte só **lê**;
+  - anônimo e senha errada são recusados.
+- **`richards-ponte`:** o mesmo build do site rodando `pnpm mqtt`, que grava pelos casos de uso do HTTP, com fila, retentativa e carta morta no volume `richards_vps_mqtt`.
+- **Origem:** a vazão vem do potenciômetro, então é **SIMULATED** (`VPS_MQTT_SIMULATED_SENSORS=VAZAO`). Temperatura (DHT11) e balança (HX711) entram como dado real.
+- **Segredos:** `9-mqtt-segredos.sh` gera e grava, sem imprimir:
+  - `VPS_MQTT_BRIDGE_PASSWORD`;
+  - `VPS_MQTT_DEVICE_USER`;
+  - `VPS_MQTT_DEVICE_PASSWORD`.
+
+  A cópia local fica em `.env.vps.local`, fora do git. O Victor recebe a senha do dispositivo **em mensagem privada**, nunca no grupo.
+
+**O que o firmware do Victor precisa:**
+
+| Campo | Valor |
+|---|---|
+| Broker | `187.77.229.205`, porta `1883` (sem TLS) |
+| Usuário | `hortifruti_01` |
+| Senha | a de `VPS_MQTT_DEVICE_PASSWORD` (privada) |
+| Tópico | `richards/comercio/telemetria`, ou o próprio `richards/comercio/telemetria/hortifruti_01` |
+| Payload | `{"dispositivo_id":"hortifruti_01","VAZAO":2.4,"TEMP":26.1,"UMIDADE":60,"PESO":0.0}` |
+| Publicação | QoS 0 ou 1, **sem `retain`** (mensagem retida é ignorada pela ponte) |
+
+**Riscos aceitos até 08/11:**
+- MQTT sem TLS: a senha do dispositivo trafega aberta.
+- A 1883 publicada pelo Docker passa por cima do `ufw`.
+
+Mitigações: a senha é própria e aleatória, a ACL é por usuário e não há acesso anônimo. Na desmontagem, troque as senhas.
+
+**Testes de aceite** (`teste-acl-broker.mjs`, sem gravar dado):
+- anônimo recusado;
+- senha errada recusada;
+- dispositivo publica no tópico compartilhado e no próprio;
+- não publica em nome de outro sensor;
+- não lê;
+- a ponte não escreve.
+
+**Desligar só o broker, sem apagar dados:** `VPS_MQTT_BIND_ADDR=127.0.0.1` no Coolify e Redeploy (a 1883 sai da internet). Para tirar de vez, volte o compose ao commit anterior na branch de deploy e faça Redeploy.
 
 ## Como foi criado (sem token da API)
 
@@ -98,7 +147,10 @@ Os segredos vão para dentro do contêiner num arquivo temporário com permissã
 ## Operação
 
 - **Publicar uma versão nova:** atualize a branch `deploy/vps-hackathon` (`git branch -f deploy/vps-hackathon main` e push, sem forçar) e clique em **Redeploy** no recurso. O banco e os dados continuam no volume.
-- **Liberar o palco na VPS:** a ocorrência do seed `richards-oc-01` precisa estar encerrada para o alerta ao vivo abrir (regra 5). Em 06/11 ela foi encerrada como DISMISSED pela própria API do app, com nota e auditoria (autor `operador:equipe`).
+- **Só dados reais:**
+  - depois do Redeploy, `ETAPA=limpar` do `8-dados-reais.sh` roda `pnpm dados:limpar-simulados --apagar --confirmar` no contêiner `web`, com backup antes (`ETAPA=antes`);
+  - a instituição real: `docker exec <web> pnpm instituicao:cadastrar --nome "..." --cidade "..."`.
+- **Liberar o palco na VPS:** sem o seed fictício, não há mais a `richards-oc-01`. Ocorrência REAL ativa se resolve pelo BI, com nota.
 - **Login menos de 1 h antes de apresentar**, com a aba já aberta. O navegador guarda o Basic Auth até ser fechado.
 
 ## Checklist pós-deploy (06/11/2026)
