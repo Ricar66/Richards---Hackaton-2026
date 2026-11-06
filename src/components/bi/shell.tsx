@@ -215,9 +215,12 @@ export function BiShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="side-nav">
           <span className="side-heading">Inteligência</span>
-          {NAV.map(({ href, label, Icon }) => {
+          {NAV.map(({ href, label, Icon }, i) => {
             const active = current.href === href;
-            return <Link key={href} href={filterQuery ? `${href}?${filterQuery}` : href} className={`side-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => setNavOpen(false)}>
+            // Direção do deslize pela ordem da barra: descer na lista avança, subir volta (a tela atual não anima).
+            const at = NAV.indexOf(current);
+            const types = i > at ? ["nav-forward"] : i < at ? ["nav-back"] : undefined;
+            return <Link key={href} href={filterQuery ? `${href}?${filterQuery}` : href} transitionTypes={types} className={`side-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => setNavOpen(false)}>
               <Icon size={17} /><span>{label}</span>
               {href === "/ocorrencias" && <SideCount />}
             </Link>;
