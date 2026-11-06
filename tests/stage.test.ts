@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  clockBR, lineFromAudit, lineFromEvent, mergeFeed, occurrenceSeal, originSeal, pickFocus, pipeTone, publicActor, ringView, ruleTransition, scaleView, sensorSeal,
+  clockBR, lineFromAudit, lineFromEvent, mergeFeed, occurrenceSeal, originSeal, pickFocus, pipeTone, publicActor, ringView, ruleTransition, scaleLotKey, scaleView, sensorSeal,
   settleRefresh, stripSegments, temperatureView, tripView, type RingOccurrence, type RuleTrack, type StripPoint,
 } from "../src/components/stage/stage-logic";
-import { activeOccurrences, flowOccurrenceFor, initModel, reduceStage, type StageModel } from "../src/components/stage/stage-model";
+import { activeOccurrences, flowOccurrenceFor, focusSource, initModel, reduceStage, type StageModel } from "../src/components/stage/stage-model";
 import type { StageSnapshot } from "../src/modules/analytics/application/get-stage-snapshot";
 import type { LiveEvent, ReadingCreatedEvent } from "../src/modules/realtime/domain/live-event";
 
@@ -168,7 +168,7 @@ test("balança: fases decididas pela ponte e lote só depois de gravado", () => 
   assert.equal(st.lit, 4);
   assert.equal(st.total, 6);
   assert.equal(scaleView(s("triggered", 6.2, 6), null, at(1)).label, "lote pedido ao servidor", "sem confirmação do banco não diz que criou");
-  const lot = { id: "l1", kg: 6.2, deviceCode: "BAL", at: at(1) };
+  const lot = { id: "l1", kg: 6.2, deviceCode: "BAL", source: "DEVICE" as const, at: at(1) };
   assert.equal(scaleView(s("triggered", 6.2, 6), lot, at(1)).label, "lote criado · aguardando verificação humana");
   assert.equal(scaleView(s("disarmed", 6.2, 6), lot, at(1)).label, "esvazie para rearmar");
   assert.equal(scaleView(s("idle", 0), null, at(40)).stale, true);
@@ -176,7 +176,7 @@ test("balança: fases decididas pela ponte e lote só depois de gravado", () => 
 
 test("balança: pesagem recusada por lote pendente diz 'nada novo criado', nunca que esta pesagem virou lote", () => {
   const blocked = { deviceId: "d", deviceCode: "BAL", kg: 6.1, source: "DEVICE" as const, channel: "mqtt" as const, progress: { phase: "blocked" as const, minKg: 1, stableSeconds: 6, requiredSeconds: 6, pendingLotId: "l-old" }, at: at(0) };
-  const pending = { id: "l-old", kg: 5.3, deviceCode: "BAL", at: at(-600) };
+  const pending = { id: "l-old", kg: 5.3, deviceCode: "BAL", source: "DEVICE" as const, at: at(-600) };
   const v = scaleView(blocked, pending, at(1));
   assert.equal(v.phase, "bloqueada");
   assert.equal(`${v.label} · ${v.sub}`.startsWith("já existe lote desta balança aguardando verificação · nada novo criado"), true, `${v.label} · ${v.sub}`);
@@ -318,7 +318,7 @@ test("redutor: leitura suspeita com occurrenceId cobre o intervalo até o evento
 });
 
 // Anel como a Sala calcula (live-stage.tsx): regra guardada + ocorrência de fluxo ativa do dispositivo.
-const ringOf = (m: StageModel, nowS: number) => ringView({ rule: m.rules.d1 ?? null, broken: m.broken.d1 ?? null, occurrence: flowOccurrenceFor(m, "d1"), nowMs: at(nowS), minFlowLpm: 1.5, continuousSeconds: 30 });
+const ringOf = (m: StageModel, nowS: number) => ringView({ rule: m.rules.d1 ?? null, broken: m.broken.d1 ?? null, occurrence: flowOccurrenceFor(m, "d1", undefined, focusSource(m.rules.d1 ?? null, (m.readings.d1 ?? []).at(-1) ?? null)), nowMs: at(nowS), minFlowLpm: 1.5, continuousSeconds: 30 });
 const openedEv = (s: number, source: "DEVICE" | "SIMULATED" = "SIMULATED", id = "X"): LiveEvent => ({ v: 1, type: "occurrence.opened", orgId: "o", emittedAt: iso(s), id, deviceId: "d1", deviceCode: "FLOW-001", kind: "UNUSUAL_FLOW", severity: "HIGH", title: "Fluxo contínuo fora do padrão", source, openedAt: iso(s) });
 const statusEv = (s: number, status: "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED", id = "X"): LiveEvent => ({ v: 1, type: "occurrence.status", orgId: "o", emittedAt: iso(s), id, deviceId: "d1", kind: "UNUSUAL_FLOW", title: "Fluxo contínuo fora do padrão", from: "OPEN", status, actor: "operador", source: "SIMULATED" });
 const liveOcc = (s: number) => ({ id: "X", kind: "UNUSUAL_FLOW", severity: "HIGH", status: "OPEN", title: "Fluxo contínuo fora do padrão", source: "SIMULATED" as const, deviceId: "d1", deviceCode: "FLOW-001", openedAt: iso(s) });
@@ -372,17 +372,21 @@ test("redutor: resolvida com o stream fora (sem evento) também sai do anel quan
   assert.equal(flowOccurrenceFor(n, "d1")?.id, "X");
 });
 
-test("redutor: 'Simular alerta' com o sensor real contando aparece como bloqueio carimbado, não como abertura do sensor", () => {
+test("redutor: 'Simular alerta' com o sensor real contando NÃO bloqueia o sensor real (regra 5 por origem) nem vira mérito dele", () => {
+  // Antes da regra 5 por origem (99fe784) o anel mostrava BLOQUEADO; o helper deste teste não passava a origem e
+  // seguia "passando" com a regra velha (revisão adversarial R6). Agora o anel é calculado como a Sala calcula.
   let m = initModel(snapshot());
   m = reduceStage(m, { type: "hello", serverTime: iso(0), arrivalMs: at(0) });
   const real = { source: "DEVICE" as const, channel: "http" as const };
   m = run(m, [reading(0, 2.4, 0, 1, real), reading(6, 2.4, 6, 2, real), reading(12, 2.4, 12, 3, real)]);
   m = run(m, [openedEv(12.5, "SIMULATED", "SIM-1")]);
   const v = ringOf(m, 13);
-  assert.equal(v.state, "BLOQUEADO_REGRA_5");
+  assert.equal(v.state, "CONTANDO", "a simulada não impede o sensor real de abrir a dele");
   assert.equal(v.observed, 12);
-  assert.equal(v.occurrenceSeal?.label, "OCORRÊNCIA SIMULADA");
+  assert.equal(v.occurrenceSeal, null, "o anel do sensor real não carrega o selo da ocorrência simulada");
   assert.notEqual(pipeTone(v.state, v.foreign), "danger");
+  // A simulada continua visível no anel quando a leitura em foco é a simulada.
+  assert.equal(flowOccurrenceFor(m, "d1", activeOccurrences(m), "SIMULATED")?.id, "SIM-1");
 });
 
 test("redutor: mudança de estado sem origem (evento antigo) é carimbada quando a auditoria do snapshot chega", () => {
@@ -445,4 +449,33 @@ test("regra 5 por origem: o anel e o cano usam a ocorrência da MESMA origem da 
   n = run(n, [reading(40, 2, 31, 9, { occurrenceId: "simX" })]);
   assert.equal(flowOccurrenceFor(n, "d1", activeOccurrences(n), "SIMULATED")?.id, "simX");
   assert.equal(flowOccurrenceFor(n, "d1", activeOccurrences(n), "DEVICE"), null);
+});
+
+test("regra 5 por origem: a origem em foco é a da leitura MAIS NOVA (uma decisão velha de outra origem não esconde a ocorrência)", () => {
+  const rule = { at: at(10), source: "SIMULATED" as const };
+  assert.equal(focusSource(rule, { capturedAt: iso(50), source: "DEVICE" }), "DEVICE", "sensor real voltou depois da bancada: vale a leitura real");
+  assert.equal(focusSource(rule, { capturedAt: iso(10), source: "SIMULATED" }), "SIMULATED");
+  assert.equal(focusSource(rule, null), "SIMULATED");
+  assert.equal(focusSource(null, { capturedAt: iso(5), source: "DEVICE" }), "DEVICE");
+  assert.equal(focusSource(null, null), null);
+  // Fim a fim no redutor: a regra simulada fica guardada, chega leitura real sem decisão nova e há ocorrência REAL ativa.
+  let m = initModel(snapshot());
+  m = run(m, [reading(10, 2, 9, 1)]); // decisão da regra numa leitura SIMULATED
+  m = reduceStage(m, { type: "event", event: { v: 1, type: "occurrence.opened", orgId: "o", emittedAt: iso(40), id: "real9", deviceId: "d1", deviceCode: "FLOW-001", kind: "UNUSUAL_FLOW", severity: "HIGH", title: "Fluxo", source: "DEVICE", openedAt: iso(40) }, arrivalMs: at(40) });
+  const lastReal = { capturedAt: iso(45), source: "DEVICE" as const };
+  assert.equal(flowOccurrenceFor(m, "d1", activeOccurrences(m), focusSource(m.rules.d1 ?? null, lastReal))?.id, "real9", "a ocorrência real aparece no anel do sensor real");
+  assert.match(ringView({ rule: null, broken: null, occurrence: null, nowMs: at(1), minFlowLpm: 1.5, continuousSeconds: 30 }).rule, /1 ativa por sensor e origem \(regra 5\)/, "espaço inseguível: '(regra' e '5)' nunca ficam em linhas separadas");
+});
+
+test("balança: lote pendente REAL e SIMULADO do mesmo dispositivo convivem; cada pesagem vê o lote da sua origem", () => {
+  const lots = [
+    { id: "real-l", deviceCode: "BAL", kg: 5.4, source: "DEVICE" as const, createdAt: iso(-60) },
+    { id: "sim-l", deviceCode: "BAL", kg: 6.0, source: "SIMULATED" as const, createdAt: iso(-30) },
+  ];
+  let m = initModel(snapshot({ pendingScaleLots: lots }));
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "DEVICE")]?.id, "real-l");
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "SIMULATED")]?.id, "sim-l", "antes a chave era só o código: o segundo lote sumia");
+  m = reduceStage(m, { type: "event", event: { v: 1, type: "donation.created", orgId: "o", emittedAt: iso(1), id: "sim-2", kg: 6.2, status: "PENDING_REVIEW", source: "SIMULATED", origin: "scale", deviceCode: "BAL", description: "x" }, arrivalMs: at(1) });
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "SIMULATED")]?.id, "sim-2");
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "DEVICE")]?.id, "real-l", "o lote real não é sobrescrito pelo simulado");
 });

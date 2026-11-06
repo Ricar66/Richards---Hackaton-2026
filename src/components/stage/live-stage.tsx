@@ -4,11 +4,11 @@ import { connectLive, type LiveConnState } from "@/lib/live-client";
 import type { LiveEventType } from "@/modules/realtime/domain/live-event";
 import type { StageSnapshot } from "@/modules/analytics/application/get-stage-snapshot";
 import {
-  RULE_STALE_MS, STRIP_WINDOW_MS, alarmMode, twinSimulated, clockBR, fixedBR, hourMinBR, kgNumBR, originSeal, pickFocus, pipeTone, ringView, scaleView, secondsSince, sensorSeal,
+  RULE_STALE_MS, STRIP_WINDOW_MS, alarmMode, twinSimulated, clockBR, fixedBR, hourMinBR, kgNumBR, originSeal, pickFocus, pipeTone, ringView, scaleLotKey, scaleView, secondsSince, sensorSeal,
   settleRefresh, temperatureView, tripView, type RefreshGate, type StripPoint,
 } from "./stage-logic";
 import { Digits } from "./digits";
-import { activeOccurrences, flowOccurrenceFor, initModel, lastReadingByDevice, latestLive, packets, reduceStage, serverNow } from "./stage-model";
+import { activeOccurrences, flowOccurrenceFor, focusSource, initModel, lastReadingByDevice, latestLive, packets, reduceStage, serverNow } from "./stage-model";
 import { useIdleCursor, useReducedMotion, useStageKeys, useTwinFlag } from "./hooks";
 import { CounterSeal, GlobalSeal, Seal, SourceSeal } from "./seal";
 import { FlowStrip } from "./flow-strip";
@@ -68,8 +68,9 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
     try {
       const res = await fetch("/api/live/snapshot", { cache: "no-store" });
       if (!res.ok) {
-        const body = await res.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error ?? `HTTP ${res.status}`);
+        const body = await res.json().catch(() => null) as { error?: string; code?: string } | null;
+        // A Sala diz a causa pelo código; o que acontece com os números ela mesma explica (snapshot congelado ou nenhum).
+        throw new Error(body?.code === "DATABASE_UNAVAILABLE" ? "Banco de dados indisponível" : body?.error ?? `HTTP ${res.status}`);
       }
       const snapshot = await res.json() as StageSnapshot;
       const v = settleRefresh(gate.current, id, true);
@@ -136,7 +137,7 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
   const rule = focus ? model.rules[focus.id] ?? null : null;
   const active = activeOccurrences(model);
   // Regra 5 por origem: o anel e o cano olham a ocorrência da MESMA origem da leitura em foco.
-  const flowOcc = focus ? flowOccurrenceFor(model, focus.id, active, rule?.source ?? lastReading?.source ?? null) : null;
+  const flowOcc = focus ? flowOccurrenceFor(model, focus.id, active, focusSource(rule, lastReading)) : null;
   const ring = ringView({ rule, broken: focus ? model.broken[focus.id] ?? null : null, occurrence: flowOcc, nowMs: refNow, minFlowLpm: focus?.minFlowLpm ?? 1.5, continuousSeconds: focus?.continuousSeconds ?? 30 });
   const counting = ring.state === "CONTANDO" || ring.state === "BLOQUEADO_REGRA_5";
   const run = counting && rule && ring.observed > 0 ? { from: rule.at - rule.observedSeconds * 1000, to: rule.at } : null;
@@ -156,7 +157,7 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
   const tempView = temp ? temperatureView(temp, refNow) : null;
   const tempOcc = temp ? active.find(o => o.kind === "TEMPERATURE_EXCURSION" && o.deviceId === temp.deviceId && o.source === temp.source) ?? null : null;
   const scale = latestLive(model.scale, nextFocus);
-  const scaleV = scale ? scaleView(scale, model.scaleLots[scale.deviceCode] ?? null, refNow) : null;
+  const scaleV = scale ? scaleView(scale, model.scaleLots[scaleLotKey(scale.deviceCode, scale.source)] ?? null, refNow) : null;
 
   const seal = originSeal(packets(model), refNow);
   const trip = model.trip ? tripView(model.trip, model.offsetMs, model.offsetKnown) : null;
@@ -178,11 +179,13 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
       <GlobalSeal seal={seal} />
     </header>
 
-    {lost && <div className="lost-banner" role="alert">
-      <strong>{lostFor !== null ? <>SINAL PERDIDO há <span className="num">{lostFor}</span> s</> : "SEM STREAM AO VIVO"}</strong>
-      <small>{conn === "down" ? "consultando o servidor a cada 5 s · nada é desenhado sem dado" : "reconectando · nada é desenhado sem dado"}</small>
+    {(lost || snapError) && <div className="stg-alerts">
+      {lost && <div className="lost-banner" role="alert">
+        <strong>{lostFor !== null ? <>SINAL PERDIDO há <span className="num">{lostFor}</span> s</> : "SEM STREAM AO VIVO"}</strong>
+        <small>{conn === "down" ? "consultando o servidor a cada 5 s · nada é desenhado sem dado" : "reconectando · nada é desenhado sem dado"}</small>
+      </div>}
+      {snapError && <div className="snap-error" role="alert">{snapError}{snap ? ` · números congelados no snapshot das ${clockBR(Date.parse(snap.serverTime))}` : " · nenhum número é exibido para não apresentar dado falso"}</div>}
     </div>}
-    {snapError && <div className="snap-error" role="alert">{snapError}{snap ? ` · números do snapshot das ${clockBR(Date.parse(snap.serverTime))}` : " · nenhum número é exibido para não apresentar dado falso"}</div>}
 
     <div className="instruments">
       <section className="inst flow" aria-labelledby="stg-flow-title">

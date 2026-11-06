@@ -47,11 +47,14 @@
 .stage .seal.seal-stamp { transform: rotate(-2deg); font-size: calc(var(--u) * 2); padding: calc(var(--u) * .6) calc(var(--u) * 1.2); letter-spacing: .16em; }
 
 /* ---------- avisos ---------- */
-.stage .lost-banner { position: absolute; z-index: 5; top: calc(var(--u) * 8.4); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * .4);
+/* Os dois avisos empilhados no centro: lado a lado, a faixa do banco cobria o "SINAL PERDIDO" (ensaio de 06/11). */
+.stage .stg-alerts { position: absolute; z-index: 5; top: calc(var(--u) * 8.4); left: 50%; transform: translateX(-50%); width: max-content; max-width: 62%;
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * .8); }
+.stage .lost-banner { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * .4);
   padding: calc(var(--u) * 1) calc(var(--u) * 2.4); background: var(--bg); border: 2px solid var(--warn); border-radius: calc(var(--u) * .8);
   font-family: var(--numf); font-weight: 800; font-size: calc(var(--u) * 2.8); letter-spacing: .08em; animation: stg-fade 300ms ease-out; }
 .stage .lost-banner small { font-family: var(--font-body), sans-serif; font-weight: 600; font-size: calc(var(--u) * 1.7); letter-spacing: 0; color: var(--label); }
-.stage .snap-error { position: absolute; z-index: 5; top: calc(var(--u) * 8.4); left: calc(var(--u) * 3.7); max-width: 40%; background: var(--danger); color: #fff; padding: calc(var(--u) * .6) calc(var(--u) * 1.2); border-radius: calc(var(--u) * .6); font-weight: 700; }
+.stage .snap-error { text-align: center; background: var(--danger); color: #fff; padding: calc(var(--u) * .6) calc(var(--u) * 1.2); border-radius: calc(var(--u) * .6); font-weight: 700; }
 .stage[data-signal="lost"] .instruments { opacity: .45; transition: opacity 300ms; }
 /* Tecla P (WCAG 2.2.2): o desenho para, o alarme fica fixo e a pílula no cabeçalho avisa (sem cobrir instrumento). */
 .stage .paused-pill { flex: 0 0 auto; padding: calc(var(--u) * .4) calc(var(--u) * 1.1); border: 2px solid var(--ink); border-radius: calc(var(--u) * .6);

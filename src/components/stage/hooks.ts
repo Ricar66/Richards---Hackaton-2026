@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { frameDelta } from "@/lib/ease";
 
 /** "Reduzir movimento" do sistema: sem rolagem contínua, sem água correndo, trocas secas. */
 export function useReducedMotion() {
@@ -105,7 +106,8 @@ export function useFrame(cb: (now: number, dt: number) => void, active: boolean)
   useEffect(() => {
     if (!active) return;
     let raf = 0, last = performance.now();
-    const step = (t: number) => { const dt = Math.min(0.1, (t - last) / 1000); last = t; saved.current(t, dt); raf = requestAnimationFrame(step); };
+    // frameDelta nunca é negativo: o 1º quadro pode ter tempo anterior ao `last` (ver src/lib/ease.ts).
+    const step = (t: number) => { const dt = frameDelta(t, last); last = Math.max(last, t); saved.current(t, dt); raf = requestAnimationFrame(step); };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [active]);

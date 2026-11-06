@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Info, TrendingDown, TrendingUp } from "lucide-react";
 import type { DashboardDTO, Provenance } from "@/modules/analytics/domain/dashboard";
 import { dateBR, numBR } from "@/lib/format";
+import { easedValue, progress } from "@/lib/ease";
 import { usePrefersReducedMotion } from "./hooks";
 import { useLiveState } from "./live-stream";
 import { PROVENANCE_LABEL, SOURCE_LABEL } from "./labels";
@@ -49,9 +50,9 @@ export function AnimatedNumber({ value, digits = 1 }: { value: number; digits?: 
     if (from === to || reduced || digits === 0) { paint(to); return; }
     let raf = 0; const start = performance.now();
     const step = (now: number) => {
-      const k = Math.min(1, (now - start) / 320);
-      paint(k < 1 ? from + (to - from) * (1 - (1 - k) ** 3) : to);
-      if (k < 1) raf = requestAnimationFrame(step);
+      // easedValue trava o progresso em [0, 1]: o 1º quadro pode ter tempo ANTERIOR a `start` (ver src/lib/ease.ts).
+      paint(easedValue(from, to, now - start));
+      if (progress(now - start, 320) < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);

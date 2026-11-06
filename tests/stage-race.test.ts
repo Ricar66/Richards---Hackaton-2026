@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pipeTone, publicActor, ringView, scaleView, settleRefresh, mergeFeed, lineFromEvent, lineFromAudit } from "../src/components/stage/stage-logic";
-import { activeOccurrences, flowOccurrenceFor, initModel, reduceStage, type StageModel } from "../src/components/stage/stage-model";
+import { activeOccurrences, flowOccurrenceFor, focusSource, initModel, reduceStage, type StageModel } from "../src/components/stage/stage-model";
 import type { StageSnapshot } from "../src/modules/analytics/application/get-stage-snapshot";
 import type { LiveEvent, ReadingCreatedEvent } from "../src/modules/realtime/domain/live-event";
 import { ScaleSurplusDetector } from "../src/modules/monitoring/domain/scale-surplus-detector";
@@ -26,7 +26,7 @@ const reading = (s: number, flow: number, obs: number, seq: number, extra: Parti
   timing: { receivedAt: new Date(at(s) + 5).toISOString(), emittedAt: new Date(at(s) + 20).toISOString() }, ...extra,
 });
 const ev = (m: StageModel, e: LiveEvent, arrivalS: number) => reduceStage(m, { type: "event", event: e, arrivalMs: at(arrivalS) });
-const ringOf = (m: StageModel, nowS: number) => ringView({ rule: m.rules.d1 ?? null, broken: m.broken.d1 ?? null, occurrence: flowOccurrenceFor(m, "d1"), nowMs: at(nowS), minFlowLpm: 1.5, continuousSeconds: 30 });
+const ringOf = (m: StageModel, nowS: number) => ringView({ rule: m.rules.d1 ?? null, broken: m.broken.d1 ?? null, occurrence: flowOccurrenceFor(m, "d1", undefined, focusSource(m.rules.d1 ?? null, (m.readings.d1 ?? []).at(-1) ?? null)), nowMs: at(nowS), minFlowLpm: 1.5, continuousSeconds: 30 });
 const opened = (s: number, id = "X", source: "DEVICE" | "SIMULATED" = "SIMULATED"): LiveEvent => ({ v: 1, type: "occurrence.opened", orgId: "o", emittedAt: iso(s), id, deviceId: "d1", deviceCode: "FLOW-001", kind: "UNUSUAL_FLOW", severity: "HIGH", title: "Fluxo", source, openedAt: iso(s) });
 const status = (s: number, st: "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED", id = "X"): LiveEvent => ({ v: 1, type: "occurrence.status", orgId: "o", emittedAt: iso(s), id, deviceId: "d1", kind: "UNUSUAL_FLOW", title: "Fluxo", from: "ACKNOWLEDGED", status: st, actor: "operador", source: "SIMULATED" });
 
@@ -111,7 +111,7 @@ test("balança: pendente verificado no meio, carga mantida, depois esvazia e nov
   assert.equal(d.push({ at: new Date(at(18)), value: 6.0 }).trigger, true, "rearma depois de esvaziar");
   assert.equal(d.progress().phase, "triggered");
   assert.equal(p(20, 6.0), "disarmed");
-  const v = scaleView({ deviceId: "d", deviceCode: "B", kg: 6.1, source: "DEVICE", channel: "mqtt", progress: { phase: "blocked", minKg: 5, stableSeconds: 6, requiredSeconds: 6, pendingLotId: "velho" }, at: at(8) }, { id: "velho", kg: 5.3, deviceCode: "B", at: at(-600) }, at(9));
+  const v = scaleView({ deviceId: "d", deviceCode: "B", kg: 6.1, source: "DEVICE", channel: "mqtt", progress: { phase: "blocked", minKg: 5, stableSeconds: 6, requiredSeconds: 6, pendingLotId: "velho" }, at: at(8) }, { id: "velho", kg: 5.3, deviceCode: "B", source: "DEVICE", at: at(-600) }, at(9));
   assert.match(`${v.label} ${v.sub}`, /já existe lote/, "pesagem bloqueada não diz que virou lote");
   assert.doesNotMatch(`${v.label} ${v.sub}`, /lote criado|virou lote/);
 });

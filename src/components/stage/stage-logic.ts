@@ -131,7 +131,7 @@ const stoppedAt = (s: number) => (s < 1 ? "parou na primeira leitura" : `parou e
 export function ringView(i: RingInput): RingView {
   const limit = i.rule?.continuousSeconds ?? i.continuousSeconds;
   const min = i.rule?.minFlowLpm ?? i.minFlowLpm;
-  const rule = `≥ ${fixedBR(min, 1)} L/min por ${limit} s sem pausa · 1 ativa por sensor (regra 5)`;
+  const rule = `≥ ${fixedBR(min, 1)} L/min por ${limit} s sem pausa · 1 ativa por sensor e origem (regra 5)`; //  : "regra 5" nunca quebra no meio
   const fresh = i.rule !== null && i.nowMs - i.rule.at <= RULE_STALE_MS;
   const above = fresh && i.rule!.flowLpm >= min;
   const observed = above ? Math.floor(i.rule!.observedSeconds) : 0;
@@ -149,7 +149,7 @@ export function ringView(i: RingInput): RingView {
       return { ...sealed, state: "OCORRENCIA_ABERTA", label: RING_LABEL.OCORRENCIA_ABERTA, fraction: 1,
         detail: occ.openedAt !== null ? `aberta às ${clockBR(occ.openedAt)} · aguarda verificação humana` : "ocorrência ativa neste sensor · aguarda verificação humana" };
     return { ...sealed, state: "BLOQUEADO_REGRA_5", label: RING_LABEL.BLOQUEADO_REGRA_5, fraction: clamp01(observed / limit),
-      detail: `já existe ocorrência de fluxo ativa neste sensor${occ.openedAt !== null ? ` (desde ${hourMinBR(occ.openedAt)})` : ""}: a regra não abre outra até ela ser resolvida` };
+      detail: `já existe ocorrência de fluxo ativa neste sensor, da mesma origem${occ.openedAt !== null ? ` (desde ${hourMinBR(occ.openedAt)})` : ""}: a regra não abre outra até ela ser resolvida` };
   }
   if (above) {
     const left = Math.max(0, Math.ceil(limit - i.rule!.observedSeconds));
@@ -353,7 +353,9 @@ export function temperatureView(t: TemperatureLive, nowMs: number): TemperatureV
 }
 
 export type ScaleLive = { deviceId: string; deviceCode: string; kg: number; source: LiveSource; channel: LiveChannel; progress: ScaleProgress; at: number };
-export type ScaleLot = { id: string; kg: number; deviceCode: string; at: number };
+/** Lote pendente da balança. A regra do lote único vale por dispositivo E origem: o real e o simulado convivem. */
+export type ScaleLot = { id: string; kg: number; deviceCode: string; source: LiveSource; at: number };
+export const scaleLotKey = (deviceCode: string, source: LiveSource) => `${deviceCode}:${source}`;
 export type ScalePhase = "vazia" | "abaixo" | "instavel" | "estabilizando" | "pedido" | "lote" | "rearmar" | "bloqueada";
 export type ScaleView = { phase: ScalePhase; label: string; sub: string; total: number; lit: number; fill: number; stale: boolean };
 /** Escala visual da caixa (representação esquemática): cheia em 10 kg ou no dobro do mínimo. */

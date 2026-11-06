@@ -274,8 +274,29 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
       const labels = JSON.parse(execFileSync("docker", ["inspect", "-f", "{{json .Config.Labels}}", outageContainer]).toString() || "null") ?? {};
       if (labels["com.docker.compose.service"] === "db" && labels["com.docker.compose.project"] === "richards-platform") throw new Error(`E2E_DB_CONTAINER=${outageContainer} é o banco compartilhado da demonstração: recusado`);
       await go("/");
+      // A Sala também fica aberta durante a queda: é ela que está no projetor.
+      const stageOut = await browser.newPage();
+      stageOut.on("pageerror", e => pageErrors.push(`/ao-vivo (banco fora): ${e.message}`));
+      await stageOut.authenticate(auth);
+      await stageOut.setViewport({ width: 1920, height: 1080 });
+      await stageOut.goto(base + "/ao-vivo", { waitUntil: "load" }).catch(() => {});
+      await stageOut.waitForSelector('[data-stage][data-live-state="live"]', { timeout: 15000 }).catch(() => {});
       execFileSync("docker", ["stop", outageContainer], { stdio: "ignore" });
       try {
+        await stageOut.waitForFunction(() => document.querySelector(".snap-error") && document.querySelector(".lost-banner"), { timeout: 40000 }).catch(() => {});
+        const sala = await stageOut.evaluate(() => {
+          const box = s => document.querySelector(s)?.getBoundingClientRect() ?? null;
+          const a = box(".lost-banner"), b = box(".snap-error");
+          return { text: document.querySelector(".snap-error")?.innerText.replace(/\s+/g, " ") ?? null, both: !!(a && b),
+            overlap: !!(a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) };
+        });
+        // Com snapshot na tela, dizer "nenhum número é exibido" seria falso: os números estão lá, congelados (ensaio de 06/11).
+        check("E1c Sala sem banco: aviso diz que os números estão congelados no snapshot e não cobre o SINAL PERDIDO",
+          !!sala.text && /congelados no snapshot das \d\d:\d\d:\d\d/.test(sala.text) && !/nenhum número é exibido/i.test(sala.text) && sala.both && !sala.overlap,
+          `${sala.text ?? "aviso não apareceu"}${sala.both ? "" : " · faltou um dos avisos"}${sala.overlap ? " · SOBREPOSTOS" : ""}`);
+        await stageOut.screenshot({ path: shot("j-sala-banco-fora.png") });
+        await stageOut.close();
+        await page.bringToFront();
         check("E1 sem banco: busca falha e a faixa de números parados aparece", await waitText("Sem conexão com o servidor desde", 30000));
         check("E1 indicador ao vivo mostra servidor indisponível", await waitText("Servidor indisponível", 15000), `sinal ${await pillState()}`);
         await page.goto(base + "/", { waitUntil: "load" }).catch(() => {});

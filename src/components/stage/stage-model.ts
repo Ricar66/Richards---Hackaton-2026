@@ -1,7 +1,7 @@
 import type { LiveEvent, LiveSource } from "@/modules/realtime/domain/live-event";
 import type { StageOccurrence, StageReading, StageSnapshot } from "@/modules/analytics/application/get-stage-snapshot";
 import {
-  BUFFER_MS, OFFLINE_MS, lineFromAudit, lineFromEvent, mergeFeed, offlineLine, ruleTransition,
+  BUFFER_MS, OFFLINE_MS, lineFromAudit, lineFromEvent, mergeFeed, offlineLine, ruleTransition, scaleLotKey,
   type BrokenRun, type FeedLine, type Packet, type RingOccurrence, type RuleMark, type RuleTrack, type ScaleLive, type ScaleLot, type TemperatureLive, type TripSample,
 } from "./stage-logic";
 
@@ -97,7 +97,10 @@ function applySnapshot(m: StageModel, s: StageSnapshot, requestedAt: number | nu
   }
   const overrides = Object.fromEntries(Object.entries(m.overrides).filter(([, o]) => keep(o.at)));
   const scaleLots: Record<string, ScaleLot> = Object.fromEntries(Object.entries(m.scaleLots).filter(([, l]) => keep(l.at)));
-  for (const l of s.pendingScaleLots) if (!scaleLots[l.deviceCode]) scaleLots[l.deviceCode] = { id: l.id, kg: l.kg, deviceCode: l.deviceCode, at: ms(l.createdAt) };
+  for (const l of s.pendingScaleLots) {
+    const key = scaleLotKey(l.deviceCode, l.source);
+    if (!scaleLots[key]) scaleLots[key] = { id: l.id, kg: l.kg, deviceCode: l.deviceCode, source: l.source, at: ms(l.createdAt) };
+  }
 
   // Ajuste de relógio pelo ponto médio da ida e volta (o `hello` refina). Snapshot do primeiro render não serve: chegou sem medida.
   const offset = requestedAt !== null && receivedAt !== null && !m.offsetKnown ? { offsetMs: serverNow - (requestedAt + receivedAt) / 2, offsetKnown: true } : {};
@@ -160,7 +163,7 @@ function applyEvent(m: StageModel, e: LiveEvent, arrivalMs: number): StageModel 
     }
     case "donation.created":
       return e.origin === "scale" && e.deviceCode
-        ? { ...m, anchorMs, feed, scaleLots: { ...m.scaleLots, [e.deviceCode]: { id: e.id, kg: e.kg, deviceCode: e.deviceCode, at: arrivalMs } } }
+        ? { ...m, anchorMs, feed, scaleLots: { ...m.scaleLots, [scaleLotKey(e.deviceCode, e.source)]: { id: e.id, kg: e.kg, deviceCode: e.deviceCode, source: e.source, at: arrivalMs } } }
         : { ...m, anchorMs, feed };
     case "donation.status":
       // Verificado ou cancelado: deixou de aguardar verificação (o snapshot que vem a seguir confirma).
@@ -234,6 +237,15 @@ const finite = (n: number) => (Number.isFinite(n) ? n : null);
  * para o anel e o cano (uma simulada não bloqueia nem acende o sensor real). Sem leitura em foco, vale qualquer ativa
  * (o selo dela diz de onde veio).
  */
+/**
+ * Origem em foco no anel e no cano: a da leitura MAIS RECENTE do sensor. A decisão da regra fica guardada até chegar
+ * outra; se a última leitura é mais nova e de outra origem (ex.: o sensor real voltou depois da bancada), vale ela.
+ */
+export function focusSource(rule: Pick<RuleTrack, "at" | "source"> | null, last: Pick<StageReading, "capturedAt" | "source"> | null): LiveSource | null {
+  if (last && (!rule || Date.parse(last.capturedAt) > rule.at)) return last.source;
+  return rule?.source ?? last?.source ?? null;
+}
+
 export function flowOccurrenceFor(m: StageModel, deviceId: string, active = activeOccurrences(m), source: LiveSource | null = null): RingOccurrence | null {
   const mine = active.filter(o => o.kind === "UNUSUAL_FLOW" && o.deviceId === deviceId);
   const found = source ? mine.find(o => o.source === source) : mine[0];

@@ -14,6 +14,7 @@ import {
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { advancePhase, budgetRestart, budgetStart, frameBudgetStep, median, type BudgetState, type PipeTone } from "../stage-logic";
+import { progress } from "@/lib/ease";
 
 export type SceneInput = {
   /** Velocidade da água em unidades do desenho SVG por segundo (`waterSpeed`). 0 = parada. */
@@ -261,12 +262,12 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
   // Nunca corre pela água (aí seria lido como vazão, inclusive com o cano parado).
   const endPulse = () => { if (pulseStart < 0) return; pulseStart = -1; ringMat.opacity = 0; pulseRing.scale.setScalar(1); applyLook(); };
   const tick = (now: number) => {
-    const dtMs = last ? now - last : 16.7;
-    last = now;
+    const dtMs = last ? Math.max(0, now - last) : 16.7;
+    last = Math.max(last, now);
     phase = advancePhase(phase, state.speed, dtMs / 1000, SVG_PERIOD);
     water.uniforms.uPhase.value = phase * scale;
     if (pulseActive(now)) {
-      const k = (now - pulseStart) / PULSE_MS;
+      const k = progress(now - pulseStart, PULSE_MS); // 1º quadro pode ser anterior a pulseStart: trava em [0, 1]
       pulseRing.scale.setScalar(1 + 1.6 * k);
       ringMat.opacity = 0.95 * (1 - k);
       screenMat.color.copy(pulseScreen.set(TONES[state.tone].dash).lerp(WHITE, 1 - k));
