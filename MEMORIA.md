@@ -45,7 +45,7 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 2. **Litros observados ≠ litros economizados. "Suspeito de vazamento" ≠ vazamento comprovado.**
 3. Fluxo persistente é avaliado com limiar e tempo configuráveis por dispositivo (`minFlowLpm`, `continuousSeconds`).
 4. Leitura é idempotente por `(deviceId, bootId, sequence)`.
-5. No máximo **uma ocorrência ativa (OPEN/ACKNOWLEDGED) por dispositivo e tipo**.
+5. No máximo **uma ocorrência ativa (OPEN/ACKNOWLEDGED) por dispositivo, tipo e origem**: nunca duas reais ativas no mesmo sensor e tipo, e uma simulada nunca bloqueia a real (nem o contrário). Refinado em 06/11 na auditoria final, como a FlowAlertPolicy, que já não mistura origem.
 6. Lote só fica **AVAILABLE** com verificação humana documentada e só fica **DELIVERED** com quem recebeu.
 7. Toda ação persistente tem autorização, transação e auditoria.
 8. Segredo nunca vai para o navegador. Basic Auth e HTTP de laboratório não vão para produção.

@@ -15,9 +15,9 @@ Complementa `docs/plano/13_PITCH_JORNADA_DEMO.md` (tese, falas de abertura, slid
    - Wi-Fi do evento;
    - NTP sincronizado;
    - abrir a serial e ver `POST 202`.
-4. Liberar o palco. A regra permite **uma ocorrência ativa por sensor e tipo**: sem isso, o alerta ao vivo não abre.
+4. Liberar o palco. A regra permite **uma ocorrência ativa por sensor, tipo e origem**: uma simulada ativa impede a bancada (simulada) de abrir outra, mas não impede o sensor real.
    - `pnpm palco:checar`. É só leitura e sai com código 1 se algo bloquear o palco.
-   - Se acusar bloqueio, rode `pnpm bancada --preparar`. Ele mostra o que vai encerrar e pede "SIM": passa a `richards-oc-01` do seed e as outras ativas de fluxo e temperatura para DISMISSED, com nota e auditoria, e **não apaga nada**.
+   - Se acusar bloqueio, rode `pnpm bancada --preparar`. Ele mostra o que vai encerrar e pede "SIM": passa a `richards-oc-01` do seed e as outras SIMULADAS ativas de fluxo e temperatura para DISMISSED, com nota e auditoria, e **não apaga nada**. Registro REAL nunca é tocado: se houver ocorrência real de ensaio ativa, resolva pelo BI, com nota.
    - A alternativa manual: no BI, em **Ocorrências**, resolver a "Fluxo contínuo fora de horário".
 5. Navegador:
    - **Notebook (operador):** zoom de 100%, janela de 1440 px ou mais, Basic Auth já digitada, abas `/`, `/monitoramento?range=24h`, `/doacoes` e `/relatorios`.

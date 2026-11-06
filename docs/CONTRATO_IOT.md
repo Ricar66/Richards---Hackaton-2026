@@ -74,7 +74,7 @@ pnpm simulate --interval 5 --samples 8 --duplicate-rate 0.3 --drop-rate 0.2   # 
 pnpm simulate --boot-id reinicio-1                         # simula reboot (novo bootId, sequence volta a 0)
 ```
 
-O resumo final informa aceitas, duplicatas, retentativas, descartes e a ocorrência associada; o código de saída é 0 se a fila zerou. **Uma ocorrência de fluxo ativa bloqueia uma nova** (regra 5): resolva a anterior antes de demonstrar outra.
+O resumo final informa aceitas, duplicatas, retentativas, descartes e a ocorrência associada; o código de saída é 0 se a fila zerou. **Uma ocorrência de fluxo ativa da mesma origem bloqueia uma nova** (regra 5, por dispositivo, tipo e origem): resolva a anterior antes de demonstrar outra. Uma simulada não bloqueia a do sensor real.
 
 ## Conexão do ESP32 com Docker
 
@@ -86,7 +86,7 @@ A bancada do Victor publica as leituras num broker MQTT (Mosquitto, por exemplo)
 
 | Sensor | O que a plataforma faz | Regra |
 |---|---|---|
-| `VAZAO` (L/min) | Grava `TelemetryReading` e avalia a `FlowAlertPolicy` do dispositivo | `minFlowLpm` e `continuousSeconds` do Device (regra 3); uma ocorrência ativa por dispositivo e tipo (regra 5) |
+| `VAZAO` (L/min) | Grava `TelemetryReading` e avalia a `FlowAlertPolicy` do dispositivo | `minFlowLpm` e `continuousSeconds` do Device (regra 3); uma ocorrência ativa por dispositivo, tipo e origem (regra 5) |
 | `TEMP` / `UMIDADE` (DHT11) | Abre `TEMPERATURE_EXCURSION` (MEDIUM) quando a temperatura fica **acima** do limite de forma sustentada | Limite e tempo em `MQTT_TEMP_LIMIT_C` (28 °C) e `MQTT_TEMP_SECONDS` (30 s); pico isolado não alerta; regra 5 |
 | `PESO` (HX711) | Cria lote de doação **`PENDING_REVIEW`** quando o peso fica estável no mínimo | `MQTT_SCALE_MIN_KG` (5 kg) por `MQTT_SCALE_STABLE_SECONDS` (6 s); só fica disponível com verificação humana (regra 6) |
 
@@ -155,7 +155,7 @@ O `palco:checar` mostra:
 
 - `DEMO_MODE` e o nome do banco;
 - a regra do dispositivo e os marcos que ela produz no cenário `palco`;
-- as ocorrências ativas por tipo, indicando quais **bloqueiam** o palco pela regra 5. A `richards-oc-01` do seed bloqueia;
+- as ocorrências ativas por tipo, indicando quais **bloqueiam** a bancada pela regra 5: só as SIMULADAS do dispositivo (a bancada grava SIMULATED). A `richards-oc-01` do seed bloqueia. Uma ocorrência REAL ativa aparece como AVISO: ela não bloqueia a bancada e não é tocada pela preparação;
 - o lote da balança aguardando verificação;
 - se existe pelo menos um lote `RESERVED` para a entrega do roteiro;
 - a data da última leitura do seed (envelhecido: use o filtro **30 dias**);
@@ -164,14 +164,14 @@ O `palco:checar` mostra:
 - a trava de outra bancada **neste** banco (uma trava em outro banco do mesmo servidor não conta);
 - outra bancada rodando, os processos `run-mqtt`/`run-bancada-virtual` desta máquina, e o `/api/health` do site com o desvio de relógio.
 
-O `--preparar` passa para **DISMISSED** cada ocorrência ativa de fluxo ou temperatura do dispositivo, pelo `OccurrenceService`, com:
+O `--preparar` passa para **DISMISSED** cada ocorrência **SIMULADA** ativa de fluxo ou temperatura do dispositivo, pelo `OccurrenceService`, com:
 
-- a nota "Cenário simulado encerrado na preparação do palco" (se a ocorrência veio do sensor real, a nota é "Ensaio com o sensor encerrado na preparação do palco");
+- a nota "Cenário simulado encerrado na preparação do palco";
 - o autor `preparacao:<usuário do Windows>`.
 
-Ele também **cancela** o lote da balança pendente, com o motivo "lote de ensaio encerrado na preparação do palco". Tudo fica auditado e **nada é apagado**. Ocorrências de outros tipos (ex.: `DEVICE_OFFLINE`) não são tocadas.
+Ele também **cancela** o lote SIMULADO da balança pendente, com o motivo "lote de ensaio encerrado na preparação do palco". Tudo fica auditado e **nada é apagado**. Registros REAIS (ocorrência ou lote com origem DEVICE) nunca são tocados para facilitar a demonstração: se forem de ensaio, uma pessoa os resolve pelo BI, com nota. Ocorrências de outros tipos (ex.: `DEVICE_OFFLINE`) também não são tocadas.
 
-**O cenário `palco` recusa começar** se houver ocorrência ativa dos tipos que ele vai disparar ou lote da balança pendente, e sugere o `--preparar`.
+**O cenário `palco` recusa começar** se houver ocorrência SIMULADA ativa dos tipos que ele vai disparar ou lote SIMULADO da balança pendente, e sugere o `--preparar`.
 
 ### No palco
 
@@ -226,7 +226,7 @@ Outras opções:
 - `--dispositivo`: padrão `RICHARDS-FLOW-001`; os apelidos de `MQTT_DEVICE_ALIASES` valem.
 - `--ajuda`: lista as opções.
 
-**Bancada física e virtual juntas:** as duas usam o mesmo dispositivo, então a regra 5 vale para as duas. Uma ocorrência SIMULADA ativa bloqueia a do sensor real, e o contrário também.
+**Bancada física e virtual juntas:** as duas usam o mesmo dispositivo, mas a regra 5 é por origem: uma ocorrência SIMULADA ativa não bloqueia a do sensor real, e o contrário também não. Duas reais ativas do mesmo tipo continuam impossíveis.
 
 **A ponte não descarta um sensor só.** Enquanto o ESP32 publica, `pnpm mqtt` grava a vazão dele (o potenciômetro, como SIMULATED pelo padrão `MQTT_SIMULATED_SENSORS="VAZAO"`) no mesmo dispositivo. A regra de fluxo lê o histórico da mesma origem sem separar sessão, então os zeros da ponte intercalados com os 2,4 L/min da bancada cortam o fluxo contínuo e a UNUSUAL_FLOW nunca abre. Por isso:
 

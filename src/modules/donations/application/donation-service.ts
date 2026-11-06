@@ -28,18 +28,19 @@ export class DonationService {
 
   /**
    * Lote pesado pela balança da bancada. Entra SEMPRE em PENDING_REVIEW (regra 6: só fica disponível com
-   * verificação humana documentada). No máximo UM lote da mesma balança aguarda verificação por vez: leitura
-   * repetida ou ponte reiniciada com o peso ainda na balança não duplica kg.
+   * verificação humana documentada). No máximo UM lote da mesma balança E da mesma origem aguarda verificação por vez:
+   * leitura repetida ou ponte reiniciada com o peso ainda na balança não duplica kg, e um lote SIMULATED pendente
+   * nunca impede a balança real (nem o contrário).
    */
   async createFromScale(input: {
     organizationId: string; deviceId: string; deviceCode: string; weightKg: number; source: "DEVICE" | "SIMULATED";
     evidence: Record<string, Prisma.InputJsonValue | null>;
   }, actor: string): Promise<{ created: boolean; id: string }> {
     return getDb().$transaction(async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`scale-donation:${input.deviceId}`}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`scale-donation:${input.deviceId}:${input.source}`}))`;
       // O lote não tem coluna de dispositivo: a autoria fica na auditoria de criação.
       const mine = await tx.auditEvent.findMany({ where: { organizationId: input.organizationId, entity: "DonationBatch", action: "CREATED", metadata: { path: ["deviceCode"], equals: input.deviceCode } }, select: { entityId: true } });
-      const pending = mine.length ? await tx.donationBatch.findFirst({ where: { id: { in: mine.map(m => m.entityId) }, status: "PENDING_REVIEW" }, select: { id: true } }) : null;
+      const pending = mine.length ? await tx.donationBatch.findFirst({ where: { id: { in: mine.map(m => m.entityId) }, status: "PENDING_REVIEW", source: input.source }, select: { id: true } }) : null;
       if (pending) return { created: false, id: pending.id };
       const item = await tx.donationBatch.create({ data: {
         organizationId: input.organizationId, description: `Excedente pesado na balança · ${input.deviceCode}`,

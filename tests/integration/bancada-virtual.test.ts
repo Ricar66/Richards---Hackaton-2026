@@ -82,7 +82,7 @@ test("bancada virtual · --sensores filtra o payload; pico não abre ocorrência
   assert.equal(s.contagem.gravadas, 61);
 });
 
-test("bancada virtual · --checar só lê; --preparar encerra com nota e auditoria, sem apagar; o palco recusa com pendência", async () => {
+test("bancada virtual · --checar só lê; --preparar encerra só o SIMULADO, com nota e auditoria, sem apagar; registro real fica intacto", async () => {
   // Pendências de ensaio: fluxo SIMULATED aberto, temperatura do sensor real assumida, lote da balança pendente e um alerta de outro tipo.
   const base = { organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, deviceId: DEMO_DEVICE_ID, title: "ensaio", description: "ensaio", eventNote: "ensaio", evidence: {} };
   const fluxo = await openDeviceOccurrence({ ...base, kind: "UNUSUAL_FLOW", severity: "HIGH", source: "SIMULATED", actor: "simulador:teste" });
@@ -97,28 +97,33 @@ test("bancada virtual · --checar só lê; --preparar encerra com nota e auditor
   assert.deepEqual(await contar(), antes, "--checar não grava nada");
   const falhas = itens.filter(i => i.nivel === "FALHA").map(i => i.texto).join("\n");
   assert.match(falhas, /UNUSUAL_FLOW.*bloqueia/);
-  assert.match(falhas, /TEMPERATURE_EXCURSION.*bloqueia/);
-  assert.match(falhas, /lote da balança aguardando verificação/);
+  // A temperatura do sensor REAL (assumida) não bloqueia a bancada simulada (regra 5 por origem): vira aviso.
+  assert.doesNotMatch(falhas, /TEMPERATURE_EXCURSION/);
+  const tempItem = itens.find(i => i.texto.startsWith("TEMPERATURE_EXCURSION"))!;
+  assert.equal(tempItem.nivel, "AVISO");
+  assert.match(tempItem.texto, /REAL ativa.*NÃO é tocada pela preparação/);
+  assert.match(falhas, /lote SIMULADO da balança aguardando verificação/);
   assert.match(falhas, /nenhum lote RESERVED/);
   assert.match(itens.find(i => i.texto.startsWith("DEVICE_OFFLINE"))!.texto, /não bloqueia/);
   assert.match(itens.find(i => i.texto.startsWith("banco "))!.texto, /^banco \w+_test$/, "mostra o nome do banco, nunca a URL");
   assert.match((await checar(DEVICE_CODE, cfg(), {})).map(i => `${i.nivel} ${i.texto}`).join("\n"), /FALHA DEMO_MODE/);
 
   const d = await acharDispositivo(DEVICE_CODE, cfg());
-  assert.equal(bloqueios(cenario("palco"), new Set(MQTT_SENSORS), await pendencias(d)).length, 3, "fluxo, temperatura e balança bloqueados");
+  assert.equal(bloqueios(cenario("palco"), new Set(MQTT_SENSORS), await pendencias(d)).length, 2, "fluxo e balança SIMULADOS bloqueiam; a temperatura REAL não");
   assert.equal(bloqueios(cenario("palco"), new Set<MqttSensor>(["PESO"]), await pendencias(d)).length, 1, "só a balança simulada: só o lote bloqueia");
 
   const linhas = await preparar(d, "preparacao:teste");
-  assert.equal(linhas.length, 3, linhas.join("\n"));
+  assert.equal(linhas.length, 2, linhas.join("\n"));
   const depois = await contar();
   assert.deepEqual([depois[1], depois[3], depois[4]], [antes[1], antes[3], antes[4]], "nada apagado: mesmas ocorrências, lotes e leituras");
-  assert.equal(depois[0], antes[0] + 3, "uma auditoria por mudança");
+  assert.equal(depois[0], antes[0] + 2, "uma auditoria por mudança");
   const [f, tt, off, l] = await Promise.all([
     db().occurrence.findUniqueOrThrow({ where: { id: fluxo.occurrenceId } }), db().occurrence.findUniqueOrThrow({ where: { id: temp.occurrenceId } }),
     db().occurrence.findUniqueOrThrow({ where: { id: offline.id } }), db().donationBatch.findUniqueOrThrow({ where: { id: lote.id } }),
   ]);
   assert.deepEqual([f.status, f.verificationNote], ["DISMISSED", NOTA_PREPARO]);
-  assert.deepEqual([tt.status, tt.verificationNote], ["DISMISSED", "Ensaio com o sensor encerrado na preparação do palco"], "ocorrência do sensor real não vira 'cenário simulado'");
+  assert.equal(tt.status, "ACKNOWLEDGED", "registro REAL não é mexido para facilitar a demonstração");
+  assert.equal(await db().occurrenceEvent.count({ where: { occurrenceId: tt.id, action: "DISMISSED" } }), 0);
   assert.equal(off.status, "OPEN", "o que não bloqueia o palco não é tocado");
   assert.deepEqual([l.status, l.cancelReason], ["CANCELLED", MOTIVO_PREPARO]);
   const [ev] = await db().occurrenceEvent.findMany({ where: { occurrenceId: f.id, action: "DISMISSED" } });

@@ -135,7 +135,8 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
   const fresh = lastAt !== null && refNow - lastAt <= RULE_STALE_MS;
   const rule = focus ? model.rules[focus.id] ?? null : null;
   const active = activeOccurrences(model);
-  const flowOcc = focus ? flowOccurrenceFor(model, focus.id, active) : null;
+  // Regra 5 por origem: o anel e o cano olham a ocorrência da MESMA origem da leitura em foco.
+  const flowOcc = focus ? flowOccurrenceFor(model, focus.id, active, rule?.source ?? lastReading?.source ?? null) : null;
   const ring = ringView({ rule, broken: focus ? model.broken[focus.id] ?? null : null, occurrence: flowOcc, nowMs: refNow, minFlowLpm: focus?.minFlowLpm ?? 1.5, continuousSeconds: focus?.continuousSeconds ?? 30 });
   const counting = ring.state === "CONTANDO" || ring.state === "BLOQUEADO_REGRA_5";
   const run = counting && rule && ring.observed > 0 ? { from: rule.at - rule.observedSeconds * 1000, to: rule.at } : null;
@@ -153,7 +154,7 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
 
   const temp = latestLive(model.temperature, nextFocus);
   const tempView = temp ? temperatureView(temp, refNow) : null;
-  const tempOcc = temp ? active.find(o => o.kind === "TEMPERATURE_EXCURSION" && o.deviceId === temp.deviceId) ?? null : null;
+  const tempOcc = temp ? active.find(o => o.kind === "TEMPERATURE_EXCURSION" && o.deviceId === temp.deviceId && o.source === temp.source) ?? null : null;
   const scale = latestLive(model.scale, nextFocus);
   const scaleV = scale ? scaleView(scale, model.scaleLots[scale.deviceCode] ?? null, refNow) : null;
 

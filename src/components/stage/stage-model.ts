@@ -1,4 +1,4 @@
-import type { LiveEvent } from "@/modules/realtime/domain/live-event";
+import type { LiveEvent, LiveSource } from "@/modules/realtime/domain/live-event";
 import type { StageOccurrence, StageReading, StageSnapshot } from "@/modules/analytics/application/get-stage-snapshot";
 import {
   BUFFER_MS, OFFLINE_MS, lineFromAudit, lineFromEvent, mergeFeed, offlineLine, ruleTransition,
@@ -230,13 +230,18 @@ const finite = (n: number) => (Number.isFinite(n) ? n : null);
  * Ocorrência de fluxo ativa do dispositivo, com a hora REAL de abertura e a origem do registro.
  * O `occurrenceId` da leitura cobre só o intervalo até o evento ou o snapshot chegarem; nesse caso a hora e a origem
  * ainda são desconhecidas (null) e a tela não inventa nenhuma das duas. Encerrada por evento nunca volta por aqui.
+ * A regra 5 é por ORIGEM: com a origem da leitura em foco conhecida (`source`), só a ocorrência da mesma origem vale
+ * para o anel e o cano (uma simulada não bloqueia nem acende o sensor real). Sem leitura em foco, vale qualquer ativa
+ * (o selo dela diz de onde veio).
  */
-export function flowOccurrenceFor(m: StageModel, deviceId: string, active = activeOccurrences(m)): RingOccurrence | null {
-  const found = active.find(o => o.kind === "UNUSUAL_FLOW" && o.deviceId === deviceId);
+export function flowOccurrenceFor(m: StageModel, deviceId: string, active = activeOccurrences(m), source: LiveSource | null = null): RingOccurrence | null {
+  const mine = active.filter(o => o.kind === "UNUSUAL_FLOW" && o.deviceId === deviceId);
+  const found = source ? mine.find(o => o.source === source) : mine[0];
   if (found) return { id: found.id, openedAt: finite(ms(found.openedAt)), source: found.source };
   const rule = m.rules[deviceId];
   const id = rule?.suspicious ? rule.occurrenceId : undefined;
-  if (id && !(id in m.closed) && m.overrides[id]?.active !== false) return { id, openedAt: null, source: null };
+  // O id veio de uma leitura daquela origem: só vale se for a origem em foco.
+  if (id && !(id in m.closed) && m.overrides[id]?.active !== false && (!source || rule?.source === source)) return { id, openedAt: null, source: null };
   return null;
 }
 

@@ -429,3 +429,20 @@ test("redutor: evento malformado é ignorado sem derrubar a tela", () => {
   const weird = { v: 1, type: "sensor.live", orgId: "o", emittedAt: iso(1), deviceId: "d1", deviceCode: "D", channel: "mqtt", at: iso(1), temperature: { c: 20 } } as unknown as LiveEvent;
   assert.deepEqual(reduceStage(m, { type: "event", event: weird, arrivalMs: at(1) }).temperature, {}, "temperatura sem regra não é desenhada");
 });
+
+test("regra 5 por origem: o anel e o cano usam a ocorrência da MESMA origem da leitura em foco", () => {
+  let m = initModel(snapshot());
+  const open = (id: string, source: "DEVICE" | "SIMULATED"): LiveEvent => ({ v: 1, type: "occurrence.opened", orgId: "o", emittedAt: iso(33), id, deviceId: "d1", deviceCode: "FLOW-001", kind: "UNUSUAL_FLOW", severity: "HIGH", title: "Fluxo", source, openedAt: iso(33) });
+  m = run(m, [open("sim1", "SIMULATED")]);
+  assert.equal(flowOccurrenceFor(m, "d1", activeOccurrences(m), "DEVICE"), null, "a simulada não vale para a leitura REAL: não bloqueia nem acende o sensor real");
+  assert.equal(flowOccurrenceFor(m, "d1", activeOccurrences(m), "SIMULATED")?.id, "sim1");
+  assert.equal(flowOccurrenceFor(m, "d1")?.id, "sim1", "sem leitura em foco: mostra a ativa (o selo diz a origem)");
+  m = run(m, [open("real1", "DEVICE")]);
+  assert.equal(flowOccurrenceFor(m, "d1", activeOccurrences(m), "DEVICE")?.id, "real1");
+  assert.equal(flowOccurrenceFor(m, "d1", activeOccurrences(m), "SIMULATED")?.id, "sim1");
+  // O id que só a leitura apontou (antes do evento) também respeita a origem da leitura.
+  let n = initModel(snapshot());
+  n = run(n, [reading(40, 2, 31, 9, { occurrenceId: "simX" })]);
+  assert.equal(flowOccurrenceFor(n, "d1", activeOccurrences(n), "SIMULATED")?.id, "simX");
+  assert.equal(flowOccurrenceFor(n, "d1", activeOccurrences(n), "DEVICE"), null);
+});

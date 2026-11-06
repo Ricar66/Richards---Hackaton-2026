@@ -17,14 +17,17 @@ const CHANNELS: ReadonlySet<string> = new Set<LiveChannel>(["http", "mqtt", "ban
 export const OCCURRENCE_TX = { maxWait: 5_000, timeout: 10_000 } as const;
 
 /**
- * Regra inviolável 5: no máximo UMA ocorrência ativa (OPEN/ACKNOWLEDGED) por dispositivo e tipo.
+ * Regra inviolável 5: no máximo UMA ocorrência ativa (OPEN/ACKNOWLEDGED) por dispositivo, tipo e ORIGEM.
+ * A origem entra na regra como já entrava na FlowAlertPolicy (leitura simulada nunca sustenta alerta real): uma
+ * ocorrência SIMULATED (demonstração, seed, bancada) nunca impede o sensor real de abrir a dele, nem o contrário, e
+ * duas ocorrências REAIS ativas do mesmo dispositivo e tipo continuam impossíveis.
  * Roda DENTRO de uma transação já aberta (`tx`): o advisory lock serializa leituras simultâneas do mesmo dispositivo e
  * tipo até o COMMIT; ocorrência, timeline, auditoria e o aviso `occurrence.opened` (entregue só no COMMIT) ficam na
  * mesma transação de quem chamou. Se ela for desfeita, nada disso existiu, nem para o telão.
  */
 export async function openDeviceOccurrenceIn(tx: Prisma.TransactionClient, input: OpenDeviceOccurrenceInput): Promise<OpenDeviceOccurrenceResult> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`occurrence:${input.kind}:${input.deviceId}`}))`;
-  const existing = await tx.occurrence.findFirst({ where: { deviceId: input.deviceId, kind: input.kind, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, select: { id: true } });
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`occurrence:${input.kind}:${input.deviceId}:${input.source}`}))`;
+  const existing = await tx.occurrence.findFirst({ where: { deviceId: input.deviceId, kind: input.kind, source: input.source, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, select: { id: true } });
   if (existing) return { created: false, occurrenceId: existing.id };
   const occurrence = await tx.occurrence.create({ data: {
     organizationId: input.organizationId, siteId: input.siteId, deviceId: input.deviceId,

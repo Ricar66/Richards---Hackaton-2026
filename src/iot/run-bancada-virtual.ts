@@ -50,15 +50,20 @@ export type Pendencias = {
   lotes: { id: string; weightKg: number; source: string }[];
 };
 /** Ocorrências ativas de fluxo e temperatura do dispositivo (regra 5) e lote da balança aguardando verificação. SÓ LEITURA. */
+/**
+ * O que bloquearia a BANCADA (que grava SIMULATED): a regra 5 e o lote único por balança valem por origem, então só
+ * ocorrência e lote SIMULATED do dispositivo entram aqui. Registros REAIS nunca são bloqueio da bancada e nunca são
+ * tocados pela preparação (não se mexe em registro real para facilitar a demonstração).
+ */
 export async function pendencias(d: Dispositivo): Promise<Pendencias> {
   const db = getDb();
   const ocorrencias = await db.occurrence.findMany({
-    where: { organizationId: DEMO_ORG_ID, deviceId: d.id, kind: { in: [...TIPOS_DA_BANCADA] }, status: { in: ["OPEN", "ACKNOWLEDGED"] } },
+    where: { organizationId: DEMO_ORG_ID, deviceId: d.id, kind: { in: [...TIPOS_DA_BANCADA] }, source: "SIMULATED", status: { in: ["OPEN", "ACKNOWLEDGED"] } },
     select: { id: true, kind: true, status: true, source: true, title: true }, orderBy: { openedAt: "asc" },
   });
   // Mesmo critério do DonationService.createFromScale: o lote não tem coluna de dispositivo, a autoria fica na auditoria.
   const criados = await db.auditEvent.findMany({ where: { organizationId: DEMO_ORG_ID, entity: "DonationBatch", action: "CREATED", metadata: { path: ["deviceCode"], equals: d.code } }, select: { entityId: true } });
-  const lotes = criados.length ? await db.donationBatch.findMany({ where: { id: { in: criados.map(c => c.entityId) }, status: "PENDING_REVIEW" }, select: { id: true, weightKg: true, source: true } }) : [];
+  const lotes = criados.length ? await db.donationBatch.findMany({ where: { id: { in: criados.map(c => c.entityId) }, status: "PENDING_REVIEW", source: "SIMULATED" }, select: { id: true, weightKg: true, source: true } }) : [];
   return { ocorrencias, lotes: lotes.map(l => ({ ...l, weightKg: Number(l.weightKg) })) };
 }
 
@@ -145,11 +150,13 @@ export async function checar(id: string, cfg: MqttBridgeConfig, env: Readonly<Re
   if (!ativas.length) add("OK", "nenhuma ocorrência ativa");
   for (const kind of [...new Set(ativas.map(o => o.kind))]) {
     const lista = ativas.filter(o => o.kind === kind);
-    const bloqueia = (TIPOS_DA_BANCADA as readonly string[]).includes(kind) && lista.some(o => o.deviceId === d.id);
-    add(bloqueia ? "FALHA" : "OK", `${kind}: ${lista.length} ativa(s) (${lista.map(o => `${o.id} ${o.status} ${o.source}`).join("; ")})${bloqueia ? ": bloqueia o palco pela regra 5, rode pnpm bancada --preparar" : ": não bloqueia o palco"}`);
+    const daBancada = (TIPOS_DA_BANCADA as readonly string[]).includes(kind);
+    const bloqueia = daBancada && lista.some(o => o.deviceId === d.id && o.source === "SIMULATED");
+    const real = daBancada && lista.some(o => o.deviceId === d.id && o.source === "DEVICE");
+    add(bloqueia ? "FALHA" : real ? "AVISO" : "OK", `${kind}: ${lista.length} ativa(s) (${lista.map(o => `${o.id} ${o.status} ${o.source}`).join("; ")})${bloqueia ? ": a SIMULADA bloqueia a bancada pela regra 5, rode pnpm bancada --preparar" : ": não bloqueia a bancada"}${real ? ". Há ocorrência REAL ativa neste sensor: ela impede o sensor real de abrir outra (regra 5 por origem) e NÃO é tocada pela preparação; se for de ensaio, resolva pelo BI com nota" : ""}`);
   }
   const { lotes } = await pendencias(d);
-  if (lotes.length) add("FALHA", `lote da balança aguardando verificação (${lotes.map(l => `${l.id} ${br(l.weightKg)} kg ${l.source}`).join("; ")}): a balança não cria outro, rode pnpm bancada --preparar`);
+  if (lotes.length) add("FALHA", `lote SIMULADO da balança aguardando verificação (${lotes.map(l => `${l.id} ${br(l.weightKg)} kg ${l.source}`).join("; ")}): a bancada não cria outro, rode pnpm bancada --preparar`);
   else add("OK", "nenhum lote da balança aguardando verificação");
   const reservados = await db.donationBatch.findMany({ where: { organizationId: DEMO_ORG_ID, status: "RESERVED" }, select: { description: true, weightKg: true, source: true }, orderBy: { createdAt: "asc" } });
   if (reservados.length) add("OK", `${reservados.length} lote(s) RESERVED para confirmar a entrega: ${reservados.map(r => `${r.description} (${br(Number(r.weightKg))} kg, ${r.source})`).join("; ")}`);
@@ -212,8 +219,9 @@ export async function preparar(d: Dispositivo, autor: string): Promise<string[]>
   const p = await pendencias(d);
   const linhas: string[] = [];
   for (const o of p.ocorrencias) {
-    // Ocorrência do sensor real não é "cenário simulado": a nota da auditoria não mente sobre a origem.
-    const nota = o.source === "SIMULATED" ? NOTA_PREPARO : "Ensaio com o sensor encerrado na preparação do palco";
+    // pendencias() só devolve SIMULATED: registro real nunca é encerrado pela preparação. Guarda dupla, por segurança.
+    if (o.source !== "SIMULATED") continue;
+    const nota = NOTA_PREPARO;
     try { await new OccurrenceService().transition(o.id, "DISMISSED", nota, autor); linhas.push(`ocorrência ${o.kind} ${o.id}: ${o.status} → DISMISSED`); }
     catch (e) { linhas.push(`ocorrência ${o.kind} ${o.id}: não mudou (${msg(e)})`); }
   }
