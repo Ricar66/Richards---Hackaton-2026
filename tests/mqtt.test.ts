@@ -76,3 +76,43 @@ test("balança: um lote por carga estável, peso conservador e rearme só depois
   fresh.rearm();
   assert.equal(fresh.push({ at: at(6), value: 2.3 }).trigger, true, "rearme manual após falha de gravação");
 });
+
+test("balança: progress() expõe a fase decidida na última leitura (idle → stabilizing → triggered → disarmed → idle)", () => {
+  const scale = new ScaleSurplusDetector(5, 6);
+  const step = (s: number, kg: number) => { scale.push({ at: at(s), value: kg }); const p = scale.progress(); return [p.phase, p.stableSeconds]; };
+  assert.deepEqual(scale.progress(), { phase: "idle", stableSeconds: 0, minKg: 5, requiredSeconds: 6 }, "antes de qualquer leitura");
+  assert.deepEqual(step(0, 0), ["idle", 0]);
+  assert.deepEqual(step(2, 4), ["idle", 0], "entre a metade e o mínimo ainda não conta");
+  assert.deepEqual(step(4, 5.4), ["stabilizing", 0]);
+  assert.deepEqual(step(6, 5.4), ["stabilizing", 2]);
+  assert.deepEqual(step(10, 5.4), ["triggered", 6]);
+  assert.deepEqual(step(12, 5.4), ["disarmed", 8], "mesma carga: já pediu o lote");
+  assert.deepEqual(step(14, 0.1), ["idle", 0], "esvaziou: rearma");
+  const failed = new ScaleSurplusDetector(2, 4);
+  failed.push({ at: at(0), value: 3 }); failed.push({ at: at(4), value: 3 });
+  assert.equal(failed.progress().phase, "triggered");
+  failed.rearm();
+  assert.equal(failed.progress().phase, "stabilizing", "gravação falhou: volta a contar, não finge lote pedido");
+});
+
+test("balança: pedido recusado por lote pendente vira fase 'blocked' (nunca 'triggered' nem 'disarmed') até esvaziar", () => {
+  const scale = new ScaleSurplusDetector(5, 6);
+  const step = (s: number, kg: number) => { scale.push({ at: at(s), value: kg }); return scale.progress(); };
+  step(0, 0); step(2, 6.1); step(4, 6.1); step(6, 6.1);
+  assert.equal(step(8, 6.1).phase, "triggered", "a carga estabilizou e pediu o lote");
+  scale.markBlocked("lote-pendente");
+  assert.deepEqual(scale.progress(), { phase: "blocked", stableSeconds: 6, minKg: 5, requiredSeconds: 6, pendingLotId: "lote-pendente" }, "esta pesagem não virou lote");
+  assert.deepEqual([step(10, 6.1).phase, scale.progress().pendingLotId], ["blocked", "lote-pendente"], "a leitura seguinte não diz 'esta pesagem já virou lote'");
+  assert.equal(scale.push({ at: at(12), value: 6.1 }).trigger, false, "um pedido por carga: não insiste a cada leitura");
+  assert.deepEqual([step(14, 0.1).phase, scale.progress().pendingLotId], ["idle", undefined], "esvaziou: rearma e esquece o bloqueio");
+  step(16, 6.1); step(18, 6.1); step(20, 6.1);
+  assert.equal(step(22, 6.1).phase, "triggered", "nova carga pede de novo");
+  assert.equal(step(24, 6.1).phase, "disarmed", "pedido aceito: fase normal de rearme");
+  scale.markBlocked("x");
+  assert.equal(scale.progress().phase, "disarmed", "markBlocked só vale logo depois do pedido");
+  const failed = new ScaleSurplusDetector(2, 4);
+  failed.push({ at: at(0), value: 3 }); failed.push({ at: at(4), value: 3 });
+  failed.markBlocked("p"); failed.rearm();
+  assert.equal(failed.progress().phase, "stabilizing");
+  assert.equal(failed.push({ at: at(6), value: 3 }).trigger, true, "rearme manual limpa o bloqueio");
+});

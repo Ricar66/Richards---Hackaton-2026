@@ -52,3 +52,11 @@ test("telemetria e health não exigem senha de operador (telemetria exige chave 
   assert.ok(passed(proxy(req("/api/health"))));
   assert.ok(passed(proxy(req("/api/iot/telemetry", { method: "POST", headers: { "content-type": "application/json" } }))));
 });
+
+test("stream ao vivo (/api/live/stream) exige a senha do operador como o resto do BI; GET não sofre 415", () => {
+  assert.equal(proxy(req("/api/live/stream")).status, 401);
+  assert.equal(proxy(req("/api/live/stream", { headers: { authorization: basic("op", "errada") } })).status, 401);
+  const r = proxy(req("/api/live/stream", { headers: { authorization: basic("op", "s3nha"), accept: "text/event-stream" } }));
+  assert.ok(passed(r), "GET do EventSource não tem Content-Type JSON e não pode ser barrado pela regra de escrita");
+  assert.equal(forwardedActor(r), "operador:op");
+});

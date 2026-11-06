@@ -1,18 +1,23 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { auditRecord } from "@/modules/audit/infrastructure/audit-record";
+import type { LiveChannel } from "@/modules/realtime/domain/live-event";
+import { notifyLive } from "@/modules/realtime/infrastructure/notify-event";
 export type DeviceOccurrenceKind = "UNUSUAL_FLOW" | "TEMPERATURE_EXCURSION";
 export type OpenDeviceOccurrenceInput = {
   kind: DeviceOccurrenceKind; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   organizationId: string; siteId: string; deviceId: string;
+  /** Código do dispositivo para o aviso ao vivo; ausente, é buscado na mesma transação. */
+  deviceCode?: string;
   source: "DEVICE" | "SIMULATED"; title: string; description: string; suspectedLiters?: number | null;
   eventNote: string; actor: string; evidence: Record<string, Prisma.InputJsonValue | null>;
 };
 export type OpenDeviceOccurrenceResult = { created: boolean; occurrenceId: string };
+const CHANNELS: ReadonlySet<string> = new Set<LiveChannel>(["http", "mqtt", "bancada-virtual"]);
 /**
  * Regra inviolável 5: no máximo UMA ocorrência ativa (OPEN/ACKNOWLEDGED) por dispositivo e tipo.
  * O advisory lock serializa leituras simultâneas do mesmo dispositivo e tipo; ocorrência, timeline e
- * auditoria são gravadas na mesma transação.
+ * auditoria são gravadas na mesma transação, junto com o aviso `occurrence.opened` (entregue só no COMMIT).
  */
 export async function openDeviceOccurrence(input: OpenDeviceOccurrenceInput): Promise<OpenDeviceOccurrenceResult> {
   return getDb().$transaction(async tx => {
@@ -29,6 +34,13 @@ export async function openDeviceOccurrence(input: OpenDeviceOccurrenceInput): Pr
       organizationId: input.organizationId, entity: "Occurrence", entityId: occurrence.id,
       action: "CREATED", actor: input.actor, metadata: { source: input.source, ...input.evidence },
     }) });
+    const deviceCode = input.deviceCode ?? (await tx.device.findUnique({ where: { id: input.deviceId }, select: { code: true } }))?.code ?? null;
+    const channel = input.evidence.channel;
+    await notifyLive(tx, {
+      type: "occurrence.opened", orgId: input.organizationId, id: occurrence.id, deviceId: input.deviceId, deviceCode,
+      kind: input.kind, severity: input.severity, title: input.title, source: input.source, openedAt: occurrence.openedAt.toISOString(),
+      ...(typeof channel === "string" && CHANNELS.has(channel) ? { channel: channel as LiveChannel } : {}),
+    });
     return { created: true, occurrenceId: occurrence.id };
   }, { maxWait: 5_000, timeout: 10_000 });
 }

@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { getDb } from "@/lib/db";
 import { DEMO_ORG_ID } from "@/lib/constants";
 import { auditRecord } from "@/modules/audit/infrastructure/audit-record";
+import { notifyLive } from "@/modules/realtime/infrastructure/notify-event";
 import { DonationRuleError, DonationWorkflow, type DonationStepDetails } from "../domain/donation-workflow";
 export type DonationTransition = "AVAILABLE" | "RESERVED" | "DELIVERED" | "CANCELLED";
 export type DonationTransitionInput = DonationStepDetails & { status: DonationTransition; note?: string };
@@ -20,6 +21,7 @@ export class DonationService {
     return getDb().$transaction(async tx => {
       const item = await tx.donationBatch.create({ data: { organizationId: DEMO_ORG_ID, description: input.description, weightKg: input.weightKg, status: "PENDING_REVIEW", source: "MANUAL" } });
       await tx.auditEvent.create({ data: auditRecord({ organizationId: DEMO_ORG_ID, entity: "DonationBatch", entityId: item.id, action: "CREATED", actor, metadata: { weightKg: input.weightKg } }) });
+      await notifyLive(tx, { type: "donation.created", orgId: DEMO_ORG_ID, id: item.id, kg: Number(item.weightKg), status: "PENDING_REVIEW", source: "MANUAL", origin: "manual", description: item.description });
       return { id: item.id, status: item.status };
     });
   }
@@ -46,6 +48,7 @@ export class DonationService {
       await tx.auditEvent.create({ data: auditRecord({ organizationId: input.organizationId, entity: "DonationBatch", entityId: item.id, action: "CREATED", actor, metadata: {
         weightKg: input.weightKg, deviceCode: input.deviceCode, source: input.source, ...input.evidence,
       } }) });
+      await notifyLive(tx, { type: "donation.created", orgId: input.organizationId, id: item.id, kg: Number(item.weightKg), status: "PENDING_REVIEW", source: input.source, origin: "scale", deviceCode: input.deviceCode, description: item.description });
       return { created: true, id: item.id };
     }, { maxWait: 5_000, timeout: 10_000 });
   }
@@ -54,7 +57,7 @@ export class DonationService {
     const db = getDb();
     const next = input.status;
     const details: DonationStepDetails = { verifiedBy: clean(input.verifiedBy), recipientId: clean(input.recipientId), receivedBy: clean(input.receivedBy), reason: clean(input.reason) };
-    const old = await db.donationBatch.findFirst({ where: { id, organizationId: DEMO_ORG_ID } });
+    const old = await db.donationBatch.findFirst({ where: { id, organizationId: DEMO_ORG_ID }, include: { recipient: { select: { name: true } } } });
     if (!old) throw new Error("NOT_FOUND");
     const verified = Boolean(old.safetyVerifiedAt) || (next === "AVAILABLE" && (details.verifiedBy?.length ?? 0) >= 3);
     const recipient = next === "RESERVED" && details.recipientId ? await db.recipientOrganization.findFirst({ where: { id: details.recipientId, active: true } }) : null;
@@ -82,6 +85,10 @@ export class DonationService {
         reason: next === "CANCELLED" ? details.reason ?? null : null,
         note: clean(input.note) ?? null,
       } }) });
+      // Telão público: só o nome da instituição viaja; quem recebeu (pessoa) fica no banco e na auditoria.
+      const recipientName = next === "RESERVED" || next === "DELIVERED" ? recipient?.name ?? old.recipient?.name : undefined;
+      // A origem do lote viaja junto: lote SIMULATED continua carimbado no telão em cada passo (regra 1).
+      await notifyLive(tx, { type: "donation.status", orgId: DEMO_ORG_ID, id, kg: Number(old.weightKg), from: old.status, status: next, source: old.source, ...(recipientName ? { recipientName } : {}) });
       return { id, status: next };
     });
   }

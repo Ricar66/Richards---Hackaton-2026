@@ -12,7 +12,10 @@ after(() => db().$disconnect());
 
 test("T04 leitura válida é gravada com origem DEVICE; com header de simulador vira SIMULATED", async () => {
   const boot = newBootId();
-  assert.deepEqual(await ingest.execute(reading(boot, 0, 0.5), DEVICE_KEY), { accepted: true, duplicate: false, alerted: false });
+  assert.deepEqual(await ingest.execute(reading(boot, 0, 0.5), DEVICE_KEY), {
+    accepted: true, duplicate: false, alerted: false,
+    rule: { minFlowLpm: 1.5, continuousSeconds: 30, observedSeconds: 0, suspicious: false },
+  });
   await ingest.execute(reading(boot, 1, 0.5), DEVICE_KEY, true);
   const rows = await db().telemetryReading.findMany({ where: { bootId: boot }, orderBy: { sequence: "asc" } });
   assert.deepEqual(rows.map(r => r.source), ["DEVICE", "SIMULATED"]);

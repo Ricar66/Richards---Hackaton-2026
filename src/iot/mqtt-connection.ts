@@ -14,12 +14,16 @@ function describe(o: MqttProcessed) {
   return parts.join(" · ");
 }
 
-async function processMessage(ingestion: MqttIngestion, message: Buffer) {
+async function processMessage(ingestion: MqttIngestion, message: Buffer, receivedAt: Date) {
   const text = message.toString();
   let raw: unknown;
-  try { raw = JSON.parse(text); } catch { console.warn(`[MQTT] Descartada, não é JSON válido: ${text.slice(0, 200)}`); return; }
+  try { raw = JSON.parse(text); } catch {
+    console.warn(`[MQTT] Descartada, não é JSON válido: ${text.slice(0, 200)}`);
+    await ingestion.reportRejected("JSON inválido"); // só o motivo vai ao telão, nunca o conteúdo
+    return;
+  }
   try {
-    const outcome = await ingestion.handle(raw);
+    const outcome = await ingestion.handle(raw, receivedAt);
     if (outcome.status === "rejected") console.warn(`[MQTT] Descartada: ${outcome.reason}`);
     else console.log(`[MQTT] ${describe(outcome)}`);
   } catch (error) {
@@ -52,6 +56,7 @@ export function startMqttBridge(cfg: MqttBridgeConfig = loadMqttConfig()): MqttC
   client.on("error", error => console.error(`[MQTT] Erro na conexão: ${error.message}`));
   // Uma mensagem por vez, na ordem de chegada: a regra de fluxo e a balança avaliam a sequência certa.
   let queue = Promise.resolve();
-  client.on("message", (_topic, message) => { queue = queue.then(() => processMessage(ingestion, message)); });
+  // A hora de chegada é marcada aqui, antes da fila: a "viagem do pacote" inclui a espera na fila.
+  client.on("message", (_topic, message) => { const receivedAt = new Date(); queue = queue.then(() => processMessage(ingestion, message, receivedAt)); });
   return client;
 }

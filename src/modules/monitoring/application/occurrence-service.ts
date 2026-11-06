@@ -1,6 +1,8 @@
 import { getDb } from "@/lib/db";
 import { DEMO_ORG_ID } from "@/lib/constants";
 import { auditRecord } from "@/modules/audit/infrastructure/audit-record";
+import { notifyLive } from "@/modules/realtime/infrastructure/notify-event";
+import { publicActor } from "@/modules/realtime/domain/public-actor";
 export type OccurrenceTransition = "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED";
 export class OccurrenceService {
   async transition(id: string, next: OccurrenceTransition, note: string, actor: string) {
@@ -23,6 +25,10 @@ export class OccurrenceService {
       if (count === 0) throw new Error("CONFLICT");
       await tx.occurrenceEvent.create({ data: { occurrenceId: id, action: next, note: text || null, actor } });
       await tx.auditEvent.create({ data: auditRecord({ organizationId: occurrence.organizationId, entity: "Occurrence", entityId: id, action: next, actor, metadata: { from: occurrence.status, note: text || null } }) });
+      // Aviso ao vivo na mesma transação: só sai no COMMIT (conflito ou erro não avisam nada). A nota não viaja.
+      // O autor viaja mascarado: o usuário do operador é metade da credencial Basic e o stream chega ao telão.
+      // A origem viaja junto: mudança de estado de registro SIMULATED também é carimbada no telão (regra 1).
+      await notifyLive(tx, { type: "occurrence.status", orgId: occurrence.organizationId, id, deviceId: occurrence.deviceId, kind: occurrence.kind, title: occurrence.title, from: occurrence.status, status: next, actor: publicActor(actor), source: occurrence.source });
       return { id, status: next };
     });
   }
