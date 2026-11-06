@@ -47,7 +47,7 @@ Verificar:
 - `pnpm test:integration`: Postgres real no banco separado `TEST_DATABASE_URL`, cujo nome precisa terminar em `_test`. Os testes apagam os dados **desse** banco.
 - `pnpm test:e2e`: jornadas no Chrome, depois de `pnpm build`.
   - Sobe uma instância isolada em :3100 no banco de teste.
-  - `--with-db-outage` também derruba o container do banco por alguns segundos.
+  - `--with-db-outage` derruba um Postgres **isolado** por alguns segundos. Exige `E2E_DB_CONTAINER` (nome do contêiner) e `TEST_DATABASE_URL` apontando para ele. O `db` do `docker compose` guarda o banco da demonstração e é recusado.
   - As capturas ficam em `.e2e/`.
 
 ## Status

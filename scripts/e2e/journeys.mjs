@@ -3,7 +3,7 @@
 // O BI mantém um stream SSE aberto: a rede nunca fica ociosa, então nada aqui espera "networkidle"; use go().
 // page.authenticate cobre o EventSource (conferido com Chrome headless + servidor Basic Auth de teste).
 import puppeteer from "puppeteer-core";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { inflateSync } from "node:zlib";
 import { join } from "node:path";
 
@@ -262,10 +262,19 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     }
     await page.setViewport({ width: 1440, height: 900 });
 
-    // ---------- Banco fora do ar (opcional: para o container db compartilhado por alguns segundos) ----------
-    if (withDbOutage) {
+    // ---------- Banco fora do ar (opcional) ----------
+    // SÓ em contêiner ISOLADO (E2E_DB_CONTAINER): o `db` do docker compose guarda também o banco da DEMONSTRAÇÃO, e
+    // derrubá-lo derrubaria a demo (auditoria final, 06/11). Sem a variável, a queda é recusada.
+    const outageContainer = process.env.E2E_DB_CONTAINER?.trim();
+    if (withDbOutage && !outageContainer) {
+      check("E0 queda do banco recusada: defina E2E_DB_CONTAINER com um Postgres isolado (nunca o db da demonstração)", false);
+    }
+    if (withDbOutage && outageContainer) {
+      // Recusa pelo rótulo do compose (serviço db do projeto), não pelo nome: renomear o contêiner não escapa da trava.
+      const labels = JSON.parse(execFileSync("docker", ["inspect", "-f", "{{json .Config.Labels}}", outageContainer]).toString() || "null") ?? {};
+      if (labels["com.docker.compose.service"] === "db" && labels["com.docker.compose.project"] === "richards-platform") throw new Error(`E2E_DB_CONTAINER=${outageContainer} é o banco compartilhado da demonstração: recusado`);
       await go("/");
-      execSync("docker compose stop db", { cwd: project, stdio: "ignore" });
+      execFileSync("docker", ["stop", outageContainer], { stdio: "ignore" });
       try {
         check("E1 sem banco: busca falha e a faixa de números parados aparece", await waitText("Sem conexão com o servidor desde", 30000));
         check("E1 indicador ao vivo mostra servidor indisponível", await waitText("Servidor indisponível", 15000), `sinal ${await pillState()}`);
@@ -275,8 +284,8 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
         check("E2 recarregar sem banco: erro honesto, nenhum KPI", t.includes("Dados indisponíveis no momento") && !(await page.$(".kpi")));
         await page.screenshot({ path: shot("j-banco-fora.png") });
       } finally {
-        execSync("docker compose start db", { cwd: project, stdio: "ignore" });
-        for (let i = 0; i < 40; i++) { try { if (execSync("docker inspect -f {{.State.Health.Status}} richards-platform-db-1").toString().trim() === "healthy") break; } catch {} await wait(1500); }
+        execFileSync("docker", ["start", outageContainer], { stdio: "ignore" });
+        for (let i = 0; i < 40; i++) { try { execFileSync("docker", ["exec", outageContainer, "pg_isready", "-q"], { stdio: "ignore" }); break; } catch {} await wait(1500); }
       }
       // A tela de erro continua dentro do shell: o stream se reconecta sozinho (espera crescente até 30 s), sem recarregar.
       check("E1b banco de volta: sinal volta a ao vivo sem recarregar a página", await page.waitForSelector(".live-pill[data-live-state=live]", { timeout: 60000 }).then(() => true, () => false), `sinal ${await pillState()}`);
