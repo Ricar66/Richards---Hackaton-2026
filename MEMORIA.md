@@ -23,7 +23,8 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 |---|---|
 | Código (máquina de desenvolvimento) | `E:\CraftOps\apps\web\richards-platform`, no HD externo `E:` |
 | GitHub (público) | https://github.com/Ricar66/Richards---Hackaton-2026, branch `main` |
-| Demo rodando | http://localhost:3000, com o container `web` do `docker compose` |
+| Demo rodando | http://localhost:3000, com o container `web` do `docker compose`. **Só dados reais desde 06/11**: sem histórico fictício, o BI começa em "sem dados" e se enche com o ESP32 |
+| Só dados reais (limpeza, instituição, volta atrás) | `docs/DADOS_REAIS.md`. Backups antes da limpeza: notebook em `E:\CraftOps\backups\richards\`, VPS em `/root/.richards-deploy/backups/` (modo 600) |
 | Usuário, senha e chave do sensor | Só no `.env` local. Ver a seção 7 |
 | Pacote original recebido (V4, intocado) | `Downloads\RICHARDS_PROJETO_INICIO_COMPLETO_V4_2026` (pasta e `.zip`) |
 | Plano e prompt mestre | `docs/plano/` (`16_PROMPT_MESTRE.md` traz as regras invioláveis) |
@@ -37,6 +38,7 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 | Sala ao vivo (telão) | `http://localhost:3000/ao-vivo` (tecla F = tela cheia). Roteiro em `docs/ROTEIRO_DEMO.md`, seção "Sala ao vivo" |
 | Bancada virtual (contingência de palco) | `pnpm bancada` / `pnpm palco:checar`; contrato em `docs/CONTRATO_IOT.md`, seção "Bancada virtual" |
 | Canal ao vivo (SSE) | `docs/CONTRATO_IOT.md`, seção "Canal ao vivo (SSE) para as telas" |
+| Broker MQTT na VPS (bancada do Victor) | `187.77.229.205:1883`, usuário `hortifruti_01`, senha só em `.env.vps.local`/VPS (mandar ao Victor no privado). Senha + ACL, sem anônimo, sem TLS até 08/11 (risco aceito pelo Ricardo). Ver `docs/DEPLOY_VPS_TETRIA.md`, "Broker MQTT da bancada" |
 | Demo na VPS da Tétria | **No ar desde 06/11 por IP: http://187.77.229.205:8090** (decisão do Ricardo: sem subdomínio nem Cloudflare). Coolify: projeto RICHARDS, ambiente `demo`, recurso `richards-demo`, branch congelada `deploy/vps-hackathon`, auto deploy desligado. Credenciais da VPS em `.env.vps.local` (fora do git). Roteiro e checklist em `docs/DEPLOY_VPS_TETRIA.md` |
 
 ## 3. Regras invioláveis (do prompt mestre)
@@ -97,18 +99,24 @@ Dependência só de desenvolvimento: `puppeteer-core` 24.43.1, para o E2E. Usa o
 | `src/modules/donations/` | Fluxo do lote (`DonationWorkflow`) e serviço com guarda otimista + auditoria |
 | `src/modules/reports/` | PDF (`buildReportPdf`, 2 páginas A4) sobre o mesmo DTO do BI |
 | `src/proxy.ts` | Basic Auth do operador; define o autor (`x-richards-actor`) e descarta o valor vindo do cliente |
-| `prisma/` | `schema.prisma`, 3 migrations e `seed.ts` (idempotente, tudo `SIMULATED`) |
+| `prisma/` | `schema.prisma`, 3 migrations e `seed.ts`. O seed é idempotente e grava **só o cadastro-base** (empresa, unidade, sensor com o hash da chave e operador). O cenário fictício (`SIMULATED`) só entra com `SEED_DEMO_DATA="true"`, que é para teste e E2E |
+| `src/modules/admin/` + `src/admin/` | Passagem para só dados reais (`limparSimulados`, inventário) e cadastro de instituição real, com auditoria (`pnpm dados:limpar-simulados`, `pnpm instituicao:cadastrar`) |
+| `src/lib/ease.ts` | Contas de animação com progresso travado em [0, 1] (KPI, laço de quadro, pulso do 3D) |
 | `iot/esp32_richards/` | Firmware: fila de 12, retentativa com a mesma `sequence`, NTP, 401 espera 30 s |
-| `src/iot/` | Ponte MQTT: `mqtt-payload.ts` (JSON e configuração), `mqtt-ingestion.ts` (adaptador para os casos de uso, emite `sensor.live`), `mqtt-connection.ts`, `run-mqtt.ts`. Bancada virtual: `bancada-virtual.ts` (cenários determinísticos) e `run-bancada-virtual.ts` (`--checar`, `--preparar`, `--cenario`) |
+| `src/iot/` | Ponte MQTT: `mqtt-payload.ts` (JSON e configuração), `mqtt-ingestion.ts` (adaptador para os casos de uso, emite `sensor.live`), `mqtt-connection.ts` (fila em memória, retentativa, carta morta), `run-mqtt.ts`. Bancada virtual: `bancada-virtual.ts` (cenários determinísticos) e `run-bancada-virtual.ts` (`--checar`, `--preparar`, `--cenario`) |
 | `scripts/` | `iot-simulator.mjs` (se comporta como o firmware), `e2e/` (jornadas no Chrome), `test-db-prepare.mjs`, `docs/` (geradores do dicionário e dos diagramas) |
 | `tests/` | Unitários (`*.test.ts`) e integração no Postgres (`integration/`) |
 
 ## 7. Como rodar
 
 ```bash
-# Demo (build de produção; aplica migrations e seed a cada start)
+# Demo (build de produção; aplica migrations e o seed do cadastro-base a cada start, sem dado fictício)
 docker compose up -d --build           # http://localhost:3000 · saúde em /api/health
 docker compose down                    # para SEM apagar dados (nunca usar -v)
+
+# Só dados reais (docs/DADOS_REAIS.md): backup antes; sem --apagar só mostra o inventário
+pnpm dados:limpar-simulados --apagar
+pnpm instituicao:cadastrar --nome "Nome da instituição" --cidade "Ribeirão Preto"
 
 # Desenvolvimento
 pnpm install && pnpm db:generate && pnpm db:deploy && pnpm db:seed
@@ -118,7 +126,9 @@ pnpm dev
 pnpm typecheck && pnpm lint && pnpm build
 pnpm test                              # unitários, sem banco
 pnpm test:integration                  # banco richards_test (nome precisa terminar em _test)
-pnpm test:e2e                          # Chrome em :3100 no banco de teste; --with-db-outage derruba o banco por segundos
+pnpm test:e2e                          # Chrome em :3100 no banco de teste
+# --with-db-outage só num Postgres ISOLADO: E2E_DB_CONTAINER=<contêiner> + TEST_DATABASE_URL apontando para ele (o db da demo é recusado)
+pnpm test:mqtt-broker                  # Mosquitto real em porta isolada (Docker), B1–B6
 
 # Simulador do sensor (contingência no palco)
 pnpm simulate --scenario leak --samples 14 --interval 4
@@ -164,6 +174,8 @@ python scripts/docs/dicionario_de_dados.py # dicionário em Excel (depois abrir 
 | Unificação IoT (PR #3) | `37d5182` (Victor) + commits seguintes | Ponte MQTT do Victor passando pela ingestão existente: regra por dispositivo, regra 5 por tipo, lote da balança em `PENDING_REVIEW`, auditoria, origem SIMULATED para o potenciômetro |
 | Tempo real e palco | branch `feat/tempo-real-palco`, integrada ao `main` em 06/11 | Stream ao vivo (LISTEN/NOTIFY + SSE) no BI inteiro; tema escuro com gêmeo digital esquemático; Sala ao vivo `/ao-vivo` para o telão; bancada virtual (`pnpm bancada`, `pnpm palco:checar`); revisão adversarial com 14 achados corrigidos; preparação do deploy na VPS (não publicado) |
 
+| Auditoria final (prompt de hardening) | `7745513`, `99fe784`, `0e433b0`, `c6499f0`, `e8462ec` + commits da tarde de 06/11 | Ingestão, regra e ocorrência numa transação só; regra 5 por origem; ponte MQTT com fila e carta morta; auditoria de segurança da VPS com plano de HTTPS (aguarda autorização); E2E de queda só em banco isolado; ensaio do hackathon 14/14; revisão adversarial com 23 achados corrigidos; KPI sem número fora do intervalo; **só dados reais** no notebook e na VPS |
+
 As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estão incorporadas ao `main`. No GitHub existe também `feat/pitch-richards-hackathon-2026`, com o kit de pitch.
 
 ## 9. Testes (últimos resultados reais)
@@ -196,8 +208,33 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Intervalo sem leitura aparece como "sem dados"**, nunca zero. A variação contra o período anterior só aparece se o período anterior tiver pelo menos 50% das amostras.
 - **Conectividade é calculada pelo último contato** (mais de 120 s sem leitura = sem comunicação). `Device.state` só vale para MAINTENANCE.
 
+**Só dados reais (decisão do Ricardo, 06/11)**
+- **Escopo:** a demo, no notebook e na VPS, fica sem dado fictício.
+  - Saíram as leituras, ocorrências e lotes `SIMULATED` e as duas instituições "· Demonstração", com backup antes.
+  - O comando foi `pnpm dados:limpar-simulados`: transação, auditoria `SIMULATED_DATA_PURGED` e trava que só apaga o que é SIMULATED.
+  - Ele recusa se a bancada estiver ligada.
+- **O seed não recria nada:** grava só o cadastro-base. O cenário fictício só entra com `SEED_DEMO_DATA="true"` (teste e E2E).
+- **Instituição real:** cadastrada pelo terminal (`pnpm instituicao:cadastrar`), porque não há tela. Nome com "Demonstração" é recusado.
+- **A simulação continua como reserva de palco:** tudo carimbado SIMULADO. Depois do evento, a mesma limpeza.
+- **`palco:checar` no modo de dados reais:**
+  - ocorrência REAL ativa no sensor é FALHA, porque impede o alerta ao vivo do sensor real;
+  - lote REAL da balança pendente é FALHA (antes nem aparecia);
+  - falta de instituição ativa é FALHA.
+  - A preparação nunca toca no registro real: quem resolve é o operador, pelo BI.
+
+**Broker MQTT (PR #4 do Victor, 06/11)**
+- **O PR #4 não foi mesclado como veio.** Ele expunha o Postgres (`5432:5432`), abria o broker anônimo em todas as interfaces, punha Grafana `latest` com admin padrão e colocava as variáveis `MQTT_*` no `web`, que não roda a ponte: ninguém gravaria as mensagens.
+- **A ideia entrou assim:**
+  - `mosquitto/`: imagem própria, com senha e ACL geradas na partida;
+  - `richards-mqtt` + `richards-ponte` no `docker-compose.vps.yml`;
+  - perfil `iot` no `docker-compose.yml` local (`docker compose --profile iot up -d`, porta no loopback por padrão);
+  - crédito ao Victor no commit.
+- **Fechar ou comentar o PR #4 é decisão do Ricardo.**
+- **Grafana fica de fora:** leria o banco sem o carimbo de origem (regra 1) e seria mais uma porta exposta.
+
 **Regras de dados**
-- **Uma ocorrência ativa por dispositivo**, garantida por `pg_advisory_xact_lock` + verificação na mesma transação. Não há constraint no banco.
+- **Uma ocorrência ativa por dispositivo, tipo e origem**, garantida por `pg_advisory_xact_lock` + verificação na mesma transação. Não há constraint no banco.
+- **Ingestão atômica:** leitura, regra, ocorrência e `NOTIFY` numa transação só. Se a ocorrência falha, a leitura volta atrás e a retentativa do firmware não vira "duplicata" (antes a ocorrência se perdia).
 - **Leitura simulada nunca sustenta alerta de leitura real**, nem o contrário: a regra só olha leituras da mesma origem.
 - **Mudança de status usa guarda otimista**: atualiza só se o status ainda é o lido; senão responde conflito.
 - **Kg entregues contam pela data de entrega** (`receivedAt`), não pela de cadastro.
@@ -209,6 +246,12 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Temperatura alerta só sustentada** (acima de 28 °C por 30 s, configurável), com no máximo uma ativa por dispositivo. As leituras ficam na auditoria; o BI ainda não grafa temperatura e não usa vazão como evidência dela.
 - **Balança cria lote `PENDING_REVIEW`**, nunca `AVAILABLE`. O peso é a menor leitura estável, arredondada para baixo. Há um lote pendente por balança, e ela só rearma depois de esvaziada.
 - **Missões não são criadas** pela ponte, porque não têm tela (P2).
+- **Fila em memória com PUBACK na chegada (revisão adversarial, 06/11).**
+  - A 1ª versão da auditoria confirmava ao broker só depois de gravar. Isso segurava o laço de pacotes do MQTT.js, inclusive o ping: com o banco fora por 30 a 90 s, o keepalive derrubava a conexão e o represado se perdia sem aviso.
+  - Agora a hora é carimbada na chegada e a retentativa tem prazo de relógio, com teto por tentativa.
+  - Erro permanente, fila cheia e Ctrl+C vão para a carta morta, com `partial` (o que já foi gravado). Mensagem retida é ignorada.
+  - Risco aceito: processo morto com fila cheia perde a fila.
+  - Prova com broker real: B5, keepalive de 2 s, banco fora 9 s, 0 queda, 4/4 gravadas.
 - **Tópico renomeado** para `richards/comercio/telemetria`, sem o nome antigo do produto. A consulta do histórico de fluxo passou a pegar as leituras mais recentes primeiro, para leituras a cada 2 s não cortarem a ponta da janela.
 
 **Tempo real e palco (branch `feat/tempo-real-palco`)**
@@ -241,6 +284,8 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Troca de dígito sem valor intermediário.** O dígito anterior sai em `::before` com texto alternativo vazio, então fica fora do innerText e do leitor de tela.
 - **Tecla P** pausa todo movimento decorativo (WCAG 2.2.2). A WAAPI e o laço do three não obedecem ao CSS de reduzir movimento, então recebem `still` explícito.
 - **KPI animado do BI** com um só escritor do texto, partindo do valor que está na tela. Contagem inteira troca direto. O E2E A2b vigia isso.
+  - **A causa do 6.450,3 L entre 6.231 e 904 (06/11) era aritmética.** O tempo do 1º quadro do `requestAnimationFrame` vem ANTES do `performance.now()` do efeito, então k < 0 e `1 - (1-k)³` empurrava o número para o lado oposto.
+  - Agora `src/lib/ease.ts` trava o progresso em [0, 1], no KPI, no laço de quadro da água e no pulso do 3D. Há teste e mutação.
 - **Revisão adversarial do diff visual (06/11, 4 lentes + verificadores):** 21 de 26 achados confirmados e corrigidos.
   - O pulso do medidor era morto com a bancada/MQTT: o `sensor.live` apagava a chave. Agora a chave é `bootId:sequence` da última leitura do sensor em foco.
   - A tecla P não parava o alarme piscando (especificidade de CSS). A regra de pausa foi para o fim do arquivo, com `!important`.
@@ -264,9 +309,14 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 ## 11. Antes da demo (resumo; o passo a passo está em `docs/ROTEIRO_DEMO.md`)
 
 1. `docker compose up -d --build` e conferir que `/api/health` responde `"database":"up"`.
-2. **Liberar o palco:** `pnpm palco:checar`. Se acusar bloqueio, rode `pnpm bancada --preparar`, que pede "SIM". Ele encerra a ocorrência do seed `richards-oc-01` ("Fluxo contínuo fora de horário") como DISMISSED, com auditoria. A alternativa é resolvê-la no BI. Sem isso, o alerta ao vivo não abre, por causa da regra 5, e o anel da Sala mostra BLOQUEADO PELA REGRA 5.
+2. **Conferir o palco:** `pnpm palco:checar`.
+   - Ocorrência REAL ativa de fluxo ou temperatura no sensor, ou lote REAL da balança pendente: resolva pelo BI, com nota.
+   - Algo SIMULADO bloqueando: `pnpm bancada --preparar`, que pede "SIM" e não apaga nada.
    - **Telão:** abrir `/ao-vivo` na janela do projetor e apertar F.
-3. **O histórico do seed envelhece**: ele cobre de 27/10 a 03/11. No dia do evento, use o filtro **30 dias**. Recriar o banco da demo apaga dados e exige autorização.
+3. **Só dados reais:**
+   - O BI começa em "sem dados" e se enche com o ESP32; use o filtro **24 h**.
+   - **Cadastre a instituição real** antes (`pnpm instituicao:cadastrar --nome "..." --cidade "..."`), senão a reserva da doação não tem destino.
+   - Recriar o banco da demo apaga dados e exige autorização.
 4. ESP32:
    - `secrets.h` com a mesma chave do `.env`;
    - Wi-Fi do evento;
@@ -280,7 +330,8 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
    - `.env` com `MQTT_BROKER_URL`, `MQTT_TOPIC` e `MQTT_DEVICE_ALIASES`;
    - `MQTT_SIMULATED_SENSORS` de acordo com o que está ligado;
    - `pnpm mqtt` mostrando `Ouvindo richards/comercio/telemetria`.
-   - Para mostrar a balança: o seed já tem um lote SIMULATED pendente, mas ele **não** bloqueia a balança.
+   - A balança (HX711) grava como DEVICE. Um lote pendente de outra origem não a bloqueia; um lote REAL pendente, sim (o `palco:checar` avisa).
+7. Depois do evento, se a contingência foi usada: `pnpm dados:limpar-simulados --apagar`, com backup antes.
 
 ## 12. Pendências
 
@@ -289,7 +340,11 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - Victor: trocar o tópico do firmware MQTT para `richards/comercio/telemetria` (ou definir `MQTT_TOPIC`), conferir `dispositivo_id` × `MQTT_DEVICE_ALIASES` e rodar o teste de bancada MQTT do `presentation/CHECKLIST_VICTOR_IOT.md`.
 - Victor: subir o `.ino` do firmware MQTT em `iot/esp32_richards_mqtt/`, com `secrets.h.example` e sem senha.
 - Ensaiar o pitch 3 vezes com cronômetro, dentro de 5min40 (`presentation/FALA_5MIN40.md`).
-- Fazer a preparação da seção 11 antes de subir no palco. Inclui liberar a `richards-oc-01` (`pnpm palco:checar` / `pnpm bancada --preparar`) e abrir a `/ao-vivo` no projetor.
+- Fazer a preparação da seção 11 antes de subir no palco. Inclui:
+  - `pnpm palco:checar` sem FALHA;
+  - abrir a `/ao-vivo` no projetor.
+- **Cadastrar a instituição real** que recebe as doações, no notebook e na VPS: `pnpm instituicao:cadastrar`. Na VPS, `docker exec <web> pnpm instituicao:cadastrar ...`.
+- **Revisar a fala e os slides** (`presentation/`): eles ainda citam o histórico SIMULATED do seed ("carimbo roxo no histórico"). Desde 06/11 o histórico é só do sensor.
 - Ensaiar uma vez a contingência `pnpm bancada --cenario palco --inicio-em 5` com o BI e a Sala abertos. Não use `--sensores VAZAO` com a ponte `pnpm mqtt` ligada.
 - Montar o backup de palco: simulação identificada, prints, vídeo offline e cabo HDMI.
 - **Conferir no regulamento do Hackathon Senac 2026** se é permitido usar material desenvolvido antes da abertura oficial, e ser transparente sobre o histórico do projeto.
@@ -301,6 +356,11 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - Firmware MQTT mandar `bootId` e `sequence` (idempotência igual à do HTTP).
 - Temperatura no BI: guardar a série e mostrar a evidência na gaveta (hoje fica só na auditoria e na descrição).
 
+- **HTTPS da VPS aguarda autorização** (`docs/DEPLOY_VPS_TETRIA.md`, "Auditoria de segurança ... plano de HTTPS"). As duas opções:
+  - A: túnel + Access em subdomínio, com o Haroldo;
+  - B: túnel rápido do cloudflared.
+
+  Nas duas, depois vem `VPS_BIND_ADDR=127.0.0.1` e Redeploy.
 - **Demo na VPS por IP** (`docs/DEPLOY_VPS_TETRIA.md`), riscos aceitos pelo Ricardo em 06/11:
   - o Basic Auth trafega em http, sem TLS;
   - a porta publicada pelo Docker passa por cima do `ufw`.
@@ -348,3 +408,9 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Teste com "N horas atrás" fixo depende da hora em que roda.** O T41 falhava nos 6 primeiros minutos de cada hora; agora as leituras são ancoradas dentro da hora.
 - **Puppeteer 24: `page.screenshot()` devolve `Uint8Array`**, não Buffer. Use `Buffer.from()` antes de ler bytes.
 - **WebGL no Chrome headless deste notebook usa a GPU real** (ANGLE D3D11). O 3D roda no E2E. Sem GPU (CI), o S3 aceita a reserva com o motivo.
+- **O tempo do 1º quadro do `requestAnimationFrame` pode ser ANTERIOR ao `performance.now()` do efeito.** Toda animação por tempo decorrido trava o progresso em [0, 1] (`src/lib/ease.ts`).
+- **No MQTT.js, segurar o callback do `handleMessage` para o laço de pacotes inteiro, inclusive o PINGRESP.** O keepalive derruba a conexão. Não usar para "confirmar só depois de gravar".
+- **Aba de fundo no Chrome headless segura a troca do esqueleto do Next** (sem quadros de animação). Ensaio com BI e Sala ao mesmo tempo: dois navegadores, ou `bringToFront()` antes de esperar.
+- **`git checkout -- arquivo` não restaura arquivo novo (fora do git).** Em teste de mutação, copie o arquivo antes e restaure da cópia.
+- **Mapa sem protótipo (`Object.create(null)`) não é `deepEqual` a `{}`.** Compare `{ ...mapa }`.
+- **`python -` e heredoc de `node -` travam o terminal da IA.** Escreva o script num arquivo.
