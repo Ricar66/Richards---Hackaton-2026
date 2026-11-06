@@ -9,6 +9,7 @@ let stopping = false;
 function stop() {
   if (stopping) return;
   stopping = true;
+  client.stopBridge(); // para de insistir: mensagem em retentativa não é confirmada (o firmware manda as próximas)
   console.log("[MQTT] Encerrando a ponte...");
   client.end(false, {}, () => { void getDb().$disconnect().finally(() => process.exit(0)); });
 }

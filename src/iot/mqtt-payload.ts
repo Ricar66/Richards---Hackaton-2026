@@ -31,6 +31,16 @@ export type MqttBridgeConfig = {
   sampleSeconds: number;
   tempLimitC: number; tempSeconds: number;
   scaleMinKg: number; scaleStableSeconds: number;
+  /**
+   * Tópico por dispositivo (`<topic>/<dispositivo_id>`): com a ACL do broker (`pattern write <topic>/%u`), um equipamento
+   * só publica como ele mesmo, e a ponte confere que o `dispositivo_id` do JSON é o do tópico. `true` recusa o tópico
+   * compartilhado (`<topic>`); `false` (padrão, compatível com o firmware atual) aceita os dois.
+   */
+  requireDeviceTopic: boolean;
+  /** Quanto tempo a ponte insiste em gravar uma mensagem (banco fora) antes de guardá-la na "carta morta" e seguir. */
+  retryBudgetMs: number;
+  /** Arquivo NDJSON com as mensagens que não foram gravadas depois do prazo (nada se perde em silêncio). */
+  deadLetterPath: string;
 };
 
 /** Só as variáveis lidas; aceita `process.env` ou um objeto parcial (testes). */
@@ -68,6 +78,9 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
     tempSeconds: number(env, "MQTT_TEMP_SECONDS", 30, 1, 3600),
     scaleMinKg: number(env, "MQTT_SCALE_MIN_KG", 5, 0.1, 500),
     scaleStableSeconds: number(env, "MQTT_SCALE_STABLE_SECONDS", 6, 1, 600),
+    requireDeviceTopic: env.MQTT_REQUIRE_DEVICE_TOPIC?.trim().toLowerCase() === "true",
+    retryBudgetMs: number(env, "MQTT_RETRY_BUDGET_SECONDS", 120, 1, 3600) * 1000,
+    deadLetterPath: env.MQTT_DEAD_LETTER?.trim() || ".mqtt-dead-letter.ndjson",
   };
 }
 

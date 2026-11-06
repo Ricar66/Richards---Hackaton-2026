@@ -16,3 +16,6 @@ __pycache__/
 
 # Credenciais da VPS (geradas na VPS; nunca vão para o git)
 .env.vps.local
+
+# Carta morta da ponte MQTT (mensagens não gravadas depois do prazo)
+.mqtt-dead-letter.ndjson

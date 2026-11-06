@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { DEMO_ORG_ID } from "@/lib/constants";
 import { getDb } from "@/lib/db";
 import { DonationService } from "@/modules/donations/application/donation-service";
-import { CHANNEL_NOTE, ingestReading, type IngestResult } from "@/modules/monitoring/application/ingest-telemetry";
+import { CHANNEL_NOTE, ingestReading, type IngestDevice, type IngestReading, type IngestResult } from "@/modules/monitoring/application/ingest-telemetry";
 import { openDeviceOccurrence } from "@/modules/monitoring/application/open-device-occurrence";
 import { DEFAULT_MAX_GAP_SECONDS } from "@/modules/monitoring/domain/flow-alert-policy";
 import { ScaleSurplusDetector } from "@/modules/monitoring/domain/scale-surplus-detector";
@@ -65,8 +65,26 @@ export class MqttIngestion {
     await notifyLiveSafe({ type: "message.rejected", orgId: DEMO_ORG_ID, channel: this.channel, reason });
   }
 
-  /** `receivedAt`: quando a mensagem chegou do broker (antes da fila), para o carimbo de tempo do evento ao vivo. */
-  async handle(raw: unknown, receivedAt = new Date()): Promise<MqttOutcome> {
+  /**
+   * Mensagem inteira, de uma vez (bancada virtual e testes). A ponte com broker usa `prepare` uma vez e repete `apply`
+   * enquanto o banco estiver fora (ver mqtt-connection.ts).
+   * `receivedAt`: quando a mensagem chegou do broker (antes da fila), para o carimbo de tempo do evento ao vivo.
+   */
+  async handle(raw: unknown, receivedAt = new Date(), topicDeviceId?: string): Promise<MqttOutcome> {
+    const prepared = await this.prepare(raw, receivedAt, topicDeviceId);
+    if (prepared.status === "rejected") return prepared;
+    try { return await this.apply(prepared.message); }
+    catch (error) { this.abandon(prepared.message); throw error; }
+  }
+
+  /**
+   * Etapa 1, UMA vez por mensagem: valida, acha o dispositivo (leitura no banco; se o banco estiver fora, lança e nada
+   * mudou na memória), fixa a hora de chegada e a sequência sintética, e alimenta a memória das regras de temperatura e da
+   * balança. Repetir só o `apply` grava a MESMA leitura (mesma hora, mesma sequência): retentativa nunca duplica nem
+   * "atualiza" a hora para o momento em que o banco voltou.
+   * `topicDeviceId`: o `<id>` de `<topic>/<id>` quando a mensagem chegou pelo tópico do próprio dispositivo.
+   */
+  async prepare(raw: unknown, receivedAt = new Date(), topicDeviceId?: string): Promise<{ status: "rejected"; reason: string } | { status: "ready"; message: MqttMessage }> {
     const parsed = mqttPayloadSchema.safeParse(raw);
     if (!parsed.success) {
       await this.reportRejected("payload inválido");
@@ -74,6 +92,11 @@ export class MqttIngestion {
     }
     const p = parsed.data;
     const code = this.cfg.aliases[p.dispositivo_id] ?? p.dispositivo_id;
+    // Tópico por dispositivo: o JSON não pode falar em nome de outro (a ACL do broker garante quem publica no tópico).
+    if (topicDeviceId !== undefined && (this.cfg.aliases[topicDeviceId] ?? topicDeviceId) !== code) {
+      await this.reportRejected("dispositivo diferente do tópico");
+      return { status: "rejected", reason: `dispositivo_id "${p.dispositivo_id}" publicado no tópico de "${topicDeviceId}": recusado` };
+    }
     // Sem fallback para "o primeiro dispositivo": leitura sem dono certo é descartada, nunca atribuída a outro sensor.
     // Escopo da demonstração: a ponte só alimenta dispositivos da organização da bancada.
     const device = await getDb().device.findFirst({ where: { code, organizationId: DEMO_ORG_ID } });
@@ -81,10 +104,10 @@ export class MqttIngestion {
       await this.reportRejected("dispositivo não cadastrado");
       return { status: "rejected", reason: `dispositivo "${p.dispositivo_id}"${code !== p.dispositivo_id ? ` (apelido de ${code})` : ""} não cadastrado: cadastre o Device ou mapeie em MQTT_DEVICE_ALIASES` };
     }
+    // Daqui para baixo nada lê o banco: a memória da ponte muda uma vez só por mensagem.
     const at = this.now();
     const mem = this.remember(device.id);
-    const out: MqttProcessed = { status: "processed", deviceCode: device.code };
-    const live: Pick<SensorLiveEvent, "temperature" | "scale"> = {};
+    const msg: MqttMessage = { device, at, receivedAt, done: {} };
 
     if (p.VAZAO !== undefined) {
       // Volume do intervalo = vazão × tempo desde a leitura anterior. Na primeira leitura ou depois de um buraco
@@ -93,29 +116,40 @@ export class MqttIngestion {
       const seconds = elapsed > 0 && elapsed <= DEFAULT_MAX_GAP_SECONDS ? elapsed : this.cfg.sampleSeconds;
       mem.lastFlowAt = at;
       const sequence = p.sequence ?? mem.sequence++;
-      const source = this.source("VAZAO");
-      const result = await ingestReading(device, {
+      msg.flow = { source: this.source("VAZAO"), sequence, reading: {
         bootId: p.bootId ?? this.bootId, sequence, flowLpm: p.VAZAO,
         deltaLiters: Math.round(((p.VAZAO * seconds) / 60) * 1000) / 1000, capturedAt: at, receivedAt,
-      }, source, this.channel);
-      out.flow = { ...result, source, sequence };
-    } else {
-      // Só o último contato (MAINTENANCE é decisão humana e não é tocado).
-      await getDb().device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });
+      } };
     }
-
     if (p.TEMP !== undefined) {
       const horizon = at.getTime() - (this.cfg.tempSeconds + 2 * DEFAULT_MAX_GAP_SECONDS) * 1000;
       mem.temps = [...mem.temps.filter(s => s.at.getTime() >= horizon), { at, value: p.TEMP }].slice(-600);
       const d = this.temperature.evaluate(mem.temps);
-      live.temperature = {
-        c: p.TEMP, ...(p.UMIDADE !== undefined ? { humidityPct: p.UMIDADE } : {}), source: this.source("TEMP"),
-        rule: { limitC: this.cfg.tempLimitC, continuousSeconds: this.cfg.tempSeconds, observedSeconds: d.observedSeconds, suspicious: d.suspicious },
-      };
-      if (!d.suspicious) out.temperature = { alerted: false };
+      msg.temperature = { decision: d, c: p.TEMP, humidityPct: p.UMIDADE, source: this.source("TEMP") };
+    }
+    if (p.PESO !== undefined) msg.scale = { decision: mem.scale.push({ at, value: p.PESO }), kg: p.PESO, source: this.source("PESO") };
+    return { status: "ready", message: msg };
+  }
+
+  /**
+   * Etapa 2, repetível: as gravações, cada uma idempotente e lembrada em `message.done` (a retentativa pula o que já
+   * gravou): leitura por (dispositivo, bootId, sequence), ocorrência pela regra 5, lote pelo pendente único da balança.
+   * O aviso ao vivo `sensor.live` sai uma vez, no fim, só depois de tudo gravado.
+   */
+  async apply(msg: MqttMessage): Promise<MqttProcessed> {
+    const { device, at, receivedAt, done } = msg;
+    const mem = this.remember(device.id);
+    if (msg.flow && !done.flow) done.flow = await ingestReading(device, msg.flow.reading, msg.flow.source, this.channel);
+    if (!msg.flow && !done.contact) {
+      // Só o último contato (MAINTENANCE é decisão humana e não é tocado).
+      await getDb().device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });
+      done.contact = true;
+    }
+    if (msg.temperature && !done.temperature) {
+      const { decision: d, source } = msg.temperature;
+      if (!d.suspicious) done.temperature = { alerted: false };
       else {
-        const source = this.source("TEMP");
-        const humidity = p.UMIDADE !== undefined ? `, umidade ${br(p.UMIDADE, 0)}%` : "";
+        const humidity = msg.temperature.humidityPct !== undefined ? `, umidade ${br(msg.temperature.humidityPct, 0)}%` : "";
         const opened = await openDeviceOccurrence({
           kind: "TEMPERATURE_EXCURSION", severity: "MEDIUM",
           organizationId: device.organizationId, siteId: device.siteId, deviceId: device.id, deviceCode: device.code, source,
@@ -128,37 +162,42 @@ export class MqttIngestion {
             windowStart: d.samples[0].at.toISOString(), windowEnd: at.toISOString(), observedSeconds: d.observedSeconds,
             rule: { limitC: this.cfg.tempLimitC, continuousSeconds: this.cfg.tempSeconds },
             samples: d.samples.slice(-60).map(s => ({ at: s.at.toISOString(), temperatureC: s.value })),
-            humidityPct: p.UMIDADE ?? null,
+            humidityPct: msg.temperature.humidityPct ?? null,
           },
         });
-        out.temperature = { alerted: opened.created, occurrenceId: opened.occurrenceId };
+        done.temperature = { alerted: opened.created, occurrenceId: opened.occurrenceId };
       }
     }
-
-    if (p.PESO !== undefined) {
-      const d = mem.scale.push({ at, value: p.PESO });
-      if (d.trigger) {
-        try {
-          const created = await this.donations.createFromScale({
-            organizationId: device.organizationId, deviceId: device.id, deviceCode: device.code, weightKg: d.weightKg, source: this.source("PESO"),
-            evidence: {
-              channel: this.channel, sensor: "HX711", observedSeconds: d.observedSeconds,
-              rule: { minKg: this.cfg.scaleMinKg, stableSeconds: this.cfg.scaleStableSeconds },
-              samples: d.samples.slice(-60).map(s => ({ at: s.at.toISOString(), weightKg: s.value })),
-            },
-          }, this.actor("PESO", device.code));
-          out.donation = { ...created, weightKg: d.weightKg };
-          // Recusado (já há lote desta balança aguardando verificação): a fase ao vivo diz isso, não "triggered",
-          // que levaria o telão a afirmar que esta pesagem virou lote.
-          if (!created.created) mem.scale.markBlocked(created.id);
-        } catch (error) {
-          mem.scale.rearm(); // não gravou: a próxima leitura estável tenta de novo
-          throw error;
-        }
-      }
-      live.scale = { kg: p.PESO, source: this.source("PESO"), progress: mem.scale.progress() };
+    if (msg.scale?.decision.trigger && !done.donation) {
+      const d = msg.scale.decision;
+      const created = await this.donations.createFromScale({
+        organizationId: device.organizationId, deviceId: device.id, deviceCode: device.code, weightKg: d.weightKg, source: msg.scale.source,
+        evidence: {
+          channel: this.channel, sensor: "HX711", observedSeconds: d.observedSeconds,
+          rule: { minKg: this.cfg.scaleMinKg, stableSeconds: this.cfg.scaleStableSeconds },
+          samples: d.samples.slice(-60).map(s => ({ at: s.at.toISOString(), weightKg: s.value })),
+        },
+      }, this.actor("PESO", device.code));
+      done.donation = { ...created, weightKg: d.weightKg };
+      // Recusado (já há lote desta balança e origem aguardando verificação): a fase ao vivo diz isso, não "triggered",
+      // que levaria o telão a afirmar que esta pesagem virou lote.
+      if (!created.created) mem.scale.markBlocked(created.id);
     }
-    if (live.temperature || live.scale) {
+    const out: MqttProcessed = { status: "processed", deviceCode: device.code };
+    if (msg.flow && done.flow) out.flow = { ...done.flow, source: msg.flow.source, sequence: msg.flow.sequence };
+    if (done.temperature) out.temperature = done.temperature;
+    if (done.donation) out.donation = done.donation;
+    const live: Pick<SensorLiveEvent, "temperature" | "scale"> = {};
+    if (msg.temperature) {
+      const d = msg.temperature.decision;
+      live.temperature = {
+        c: msg.temperature.c, ...(msg.temperature.humidityPct !== undefined ? { humidityPct: msg.temperature.humidityPct } : {}), source: msg.temperature.source,
+        rule: { limitC: this.cfg.tempLimitC, continuousSeconds: this.cfg.tempSeconds, observedSeconds: d.observedSeconds, suspicious: d.suspicious },
+      };
+    }
+    if (msg.scale) live.scale = { kg: msg.scale.kg, source: msg.scale.source, progress: mem.scale.progress() };
+    if ((live.temperature || live.scale) && !done.live) {
+      done.live = true;
       const emittedAt = new Date();
       await notifyLiveSafe({
         type: "sensor.live", orgId: device.organizationId, persisted: false, deviceId: device.id, deviceCode: device.code,
@@ -168,4 +207,22 @@ export class MqttIngestion {
     }
     return out;
   }
+
+  /** Desistiu da mensagem (prazo esgotado): a balança, se ia criar lote e não criou, rearma para a próxima pesagem estável. */
+  abandon(msg: MqttMessage) {
+    if (msg.scale?.decision.trigger && !msg.done.donation) this.remember(msg.device.id).scale.rearm();
+  }
 }
+
+/** Mensagem preparada: o que gravar e o que já foi gravado (`done`), para a retentativa não repetir nada. */
+export type MqttMessage = {
+  device: IngestDevice; at: Date; receivedAt: Date;
+  flow?: { source: "DEVICE" | "SIMULATED"; sequence: number; reading: IngestReading };
+  temperature?: { decision: ReturnType<TemperatureAlertPolicy["evaluate"]>; c: number; humidityPct?: number; source: "DEVICE" | "SIMULATED" };
+  scale?: { decision: ReturnType<ScaleSurplusDetector["push"]>; kg: number; source: "DEVICE" | "SIMULATED" };
+  done: {
+    flow?: IngestResult; contact?: boolean; live?: boolean;
+    temperature?: { alerted: boolean; occurrenceId?: string };
+    donation?: { created: boolean; id: string; weightKg: number };
+  };
+};

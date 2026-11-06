@@ -103,7 +103,41 @@ Payload que o firmware publica (exemplo de formato, não medição real):
 - **Idempotência:** sem `bootId`/`sequence` no payload, a ponte numera as leituras na própria sessão (`bootId = mqtt-xxxxxxxx`). Com o QoS 0 do ESP32 não há reenvio, mas uma mensagem repetida pelo broker contaria duas vezes. Para idempotência igual à do HTTP, o firmware pode mandar `"bootId"` e `"sequence"` (os dois juntos): a repetição volta como duplicata e não soma volume. O prefixo `mqtt-` no `bootId` é reservado à ponte e é recusado.
 - **Balança:** o peso do lote é a **menor** leitura do trecho estável, arredondada para baixo em 0,1 kg, para nunca superestimar. Depois de criar um lote, a balança só gera outro quando é esvaziada (peso abaixo da metade do mínimo). Cada balança mantém no máximo **um** lote aguardando verificação. O autor fica na auditoria (`dispositivo:<código>`, `deviceCode`).
 - **Conectividade:** a ponte só atualiza `lastSeenAt`. Não grava `ONLINE`, e `MAINTENANCE` continua sendo decisão humana.
-- **Banco fora:** a entrega já foi confirmada ao broker, então a leitura se perde. Isso fica registrado no log (`Falha ao gravar`), e nada é reconstruído depois.
+- **Banco fora (auditoria final, 06/11):** a ponte confirma ao broker (PUBACK) **só depois de gravar**.
+  - Com o banco recusando, ela insiste dentro do processo com espera crescente (0,5 s até 15 s) e mantém a ordem de chegada: as mensagens seguintes esperam.
+  - A retentativa grava a MESMA leitura: mesma hora de chegada e mesma sequência. Ela nunca "atualiza" a hora para o momento em que o banco voltou.
+  - Passado o prazo (`MQTT_RETRY_BUDGET_SECONDS`, padrão 120 s), a mensagem vai para a **carta morta** (`MQTT_DEAD_LETTER`, padrão `.mqtt-dead-letter.ndjson`), com hora de chegada, tópico, conteúdo e erro. A ponte avisa no log e no telão e segue. Nada se perde em silêncio; reprocessar é decisão humana.
+  - Testes: `tests/integration/mqtt-confiabilidade.test.ts` (M3.1–M3.6) e `pnpm test:mqtt-broker` (Mosquitto real em porta isolada, B1–B4).
+
+### Garantias e riscos residuais da ponte
+
+| Situação | O que acontece |
+|---|---|
+| Banco cai com a ponte de pé | Insiste até o prazo; grava com a hora da chegada ou guarda na carta morta. Sem perda silenciosa |
+| Mensagem repetida pelo broker durante o processamento (mesmo id de pacote e conteúdo) | Processada uma vez |
+| Firmware manda `bootId` + `sequence` | Idempotente como no HTTP: repetição é duplicata, não soma volume |
+| Firmware **sem** `bootId`/`sequence` (o atual) | A ponte numera na sessão. Sem reentrega não há duplicata; não há como deduplicar entre sessões |
+| Ponte desligada ou reiniciando | **Sessão limpa de propósito.** O JSON não traz horário (a hora é a da chegada na ponte), então mensagens represadas no broker chegariam juntas, minutos depois, carimbadas como "agora". Publicado com a ponte fora não é gravado: sem amostra, sem linha |
+| Processo da ponte morre no meio de uma retentativa | Aquela mensagem se perde (o log mostra as tentativas) |
+| ESP32 → broker em QoS 0 (PubSubClient) | Sem reenvio no Wi-Fi: perda possível antes de chegar ao broker |
+| **Não prometido** | Entrega exatamente uma vez de ponta a ponta |
+
+**Para chegar a "pelo menos uma vez" de ponta a ponta (P1, depois do evento):**
+- o firmware manda `bootId`, `sequence` e o horário NTP da leitura;
+- publica em QoS 1;
+- a ponte passa a usar sessão persistente e o horário do dispositivo.
+
+**Restrição por dispositivo:**
+- A ponte assina também `<tópico>/<dispositivo_id>`. Por esse tópico, o `dispositivo_id` do JSON tem de ser o do tópico, senão a mensagem é recusada.
+- Com `MQTT_REQUIRE_DEVICE_TOPIC=true`, o tópico compartilhado deixa de ser aceito.
+- Com a ACL do Mosquitto abaixo e um usuário por dispositivo (usuário = `dispositivo_id`), um equipamento só publica como ele mesmo:
+
+```text
+# mosquitto: password_file + acl_file
+user richards-ponte
+topic read richards/comercio/telemetria/#
+pattern write richards/comercio/telemetria/%u
+```
 
 ### Como rodar na bancada
 

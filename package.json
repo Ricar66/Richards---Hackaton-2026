@@ -23,7 +23,8 @@
     "simulate": "node scripts/iot-simulator.mjs",
     "mqtt": "tsx src/iot/run-mqtt.ts",
     "bancada": "tsx src/iot/run-bancada-virtual.ts",
-    "palco:checar": "tsx src/iot/run-bancada-virtual.ts --checar"
+    "palco:checar": "tsx src/iot/run-bancada-virtual.ts --checar",
+    "test:mqtt-broker": "tsx scripts/mqtt-fumaca.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
