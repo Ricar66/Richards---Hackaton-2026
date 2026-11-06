@@ -14,33 +14,39 @@ export type OpenDeviceOccurrenceInput = {
 };
 export type OpenDeviceOccurrenceResult = { created: boolean; occurrenceId: string };
 const CHANNELS: ReadonlySet<string> = new Set<LiveChannel>(["http", "mqtt", "bancada-virtual"]);
+export const OCCURRENCE_TX = { maxWait: 5_000, timeout: 10_000 } as const;
+
 /**
  * Regra inviolável 5: no máximo UMA ocorrência ativa (OPEN/ACKNOWLEDGED) por dispositivo e tipo.
- * O advisory lock serializa leituras simultâneas do mesmo dispositivo e tipo; ocorrência, timeline e
- * auditoria são gravadas na mesma transação, junto com o aviso `occurrence.opened` (entregue só no COMMIT).
+ * Roda DENTRO de uma transação já aberta (`tx`): o advisory lock serializa leituras simultâneas do mesmo dispositivo e
+ * tipo até o COMMIT; ocorrência, timeline, auditoria e o aviso `occurrence.opened` (entregue só no COMMIT) ficam na
+ * mesma transação de quem chamou. Se ela for desfeita, nada disso existiu, nem para o telão.
  */
+export async function openDeviceOccurrenceIn(tx: Prisma.TransactionClient, input: OpenDeviceOccurrenceInput): Promise<OpenDeviceOccurrenceResult> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`occurrence:${input.kind}:${input.deviceId}`}))`;
+  const existing = await tx.occurrence.findFirst({ where: { deviceId: input.deviceId, kind: input.kind, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, select: { id: true } });
+  if (existing) return { created: false, occurrenceId: existing.id };
+  const occurrence = await tx.occurrence.create({ data: {
+    organizationId: input.organizationId, siteId: input.siteId, deviceId: input.deviceId,
+    kind: input.kind, source: input.source, severity: input.severity, status: "OPEN",
+    title: input.title, description: input.description, suspectedLiters: input.suspectedLiters ?? null,
+    events: { create: { action: "CREATED", note: input.eventNote, actor: input.actor } },
+  } });
+  await tx.auditEvent.create({ data: auditRecord({
+    organizationId: input.organizationId, entity: "Occurrence", entityId: occurrence.id,
+    action: "CREATED", actor: input.actor, metadata: { source: input.source, ...input.evidence },
+  }) });
+  const deviceCode = input.deviceCode ?? (await tx.device.findUnique({ where: { id: input.deviceId }, select: { code: true } }))?.code ?? null;
+  const channel = input.evidence.channel;
+  await notifyLive(tx, {
+    type: "occurrence.opened", orgId: input.organizationId, id: occurrence.id, deviceId: input.deviceId, deviceCode,
+    kind: input.kind, severity: input.severity, title: input.title, source: input.source, openedAt: occurrence.openedAt.toISOString(),
+    ...(typeof channel === "string" && CHANNELS.has(channel) ? { channel: channel as LiveChannel } : {}),
+  });
+  return { created: true, occurrenceId: occurrence.id };
+}
+
+/** Abre (ou devolve a ativa) numa transação própria. Para abrir junto com outra gravação, use `openDeviceOccurrenceIn`. */
 export async function openDeviceOccurrence(input: OpenDeviceOccurrenceInput): Promise<OpenDeviceOccurrenceResult> {
-  return getDb().$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`occurrence:${input.kind}:${input.deviceId}`}))`;
-    const existing = await tx.occurrence.findFirst({ where: { deviceId: input.deviceId, kind: input.kind, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, select: { id: true } });
-    if (existing) return { created: false, occurrenceId: existing.id };
-    const occurrence = await tx.occurrence.create({ data: {
-      organizationId: input.organizationId, siteId: input.siteId, deviceId: input.deviceId,
-      kind: input.kind, source: input.source, severity: input.severity, status: "OPEN",
-      title: input.title, description: input.description, suspectedLiters: input.suspectedLiters ?? null,
-      events: { create: { action: "CREATED", note: input.eventNote, actor: input.actor } },
-    } });
-    await tx.auditEvent.create({ data: auditRecord({
-      organizationId: input.organizationId, entity: "Occurrence", entityId: occurrence.id,
-      action: "CREATED", actor: input.actor, metadata: { source: input.source, ...input.evidence },
-    }) });
-    const deviceCode = input.deviceCode ?? (await tx.device.findUnique({ where: { id: input.deviceId }, select: { code: true } }))?.code ?? null;
-    const channel = input.evidence.channel;
-    await notifyLive(tx, {
-      type: "occurrence.opened", orgId: input.organizationId, id: occurrence.id, deviceId: input.deviceId, deviceCode,
-      kind: input.kind, severity: input.severity, title: input.title, source: input.source, openedAt: occurrence.openedAt.toISOString(),
-      ...(typeof channel === "string" && CHANNELS.has(channel) ? { channel: channel as LiveChannel } : {}),
-    });
-    return { created: true, occurrenceId: occurrence.id };
-  }, { maxWait: 5_000, timeout: 10_000 });
+  return getDb().$transaction(tx => openDeviceOccurrenceIn(tx, input), OCCURRENCE_TX);
 }

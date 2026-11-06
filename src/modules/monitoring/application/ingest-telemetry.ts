@@ -1,10 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { FlowAlertPolicy } from "../domain/flow-alert-policy";
-import { openFlowOccurrence } from "./open-flow-occurrence";
+import { OCCURRENCE_TX, openDeviceOccurrenceIn, type OpenDeviceOccurrenceResult } from "./open-device-occurrence";
 import { getDb } from "@/lib/db";
 import type { FlowRuleProgress, LiveChannel, ReadingCreatedEvent } from "@/modules/realtime/domain/live-event";
-import { notifyLiveSafe } from "@/modules/realtime/infrastructure/notify-event";
+import { notifyLive } from "@/modules/realtime/infrastructure/notify-event";
 export const telemetrySchema = z.object({
   deviceCode: z.string().min(3).max(80), bootId: z.string().min(4).max(80),
   sequence: z.number().int().min(0),
@@ -27,29 +27,55 @@ const hash = (s: string) => createHash("sha256").update(s).digest();
 /**
  * Caminho único de gravação de leitura e avaliação da regra de fluxo, comum ao HTTP e à ponte MQTT:
  * idempotência, último contato, regra por dispositivo (regra 3) e ocorrência única (regra 5) valem igual nos dois canais.
- * Leitura NOVA gravada vira `reading.created` no canal ao vivo (best-effort: falha do aviso nunca recusa a leitura);
- * duplicata não avisa nada.
+ *
+ * TUDO numa transação só: leitura, último contato, avaliação da regra, ocorrência (com o advisory lock da regra 5) e os
+ * avisos ao vivo. Antes, a leitura era confirmada sozinha e a ocorrência vinha depois, em outra transação: se a segunda
+ * falhasse, a retentativa do firmware virava "duplicata" (não reavaliava) e a ocorrência devida nunca abria se o fluxo
+ * parasse antes da próxima leitura. Agora qualquer falha desfaz a leitura também; a retentativa encontra o banco como
+ * estava e decide de novo. Os avisos (`reading.created`, `occurrence.opened`) saem por `pg_notify` DENTRO da transação:
+ * o PostgreSQL só os entrega no COMMIT e os descarta no ROLLBACK, então o telão nunca vê leitura ou ocorrência desfeita.
+ * Duplicata (mesmo dispositivo, bootId e sequence já confirmados) não reavalia nem avisa nada: o estado dela já foi
+ * decidido e confirmado junto com ela.
  */
 export async function ingestReading(device: IngestDevice, reading: IngestReading, source: "DEVICE" | "SIMULATED", channel: IngestChannel = "http"): Promise<IngestResult> {
-  const db = getDb();
   const time = reading.capturedAt;
-  // Idempotência por (deviceId, bootId, sequence) decidida pela constraint UNIQUE (INSERT ... ON CONFLICT DO NOTHING):
-  // retentativas e requisições simultâneas nunca somam volume duas vezes nem viram erro 503.
-  const { count } = await db.telemetryReading.createMany({ data: [{
-    deviceId: device.id, bootId: reading.bootId, sequence: reading.sequence,
-    flowLpm: reading.flowLpm, deltaLiters: reading.deltaLiters, capturedAt: time, source,
-  }], skipDuplicates: true });
-  if (count === 0) return { accepted: true, duplicate: true, alerted: false };
-  // Só o último contato: conectividade é calculada na leitura e MAINTENANCE (decisão humana) não pode ser sobrescrito.
-  await db.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });
-  const since = new Date(time.getTime() - Math.max(device.continuousSeconds + 60, 120) * 1000);
-  // Mesma origem da leitura atual: amostra simulada nunca sustenta alerta de DEVICE (nem o contrário).
-  // Mais recentes primeiro: com leituras frequentes (MQTT a cada 2 s) o limite de 120 não pode cortar a ponta da janela.
-  const history = await db.telemetryReading.findMany({ where: { deviceId: device.id, source, capturedAt: { gte: since, lte: time } }, orderBy: { capturedAt: "desc" }, take: 120 });
-  const policy = new FlowAlertPolicy(device.minFlowLpm, device.continuousSeconds);
-  const decision = policy.evaluate(history.map(x => ({ capturedAt: x.capturedAt, flowLpm: Number(x.flowLpm), deltaLiters: Number(x.deltaLiters) })));
-  const rule: FlowRuleProgress = { minFlowLpm: device.minFlowLpm, continuousSeconds: device.continuousSeconds, observedSeconds: decision.observedSeconds, suspicious: decision.suspicious };
-  const announce = (occurrenceId?: string) => {
+  return getDb().$transaction(async tx => {
+    // Idempotência por (deviceId, bootId, sequence) decidida pela constraint UNIQUE (INSERT ... ON CONFLICT DO NOTHING).
+    // Duas cópias simultâneas: a segunda espera o COMMIT (ou ROLLBACK) da primeira no índice único e então decide.
+    const { count } = await tx.telemetryReading.createMany({ data: [{
+      deviceId: device.id, bootId: reading.bootId, sequence: reading.sequence,
+      flowLpm: reading.flowLpm, deltaLiters: reading.deltaLiters, capturedAt: time, source,
+    }], skipDuplicates: true });
+    if (count === 0) return { accepted: true, duplicate: true, alerted: false } satisfies IngestResult;
+    // Só o último contato: conectividade é calculada na leitura e MAINTENANCE (decisão humana) não pode ser sobrescrito.
+    await tx.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } });
+    const since = new Date(time.getTime() - Math.max(device.continuousSeconds + 60, 120) * 1000);
+    // Mesma origem da leitura atual: amostra simulada nunca sustenta alerta de DEVICE (nem o contrário).
+    // Mais recentes primeiro: com leituras frequentes (MQTT a cada 2 s) o limite de 120 não pode cortar a ponta da janela.
+    const history = await tx.telemetryReading.findMany({ where: { deviceId: device.id, source, capturedAt: { gte: since, lte: time } }, orderBy: { capturedAt: "desc" }, take: 120 });
+    const policy = new FlowAlertPolicy(device.minFlowLpm, device.continuousSeconds);
+    const decision = policy.evaluate(history.map(x => ({ capturedAt: x.capturedAt, flowLpm: Number(x.flowLpm), deltaLiters: Number(x.deltaLiters) })));
+    const rule: FlowRuleProgress = { minFlowLpm: device.minFlowLpm, continuousSeconds: device.continuousSeconds, observedSeconds: decision.observedSeconds, suspicious: decision.suspicious };
+    let opened: OpenDeviceOccurrenceResult | null = null;
+    if (decision.suspicious) {
+      const simulated = source === "SIMULATED";
+      opened = await openDeviceOccurrenceIn(tx, {
+        kind: "UNUSUAL_FLOW", severity: "HIGH",
+        organizationId: device.organizationId, siteId: device.siteId, deviceId: device.id, deviceCode: device.code, source,
+        title: "Fluxo contínuo fora do padrão",
+        description: `Vazão igual ou superior a ${device.minFlowLpm} L/min por ${Math.round(decision.observedSeconds)} segundos. Requer verificação.`,
+        suspectedLiters: decision.suspectVolumeLiters,
+        eventNote: (simulated ? "Gerada automaticamente a partir de leituras SIMULADAS" : "Gerada automaticamente a partir de leituras do sensor") + CHANNEL_NOTE[channel],
+        actor: `${simulated ? "simulador" : "dispositivo"}:${device.code}`,
+        evidence: {
+          channel,
+          windowStart: new Date(time.getTime() - decision.observedSeconds * 1000).toISOString(), windowEnd: time.toISOString(),
+          observedSeconds: decision.observedSeconds, suspectVolumeLiters: decision.suspectVolumeLiters,
+          rule: { minFlowLpm: device.minFlowLpm, continuousSeconds: device.continuousSeconds },
+          trigger: { bootId: reading.bootId, sequence: reading.sequence },
+        },
+      });
+    }
     const emittedAt = new Date();
     const event: Omit<ReadingCreatedEvent, "v" | "emittedAt"> = {
       type: "reading.created", orgId: device.organizationId, deviceId: device.id, deviceCode: device.code, siteId: device.siteId,
@@ -57,32 +83,13 @@ export async function ingestReading(device: IngestDevice, reading: IngestReading
       flowLpm: reading.flowLpm, deltaLiters: reading.deltaLiters, source, channel, rule,
       // Só o HTTP traz hora do próprio dispositivo (NTP); no MQTT o `capturedAt` é a hora da ponte.
       timing: { receivedAt: (reading.receivedAt ?? emittedAt).toISOString(), emittedAt: emittedAt.toISOString(), ...(channel === "http" ? { deviceAt: time.toISOString() } : {}) },
-      ...(occurrenceId ? { occurrenceId } : {}),
+      ...(opened ? { occurrenceId: opened.occurrenceId } : {}),
     };
-    return notifyLiveSafe(event, emittedAt);
-  };
-  if (!decision.suspicious) { await announce(); return { accepted: true, duplicate: false, alerted: false, rule }; }
-  const simulated = source === "SIMULATED";
-  const via = CHANNEL_NOTE[channel];
-  let opened: Awaited<ReturnType<typeof openFlowOccurrence>>;
-  // A leitura já está gravada: mesmo se abrir a ocorrência falhar, o fato "leitura recebida" é avisado.
-  try { opened = await openFlowOccurrence({
-    organizationId: device.organizationId, siteId: device.siteId, deviceId: device.id, deviceCode: device.code, source,
-    title: "Fluxo contínuo fora do padrão",
-    description: `Vazão igual ou superior a ${device.minFlowLpm} L/min por ${Math.round(decision.observedSeconds)} segundos. Requer verificação.`,
-    suspectedLiters: decision.suspectVolumeLiters,
-    eventNote: (simulated ? "Gerada automaticamente a partir de leituras SIMULADAS" : "Gerada automaticamente a partir de leituras do sensor") + via,
-    actor: `${simulated ? "simulador" : "dispositivo"}:${device.code}`,
-    evidence: {
-      channel,
-      windowStart: new Date(time.getTime() - decision.observedSeconds * 1000).toISOString(), windowEnd: time.toISOString(),
-      observedSeconds: decision.observedSeconds, suspectVolumeLiters: decision.suspectVolumeLiters,
-      rule: { minFlowLpm: device.minFlowLpm, continuousSeconds: device.continuousSeconds },
-      trigger: { bootId: reading.bootId, sequence: reading.sequence },
-    },
-  }); } catch (error) { await announce(); throw error; }
-  await announce(opened.occurrenceId);
-  return { accepted: true, duplicate: false, alerted: opened.created, occurrenceId: opened.occurrenceId, rule };
+    await notifyLive(tx, event, emittedAt);
+    return opened
+      ? { accepted: true, duplicate: false, alerted: opened.created, occurrenceId: opened.occurrenceId, rule } satisfies IngestResult
+      : { accepted: true, duplicate: false, alerted: false, rule } satisfies IngestResult;
+  }, OCCURRENCE_TX);
 }
 
 /** Canal HTTP do firmware: autentica pela chave do dispositivo e confere o relógio antes de gravar. */
