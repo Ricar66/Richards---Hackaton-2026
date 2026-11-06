@@ -37,7 +37,7 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 | Sala ao vivo (telão) | `http://localhost:3000/ao-vivo` (tecla F = tela cheia). Roteiro em `docs/ROTEIRO_DEMO.md`, seção "Sala ao vivo" |
 | Bancada virtual (contingência de palco) | `pnpm bancada` / `pnpm palco:checar`; contrato em `docs/CONTRATO_IOT.md`, seção "Bancada virtual" |
 | Canal ao vivo (SSE) | `docs/CONTRATO_IOT.md`, seção "Canal ao vivo (SSE) para as telas" |
-| Deploy na VPS da Tétria | `docs/DEPLOY_VPS_TETRIA.md` + `docker-compose.vps.yml`. **Não publicado**: depende do aval dos sócios e da Cloudflare (Haroldo) |
+| Demo na VPS da Tétria | **No ar desde 06/11 por IP: http://187.77.229.205:8090** (decisão do Ricardo: sem subdomínio nem Cloudflare). Coolify: projeto RICHARDS, ambiente `demo`, recurso `richards-demo`, branch congelada `deploy/vps-hackathon`, auto deploy desligado. Credenciais da VPS em `.env.vps.local` (fora do git). Roteiro e checklist em `docs/DEPLOY_VPS_TETRIA.md` |
 
 ## 3. Regras invioláveis (do prompt mestre)
 
@@ -259,7 +259,13 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - Firmware MQTT mandar `bootId` e `sequence` (idempotência igual à do HTTP).
 - Temperatura no BI: guardar a série e mostrar a evidência na gaveta (hoje fica só na auditoria e na descrição).
 
-- **Deploy na VPS da Tétria** (`docs/DEPLOY_VPS_TETRIA.md`): precisa do aval dos quatro sócios (governança da Tétria) e de o Haroldo criar a rota no túnel e a política do Cloudflare Access. A porta prevista é `127.0.0.1:18082`. Não mexer no catch-all do túnel, que aponta para a Elora. O compose recusa subir sem senhas novas (`VPS_*`).
+- **Demo na VPS por IP** (`docs/DEPLOY_VPS_TETRIA.md`), riscos aceitos pelo Ricardo em 06/11:
+  - o Basic Auth trafega em http, sem TLS;
+  - a porta publicada pelo Docker passa por cima do `ufw`.
+  - A senha é própria da VPS. **Desmontar até 08/11** (Stop no Coolify) e trocar a senha.
+  - Publicar versão nova: mover a branch `deploy/vps-hackathon` e clicar em Redeploy.
+  - Não ligar o ESP32 na VPS: o firmware HTTP não tem TLS.
+  - A 18082 do primeiro roteiro é do woodpecker-server.
 - A linha do tempo das gavetas do BI mostra o autor completo (`operador:<usuário>`). Se o BI for projetado, considere usar um usuário de laboratório neutro.
 
 **P2 (depois do hackathon)**

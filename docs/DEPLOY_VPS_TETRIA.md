@@ -1,125 +1,99 @@
 # Publicação do RICHARDS na VPS da Tétria
 
-> Preparado em 06/11/2026, de madrugada, a partir de como a **Elora** (projeto CardCraft, `E:\CraftOps\apps\web\CardCraft\docs\06-operacao\`) está publicada.
-> **Nada foi executado na VPS, no Coolify nem na Cloudflare.**
-> O repositório já tem o `docker-compose.vps.yml`, validado localmente.
+> **No ar desde 06/11/2026, por IP: http://187.77.229.205:8090.**
+> Decisão do Ricardo no mesmo dia: "não vamos usar subdomínio, iremos fazer por IP mesmo".
+> O primeiro roteiro (Cloudflare Tunnel + Access em `richards.tetriabrasil.com.br`) ficou como alternativa no fim deste arquivo.
 
-## Por que não foi publicado sozinho
+## Como está no ar
 
-- A governança da Tétria (`tetriaOS/Operations/GOVERNANCA.md`, linhas 39–55) manda **parar e pedir orientação aos sócios** antes de publicar produto, alterar produção ou mexer em infraestrutura. Para isso não há aprovador definido.
-- O Cloudflare Access e a rota do túnel ficam na conta Zero Trust administrada pelo Haroldo.
-- A mesma VPS roda a **produção da Elora**, com domínios de clientes. Um erro na regra final do túnel derruba esses domínios.
+| Item | Valor |
+|---|---|
+| Endereço | `http://187.77.229.205:8090` (BI em `/`, Sala ao vivo em `/ao-vivo`, saúde em `/api/health`) |
+| Coolify | projeto **RICHARDS** (`vejbym56yieujkya75vn36in`) · ambiente **demo** (`zummmht1qmzi6sv4eiblwywj`) · recurso **richards-demo** (`hgqhwyshnq0r3fqwrevyae4l`) |
+| Código | repositório público `Ricar66/Richards---Hackaton-2026`, branch congelada **`deploy/vps-hackathon`**, compose `/docker-compose.vps.yml` |
+| Deploy automático | **Desligado.** A VPS não segue o `main`; publicar de novo é Redeploy manual no Coolify |
+| Outras opções do recurso | "Inject Build Args to Dockerfile" e "Connect to Predefined Network" desligados; valores das variáveis ocultos nos logs; nenhum domínio no proxy |
+| Banco | `richards-db` (Postgres 16) só na rede do compose, volume `richards_vps_pgdata`, seed SIMULATED |
+| Variáveis | `VPS_POSTGRES_PASSWORD`, `VPS_OPERATOR_USER` (`equipe`), `VPS_OPERATOR_PASSWORD` e `VPS_IOT_DEVICE_KEY`, só de execução |
+| Credenciais | Geradas na VPS (`openssl rand -hex`), em `/root/.richards-deploy/credenciais.env` (600). Cópia local em `.env.vps.local`, fora do git. Guardar no Passbolt |
 
-## Decisões recomendadas
+## Riscos aceitos (acesso por IP)
 
-| # | Decisão | Recomendação |
-|---|---|---|
-| D1 | Papel da VPS no evento | **Vitrine**. O palco continua no notebook (`docker compose up -d`, testado) |
-| D2 | Banco | **Novo**, com o seed SIMULATED. A fala cita os números de **uma** fonte só |
-| D3 | Expor sem Access | **Não.** O app tem senha única de laboratório e `DEMO_MODE=true` (regra 8) |
-| D4 | Quem entra | Só os e-mails da equipe (Access com One-time PIN, sessão de 24 h) |
-| D5 | Senhas | Novas, geradas na VPS com `openssl rand -hex 32`, guardadas no Passbolt e trocadas na desmontagem |
-| D6 | Hostname | `richards.tetriabrasil.com.br`, com um nível só, coberto pelo certificado curinga |
-| D7 | IoT na VPS | **Não no evento.** O firmware HTTP não tem TLS; a bancada fica local |
-| D8 | Prazo | Desmontar até 08/11 |
+- **A senha do Basic Auth trafega em texto puro (http).** Quem estiver na mesma rede, como o Wi-Fi do evento, consegue ler. Mitigação: a senha é própria da VPS (24 caracteres aleatórios, nunca a de laboratório do notebook), o usuário é neutro e o banco só tem dados SIMULATED. Trocar a senha e desmontar até 08/11.
+- **A porta publicada pelo Docker passa por cima do `ufw`**, que só libera 22, 80 e 443. Por isso a 8090 abre sem regra nova, como a `:3000` do NewCraft.
+  - A proteção real das portas administrativas é a cadeia `DOCKER-USER` → `CODECRAFT-ADMIN`, que derruba 8000, 6001, 6002 e 8080 vindas de fora.
+  - Qualquer porta nova em `0.0.0.0` fica pública na hora.
+- A rota de telemetria (`/api/iot/telemetry`) aceita POST de qualquer origem com a chave do dispositivo. A chave da VPS é aleatória e diferente da do notebook. **Não ligar o ESP32 na VPS durante o evento:** o firmware HTTP não tem TLS.
+- Não há limite de tentativas no Basic Auth. Com 96 bits de senha aleatória, tentar por força bruta não é viável.
 
-## Arquitetura
+## Como foi criado (sem token da API)
 
-```
-navegador (allowlist) ─HTTPS─► Cloudflare: DNS proxied + Access (Allow, sem Bypass) + túnel "tetria"
-                                   │ rota richards.tetriabrasil.com.br → http://127.0.0.1:18082
-VPS ── cloudflared ──► 127.0.0.1:18082 ──► web (Next, :3000) ──► richards-db (Postgres 16, sem porta no host)
-       (Coolify: projeto RICHARDS · ambiente demo · recurso richards-demo · compose /docker-compose.vps.yml)
-       vizinhos intocados: Elora 18081 + regra final do túnel, Keycloak 18080, Coolify 8000/6001/6002, Traefik 443
-```
+A sessão de 06/11 não criou token da API do Coolify. O recurso foi criado pelos modelos internos do Coolify, executados com `php` dentro do contêiner `coolify`, repetindo o caminho de `ApplicationsController::create_application` para um repositório público:
 
-## Passo a passo
+1. `Project::create` (team 0) e `environments()->create(['name' => 'demo'])`.
+2. `new Application` com `source` = "Public GitHub" (`GithubApp` 0), o destino único do servidor `localhost` e as opções acima.
+3. As 4 variáveis com `is_runtime = true` e `is_buildtime = false`.
+4. `LoadComposeFile`, depois `queue_application_deployment(...)`. O deploy aparece normalmente na lista do recurso no painel.
 
-### 0. Autorização
+Os segredos vão para dentro do contêiner num arquivo temporário com permissão 600, apagado no fim. Nenhum valor passa pelo terminal nem pelo log.
 
-1. Pedido aos sócios (Haroldo, Marcus, Paulo e Ricardo). O texto pronto está no fim deste arquivo.
-2. Decisão registrada em `tetriaOS/Operations/Decisões/`, com hostname, prazo, "só Access, sem Bypass" e quem opera.
+**Antes de escolher a porta, confira ao vivo** com `ss -ltnp`. Em 06/11 a `127.0.0.1:18082` do primeiro roteiro já era do `woodpecker-server` (CI).
 
-### 1. Repositório (Ricardo)
+## Operação
 
-3. Congelar a versão do evento: `git tag deploy-hackathon-2026` (ou uma branch `deploy/vps-hackathon`). Durante o evento, a VPS **não** segue o `main`.
+- **Publicar uma versão nova:** atualize a branch `deploy/vps-hackathon` (`git branch -f deploy/vps-hackathon main` e push, sem forçar) e clique em **Redeploy** no recurso. O banco e os dados continuam no volume.
+- **Liberar o palco na VPS:** a ocorrência do seed `richards-oc-01` precisa estar encerrada para o alerta ao vivo abrir (regra 5). Em 06/11 ela foi encerrada como DISMISSED pela própria API do app, com nota e auditoria (autor `operador:equipe`).
+- **Login menos de 1 h antes de apresentar**, com a aba já aberta. O navegador guarda o Basic Auth até ser fechado.
 
-### 2. Coolify (Ricardo)
-
-4. **Novo projeto `RICHARDS`**, ambiente `demo`, recurso `richards-demo`:
-   - **Tipo:** Docker Compose (Git). Não usar "Service" colado.
-   - **Repositório:** `https://github.com/Ricar66/Richards---Hackaton-2026` (público), na tag ou branch congelada.
-   - **Compose:** `/docker-compose.vps.yml`.
-   - **Domínio:** vazio em todos os serviços. Apagar qualquer `*.sslip.io` sugerido.
-   - **Desligados:** Auto deploy, "Inject Build Args to Dockerfile" e "Connect to Predefined Network".
-5. **Conferir ao vivo** que a porta está livre (SSH): `ss -ltnp | grep 18082` não deve devolver nada.
-6. **Variáveis do recurso** (nenhuma como Build Variable):
-   - `VPS_POSTGRES_PASSWORD`: definir antes do 1º deploy, porque o Postgres só aplica a senha ao criar o volume;
-   - `VPS_OPERATOR_USER` e `VPS_OPERATOR_PASSWORD`;
-   - `VPS_IOT_DEVICE_KEY`.
-
-### 3. Cloudflare (Haroldo ou o administrador da zona)
-
-7. **Access antes da rota:**
-   - aplicação self-hosted para `richards.tetriabrasil.com.br` (domínio inteiro);
-   - política **Allow** com e-mails exatos, One-time PIN e sessão de 24 h;
-   - **sem Bypass e sem exceção de caminho**.
-8. **Túnel `tetria`:**
-   - rota pública `richards.tetriabrasil.com.br` → `http://127.0.0.1:18082`;
-   - sem `httpHostHeader`, que quebra a proteção CSRF de `src/proxy.ts`;
-   - **sem tocar na regra final**, que é da Elora.
-   - O CNAME precisa ser proxied, nunca um registro A para o IP da VPS.
-9. **http → https só para esse hostname**, com uma Redirect Rule filtrada. Não mexer no "Always Use HTTPS" da zona. A senha Basic nunca pode trafegar em http.
-
-### 4. Deploy
-
-10. Deploy manual. Nos logs, esperar `migrate deploy` (3 migrations) → seed → `next start`. O status precisa ficar **Healthy**.
-11. Resolver pelo BI a ocorrência do seed `richards-oc-01`, senão a regra 5 bloqueia o alerta ao vivo.
-12. Rodar o checklist abaixo.
-13. Manter o auto deploy **desligado** até o fim do evento.
-
-## Tempo real (SSE) atrás da Cloudflare
-
-A versão de 06/11 traz `/api/live/stream` (Server-Sent Events):
-
-- **Compressão:** a rota manda `Cache-Control: no-cache, no-transform`, o que impede a compressão de segurar os eventos.
-- **Ociosidade:** o heartbeat de 15 s fica bem abaixo do corte de ociosidade de 100 s do proxy da Cloudflare.
-- **Sessão do Access:** se ela expirar no meio da apresentação, o stream e a consulta de reserva caem para o login. A tela passa a mostrar "Servidor indisponível · números parados". Mitigação: fazer login menos de 1 h antes, com a aba já aberta.
-
-## Checklist pós-deploy
+## Checklist pós-deploy (06/11/2026)
 
 Registrar cada item como PASSOU, FALHOU ou NÃO EXECUTADO.
 
-| # | Verificação | Esperado |
-|---|---|---|
-| 1 | Status no Coolify | `web` e `richards-db` Healthy |
-| 2 | `ss -ltnp \| grep -E '18082\|5432'` | Só `127.0.0.1:18082` |
-| 3 | De fora (rede móvel): `curl -m 5 http://<IP_VPS>:18082/` | Recusado ou timeout |
-| 4 | `curl -sSI https://richards.tetriabrasil.com.br/api/health`, sem sessão | 302 para `*.cloudflareaccess.com` |
-| 5 | `curl -sSI http://richards.tetriabrasil.com.br/` | Redireciona para https ou para o Access, nunca 401 do app em http |
-| 6 | Domínios no Coolify | Nenhum, nem `sslip` |
-| 7 | Navegador da allowlist | Access → Basic Auth → BI. `/api/health` com `"database":"up"` |
-| 8 | E-mail fora da allowlist | Bloqueado |
-| 9 | `/ao-vivo` aberto | Estado "Ao vivo"; um "Simular alerta" no BI aparece na Sala em menos de 2 s |
-| 10 | PDF em `/relatorios` | Carimbo SIMULATED e os mesmos números do BI |
-| 11 | Reiniciar o `web` | Volta Healthy e os dados continuam (volume preservado) |
-| 12 | Vizinhos | `https://elora.tetriabrasil.com.br/api/health` OK, e um domínio próprio de cliente ainda abre |
+| # | Verificação | Esperado | Resultado |
+|---|---|---|---|
+| 1 | Deploy no Coolify | `finished`; `web` e `richards-db` healthy | PASSOU: `tp17dqtcbljhqizfee28fyus`, de 11:11 a 11:14 UTC; `web` healthy 27 s depois de subir |
+| 2 | `ss -ltnp` na VPS | `0.0.0.0:8090` do docker-proxy; banco sem porta no host | PASSOU |
+| 3 | `GET /api/health` de fora | 200 com `"database":"up"` | PASSOU (pela rede da Tracbel) |
+| 4 | `GET /` sem senha | 401 com `WWW-Authenticate: Basic` | PASSOU (de dentro da VPS e de fora) |
+| 5 | `GET /` com a senha da VPS | 200 | PASSOU; `/ao-vivo` e `/api/live/snapshot` também 200 |
+| 6 | `GET /api/live/stream` com a senha | `text/event-stream`, `no-cache, no-transform` | PASSOU; `hello` com `"listening":true` |
+| 7 | Liberar o palco | `richards-oc-01` DISMISSED | PASSOU: OPEN → DISMISSED pela API, com nota |
+| 8 | Vizinhos | `https://elora.tetriabrasil.com.br/api/health` OK; woodpecker na 18082 intocado | PASSOU: 200 e 200 |
+
+### Verificação independente (06/11/2026, dois verificadores separados)
+
+**Jornada no Chrome contra a VPS: PASSOU 7/7.**
+- BI e Sala chegam ao estado ao vivo.
+- Um "Simular alerta" (POST `/api/admin/simulate`) apareceu na Sala e no BI antes da própria resposta HTTP: o `NOTIFY` sai no COMMIT. Em seguida foi encerrado como DISMISSED, com nota.
+- PDF com `X-Report-Provenance: SIMULATED`.
+- 0 erros de JavaScript em 7 telas; sem senha, 401.
+
+**Exposição e segredos: PASSOU 12/12.**
+- De fora, só a 8090 abre; 5432, 18080, 18081, 18082, 9010 e 20241 dão timeout.
+- Banco sem porta no host. Web e banco só na rede do recurso, sem rota do Traefik.
+- Os 4 segredos não aparecem: logs do deploy, git (histórico completo), bundles do Next, labels e temporários (0 ocorrências).
+- Vizinhos intactos. Nenhum token novo no Coolify.
+
+**Pendências para depois do evento (P3):**
+- O Coolify entrega o `.env` do recurso a todos os serviços, então o banco também recebe a senha do operador e a chave do sensor.
+- O web roda como root no contêiner: falta `USER node` no Dockerfile.
+- O recurso segue o topo da branch `deploy/vps-hackathon`: confira o commit antes de cada Redeploy.
 
 ## Desmontagem (até 08/11)
 
-- Remover a rota do túnel, a aplicação do Access e o CNAME.
-- Parar o recurso e trocar as senhas.
-- Apagar o volume **só com autorização expressa** (regra 9).
+- No Coolify, **Stop** no recurso `richards-demo`. A porta 8090 fecha junto.
+- Trocar as senhas ou apagar o `/root/.richards-deploy/credenciais.env` e a cópia local `.env.vps.local`.
+- Apagar o recurso, o volume `richards_vps_pgdata` e o projeto RICHARDS **só com autorização expressa** (regra 9).
 
-## Pedido aos sócios (texto pronto)
+## Alternativa não usada: Cloudflare Tunnel + Access (padrão da Elora)
 
-> **Pedido de aprovação: demonstração do RICHARDS na VPS da Tétria (Hackathon Senac, 06–08/11)**
->
-> Quero publicar a demonstração do RICHARDS Intelligence, projeto do hackathon, em `richards.tetriabrasil.com.br`, até 08/11. Nessa data desmonto tudo.
->
-> - **Acesso:** só pela Cloudflare Access, com os e-mails da equipe, sem Bypass. A aplicação fica na porta local 18082 e não toca na Elora, nem na porta 18081, nem na regra final do túnel.
-> - **Dados:** banco próprio, novo e só com dados simulados e carimbados. Sem dados de clientes da Tétria.
-> - **Operação:** recurso próprio no Coolify (projeto RICHARDS), com auto deploy desligado. O build fica fora do horário de uso da Elora.
-> - **Preciso do Haroldo para:** criar o Access e a rota no túnel `tetria`.
->
-> O roteiro, o checklist e a desmontagem estão em `docs/DEPLOY_VPS_TETRIA.md` do repositório.
+Para voltar a esse modelo:
+
+1. No `docker-compose.vps.yml`, troque a porta por `"127.0.0.1:<porta livre>:3000"`. A 18082 está ocupada.
+2. Peça ao Haroldo:
+   - a aplicação no Cloudflare Access (política Allow com os e-mails da equipe, sem Bypass);
+   - a rota no túnel para a porta local, sem `httpHostHeader` (quebra a proteção CSRF do `src/proxy.ts`) e sem tocar na regra final, que é da Elora;
+   - o CNAME proxied.
+3. Redeploy.
+
+O heartbeat de 15 s do `/api/live/stream` fica abaixo do corte de ociosidade de 100 s da Cloudflare. O `no-transform` impede a compressão de segurar os eventos.
