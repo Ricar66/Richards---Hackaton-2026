@@ -13,3 +13,6 @@ iot/**/secrets.h
 .omc/
 .e2e/
 __pycache__/
+
+# Credenciais da VPS (geradas na VPS; nunca vão para o git)
+.env.vps.local

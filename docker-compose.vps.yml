@@ -1,7 +1,9 @@
-# Publicação na VPS da Tétria (Coolify + Cloudflare Tunnel), no mesmo padrão da Elora.
+# Publicação na VPS da Tétria pelo Coolify, no mesmo padrão de recurso da Elora.
 # Roteiro completo: docs/DEPLOY_VPS_TETRIA.md. NÃO usar no notebook: lá o plano B é o docker-compose.yml.
-# - A web publica SÓ no loopback (127.0.0.1:18082); quem entrega para fora é o cloudflared do host, atrás do Cloudflare Access.
-#   Nunca escrever "18082:3000" sem o 127.0.0.1: o Docker passa por cima do firewall e expõe no IP público.
+# - Decisão do Ricardo em 06/11/2026: acesso direto por IP, sem subdomínio nem Cloudflare Access:
+#   http://187.77.229.205:8090. A porta publicada pelo Docker passa por cima do ufw, por isso abre sem regra nova.
+#   Para voltar ao modelo da Elora (túnel + Access), troque por "127.0.0.1:<porta livre>:3000".
+#   A 18082 do primeiro roteiro é do woodpecker-server; confira com `ss -ltnp` antes.
 # - O banco não tem porta no host.
 # - Segredos vêm das variáveis do recurso no Coolify; ":?" derruba o deploy se faltar (nunca sobe com senha de laboratório).
 services:
@@ -27,7 +29,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://richards:${VPS_POSTGRES_PASSWORD:?defina VPS_POSTGRES_PASSWORD}@richards-db:5432/richards?schema=public
-      # Demonstração de hackathon: todo o seed é SIMULATED. O host só é alcançável pelo Cloudflare Access (sem Bypass).
+      # Demonstração de hackathon: todo o seed é SIMULATED. Senha forte e própria da VPS (nunca a de laboratório do notebook).
       DEMO_MODE: "true"
       AUTH_MODE: basic
       RICHARDS_OPERATOR_USER: ${VPS_OPERATOR_USER:?defina VPS_OPERATOR_USER}
@@ -41,6 +43,6 @@ services:
       retries: 4
       start_period: 120s
     ports:
-      - "127.0.0.1:18082:3000"
+      - "0.0.0.0:8090:3000"
 volumes:
   richards_vps_pgdata:
