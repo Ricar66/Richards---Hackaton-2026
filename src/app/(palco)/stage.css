@@ -1,3 +1,4 @@
+/* Nomes de classe da Sala NÃO podem repetir os do BI: o globals.css é global (ex.: .twin-stage é do gêmeo do BI, .stamp tem position absolute). */
 /* RICHARDS · Sala ao vivo (palco). "A barra lateral vira a sala": fundo --nav, instrumentos separados por linhas de 1 px,
    cor só significa estado. Tudo escopado em .stage (o CSS de layout fica carregado ao navegar para o BI).
    Escala única --u: 1/100 da altura em 16:9 (10,8 px em 1080p, 7,2 px em 720p). Movimento só em transform e opacity. */
@@ -52,7 +53,10 @@
 .stage .lost-banner small { font-family: var(--font-body), sans-serif; font-weight: 600; font-size: calc(var(--u) * 1.7); letter-spacing: 0; color: var(--label); }
 .stage .snap-error { position: absolute; z-index: 5; top: calc(var(--u) * 8.4); left: calc(var(--u) * 3.7); max-width: 40%; background: var(--danger); color: #fff; padding: calc(var(--u) * .6) calc(var(--u) * 1.2); border-radius: calc(var(--u) * .6); font-weight: 700; }
 .stage[data-signal="lost"] .instruments { opacity: .45; transition: opacity 300ms; }
-.stage .stage-keys { position: absolute; right: calc(var(--u) * 3.7); bottom: calc(var(--u) * .2); color: var(--label); opacity: .5; font-size: calc(var(--u) * 1.4); }
+/* Tecla P (WCAG 2.2.2): o desenho para, o alarme fica fixo e a pílula no cabeçalho avisa (sem cobrir instrumento). */
+.stage .paused-pill { flex: 0 0 auto; padding: calc(var(--u) * .4) calc(var(--u) * 1.1); border: 2px solid var(--ink); border-radius: calc(var(--u) * .6);
+  font-family: var(--numf); font-weight: 800; letter-spacing: .08em; font-size: calc(var(--u) * 1.7); white-space: nowrap; }
+.stage .stage-keys { position: absolute; right: calc(var(--u) * 3.7); bottom: calc(var(--u) * .2); color: var(--label); opacity: .8; font-size: calc(var(--u) * 1.4); }
 
 /* ---------- grade: 12 colunas, linhas 1fr | .62fr | viagem ---------- */
 .stage .instruments { display: grid; min-height: 0; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, .64fr) calc(var(--u) * 12.6); column-gap: calc(var(--u) * 2.2); transition: opacity 300ms; }
@@ -86,19 +90,46 @@
 .stage .flow-meta { margin-top: calc(var(--u) * 1); color: var(--label); font-size: calc(var(--u) * 1.9); }
 .stage .flow-note { margin-top: calc(var(--u) * .5); color: var(--label); font-size: calc(var(--u) * 1.7); opacity: .85; }
 .stage .twin { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; }
-.stage .pipe { flex: 1; min-height: 0; width: 100%; filter: drop-shadow(0 calc(var(--u) * 1.6) calc(var(--u) * 2.6) #0007); }
+/* Sem filter no SVG: com a água mudando de transform a cada quadro, um drop-shadow obrigaria o navegador a refiltrar o
+   desenho inteiro por quadro. A sombra e o brilho agora são gradientes estáticos dentro do próprio SVG. */
+.stage .pipe { flex: 1; min-height: 0; width: 100%; transition: opacity 400ms ease-out; }
+.stage .pipe-pulse { opacity: 0; transform-box: fill-box; transform-origin: center; pointer-events: none; }
+/* Gêmeo: SVG sempre montado (é o elemento acessível); o canvas 3D entra por cima só quando está pronto. Com o 3D na tela,
+   o SVG fica transparente (opacity, não visibility: continua no leitor de tela com o mesmo aria-label). */
+.stage .twin-slot { position: relative; flex: 1; min-height: 0; display: flex; }
+.stage .twin-canvas { position: absolute; inset: 0; opacity: 0; transition: opacity 400ms ease-out; pointer-events: none; }
+.stage .twin-slot[data-twin-mode="3d"] .twin-canvas { opacity: 1; }
+.stage .twin-slot[data-twin-mode="3d"] > .pipe { opacity: 0; }
+.stage .twin-diag { position: absolute; z-index: 3; right: 0; top: calc(var(--u) * 2.4); max-width: 46%; margin: 0; padding: calc(var(--u) * .6) calc(var(--u) * .9);
+  background: rgb(7 18 23 / .9); border: 1px solid var(--line); border-radius: calc(var(--u) * .5);
+  font-family: var(--mono); font-size: calc(var(--u) * 1.25); line-height: 1.35; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none; }
 .stage .pipe-water { will-change: transform; }
 .stage .twin figcaption { display: flex; justify-content: space-between; gap: calc(var(--u) * 1); color: var(--label); font-size: calc(var(--u) * 1.7); }
 .stage .twin figcaption { align-items: center; justify-content: flex-end; }
 .stage .twin-note { position: absolute; left: 0; top: 0; color: var(--label); font-size: calc(var(--u) * 1.7); }
 .stage .twin-tag { display: inline-flex; align-items: center; gap: calc(var(--u) * .8); color: var(--ink); white-space: nowrap; min-width: 0; }
+/* Alarme ISA-18.2 no gêmeo: halo ATRÁS do cano (z-index -1 dentro da .stage). Pisca a 0,5 Hz só enquanto a ocorrência do
+   sensor está aberta e ninguém assumiu; assumida = fixo. Sem animação (reduzir movimento ou P), fica fixo e visível. */
+.stage .twin::before { content: ""; position: absolute; z-index: -1; inset: 4% 0 8%; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(closest-side, rgb(236 107 100 / .5), rgb(236 107 100 / 0) 75%); }
+.stage .twin[data-alarm="steady"]::before { opacity: .6; }
+.stage .twin[data-alarm="pulse"]::before { opacity: .6; animation: stg-alarm 1s ease-in-out infinite alternate; }
+/* Leitura em foco simulada: contorno roxo tracejado no desenho, além da hachura dentro do cano e do selo. */
+.stage .twin[data-sim] { outline: 2px dashed var(--sim); outline-offset: calc(var(--u) * .5); border-radius: calc(var(--u) * 1); }
+
+/* Troca de dígito: só a posição que mudou anima; o caractere anterior sai em ::before (texto alternativo vazio: fora do
+   innerText e do leitor de tela). A primeira declaração de content é a reserva para quem não entende o "/ alt". */
+.stage .digits { white-space: nowrap; }
+.stage .dg { display: inline-block; position: relative; }
+.stage .dg-in { display: inline-block; animation: stg-dg-in 220ms ease-out; }
+.stage .dg.on::before { content: attr(data-prev); content: attr(data-prev) / ""; position: absolute; left: 0; top: 0; pointer-events: none; animation: stg-dg-out 220ms ease-out forwards; }
 
 .stage .strip { flex: 1; min-height: 0; display: grid; grid-template-columns: calc(var(--u) * 4.4) minmax(0, 1fr); padding: calc(var(--u) * 2.4) 0 calc(var(--u) * 2.8); }
 .stage .strip-y { position: relative; }
 .stage .strip-y span { position: absolute; right: calc(var(--u) * 1); transform: translateY(-50%); color: var(--label); font-size: calc(var(--u) * 1.7); font-variant-numeric: tabular-nums; }
 .stage .strip-y span.thr { color: var(--warn); font-weight: 800; }
 .stage .strip-plot { position: relative; min-width: 0; min-height: 0; }
-.stage .strip-plot svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.stage .strip-plot svg { position: absolute; left: 0; top: 0; overflow: visible; mask-image: linear-gradient(to right, transparent, #000 5%); }
 .stage .strip-data { will-change: transform; }
 .stage .strip-grid { stroke: var(--line); stroke-width: 1; }
 .stage .strip-base { stroke: #2c4a53; stroke-width: 1.5; }
@@ -129,7 +160,13 @@
 .stage .ring-center b { font-size: calc(var(--u) * 9); line-height: 1; }
 .stage .ring-center small { font-size: calc(var(--u) * 3.2); color: var(--label); font-weight: 600; }
 .stage .ring-center span { color: var(--label); font-size: calc(var(--u) * 2); }
-.stage .ring-state { display: flex; flex-direction: column; gap: calc(var(--u) * .3); padding: calc(var(--u) * 1) calc(var(--u) * 1.4); border: 1px solid #2c4a53; border-radius: calc(var(--u) * .8); margin-top: calc(var(--u) * .8); }
+.stage .ring-state { position: relative; display: flex; flex-direction: column; gap: calc(var(--u) * .3); padding: calc(var(--u) * 1) calc(var(--u) * 1.4); border: 1px solid #2c4a53; border-radius: calc(var(--u) * .8); margin-top: calc(var(--u) * .8); }
+.stage .ring-state.open strong::before { content: "▲ "; }
+.stage .ring-ack { font-style: normal; font-weight: 700; font-size: calc(var(--u) * 1.7); }
+/* Moldura do alarme POR DENTRO da caixa (por fora, o overflow do instrumento cortava a borda direita). */
+.stage .rule-ring[data-alarm] .ring-state::after { content: ""; position: absolute; inset: calc(var(--u) * .35); border: 2px solid rgb(255 255 255 / .9); border-radius: calc(var(--u) * .5); pointer-events: none; opacity: .9; }
+.stage .rule-ring[data-alarm] .ring-state.blocked::after { border-color: var(--danger); }
+.stage .rule-ring[data-alarm="pulse"] .ring-state::after { animation: stg-alarm 1s ease-in-out infinite alternate; }
 .stage .ring-state strong { font-family: var(--numf); font-size: calc(var(--u) * 2.5); font-weight: 800; letter-spacing: .06em; }
 .stage .ring-state span { font-size: calc(var(--u) * 1.8); }
 .stage .ring-state.idle span, .stage .ring-state.broken span { color: var(--label); }
@@ -193,7 +230,7 @@
 .stage .feed-pulse { display: flex; align-items: center; gap: calc(var(--u) * .7); flex-wrap: wrap; color: var(--label); font-size: calc(var(--u) * 1.8); padding-bottom: calc(var(--u) * .7); border-bottom: 1px dashed var(--line); }
 .stage .feed-pulse .num { color: var(--ink); font-weight: 800; }
 .stage .feed-pulse i { width: calc(var(--u) * 1); height: calc(var(--u) * 1); border-radius: 50%; background: var(--data); }
-.stage .feed-list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: hidden; }
+.stage .feed-list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: hidden; mask-image: linear-gradient(to bottom, #000 80%, transparent); }
 .stage .feed-line { position: relative; display: grid; grid-template-columns: auto calc(var(--u) * 2.4) minmax(0, 1fr) auto; gap: calc(var(--u) * .9); align-items: start; padding: calc(var(--u) * .7) 0; border-bottom: 1px solid var(--line-2); animation: stg-enter 200ms ease-out; }
 .stage .feed-line::before { content: ""; position: absolute; inset: 0; background: var(--data); opacity: 0; animation: stg-flash 1.2s ease-out; pointer-events: none; }
 .stage .feed-line time { color: var(--label); font-size: calc(var(--u) * 1.7); padding-top: .1em; }
@@ -231,6 +268,18 @@
 @keyframes stg-flash { from { opacity: .18; } to { opacity: 0; } }
 @keyframes stg-rise { from { transform: translateY(calc(var(--u) * 1.2)); opacity: .6; } to { transform: none; opacity: 1; } }
 @keyframes stg-fade { from { opacity: 0; } to { opacity: 1; } }
+/* 1 s em alternate = um ciclo a cada 2 s (0,5 Hz): bem abaixo do limite de 3 flashes/s da WCAG 2.3.1. */
+@keyframes stg-alarm { from { opacity: .22; } to { opacity: .95; } }
+@keyframes stg-dg-in { from { transform: translateY(-.32em); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes stg-dg-out { from { transform: none; opacity: 1; } to { transform: translateY(.32em); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .stage *, .stage *::before, .stage *::after { animation: none !important; transition: none !important; }
+  /* Sem a animação de saída, o dígito anterior ficaria parado por cima do novo: troca seca, sem ::before. */
+  .stage .dg.on::before { content: none; }
 }
+
+/* Tecla P (WCAG 2.2.2) — no FIM do arquivo e com !important: vence as regras de pulso do alarme (mesma especificidade
+   ou maior) e para TODA animação e transição de CSS da Sala; o alarme fica fixo e visível. O dígito anterior não pode
+   ficar parado por cima do novo. O que anda em JS (água, faixa, viagem do pacote, FLIP, 3D) recebe `still`. */
+.stage[data-paused] *, .stage[data-paused] *::before, .stage[data-paused] *::after { animation: none !important; transition: none !important; }
+.stage[data-paused] .dg.on::before { content: none; }

@@ -4,14 +4,15 @@ import { connectLive, type LiveConnState } from "@/lib/live-client";
 import type { LiveEventType } from "@/modules/realtime/domain/live-event";
 import type { StageSnapshot } from "@/modules/analytics/application/get-stage-snapshot";
 import {
-  RULE_STALE_MS, STRIP_WINDOW_MS, clockBR, fixedBR, hourMinBR, kgNumBR, originSeal, pickFocus, pipeTone, ringView, scaleView, secondsSince, sensorSeal,
+  RULE_STALE_MS, STRIP_WINDOW_MS, alarmMode, twinSimulated, clockBR, fixedBR, hourMinBR, kgNumBR, originSeal, pickFocus, pipeTone, ringView, scaleView, secondsSince, sensorSeal,
   settleRefresh, temperatureView, tripView, type RefreshGate, type StripPoint,
 } from "./stage-logic";
+import { Digits } from "./digits";
 import { activeOccurrences, flowOccurrenceFor, initModel, lastReadingByDevice, latestLive, packets, reduceStage, serverNow } from "./stage-model";
-import { useIdleCursor, useReducedMotion, useStageKeys } from "./hooks";
+import { useIdleCursor, useReducedMotion, useStageKeys, useTwinFlag } from "./hooks";
 import { CounterSeal, GlobalSeal, Seal, SourceSeal } from "./seal";
 import { FlowStrip } from "./flow-strip";
-import { PipeTwin } from "./pipe-twin";
+import { TwinSlot } from "./twin-slot";
 import { RuleRing } from "./rule-ring";
 import { ScalePanel, TemperaturePanel } from "./sensors";
 import { EventFeed } from "./event-feed";
@@ -23,21 +24,39 @@ const CONN_LABEL: Record<LiveConnState, string> = { connecting: "Conectando", li
 const SEVERITY: Record<string, string> = { LOW: "baixa", MEDIUM: "média", HIGH: "alta", CRITICAL: "crítica" };
 const STATUS: Record<string, string> = { OPEN: "aberta", ACKNOWLEDGED: "assumida" };
 
-type Props = { initial: StageSnapshot | null; initialError: "not-seeded" | "database" | null; pinnedCode: string | null };
+type Props = {
+  initial: StageSnapshot | null; initialError: "not-seeded" | "database" | null; pinnedCode: string | null;
+  /** `?3d=1` liga e `?3d=0` desliga o gêmeo 3D; null = vale o que ficou gravado (padrão: desligado). */
+  initial3d?: boolean | null;
+  /** `?atalhos=0` desliga os atalhos de uma tecla (F, P, 3, D): WCAG 2.1.4. */
+  shortcuts?: boolean;
+};
 
 /**
  * Sala ao vivo: tela de palco (só para ver). Snapshot do servidor + stream SSE; com o stream fora, consulta o snapshot
  * a cada 5 s e diz isso na tela. Nenhum número nasce aqui: tudo vem do banco, da regra ou do canal ao vivo, com a origem.
  */
-export function LiveStage({ initial, initialError, pinnedCode }: Props) {
+export function LiveStage({ initial, initialError, pinnedCode, initial3d = null, shortcuts = true }: Props) {
   const [model, dispatch] = useReducer(reduceStage, initial, initModel);
   const [conn, setConn] = useState<LiveConnState>("connecting");
   const [lostAt, setLostAt] = useState<number | null>(null);
   const [snapError, setSnapError] = useState<string | null>(initialError === "not-seeded" ? "Base não preparada: execute pnpm db:seed." : initialError ? "Banco de dados indisponível." : null);
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  // Região viva sempre montada: anuncia a pausa e a retomada (uma região inserida já com texto costuma não ser lida).
+  const [pauseMsg, setPauseMsg] = useState("");
+  const [diag, setDiag] = useState(false);
+  const [want3d, toggle3d] = useTwinFlag(initial3d);
   const reduced = useReducedMotion();
   const idle = useIdleCursor(3000);
-  useStageKeys();
+  const togglePause = () => {
+    const next = !paused;
+    setPaused(next);
+    setPauseMsg(next ? "Movimento pausado. Números, feed e relógio seguem ao vivo. Tecla P retoma." : "Movimento retomado.");
+  };
+  useStageKeys({ onPause: togglePause, onToggle3d: toggle3d, onDiag: () => setDiag(d => !d) }, shortcuts);
+  // Movimento parado (reduzir movimento do sistema ou tecla P): só o desenho para; o dado continua chegando.
+  const still = reduced || paused;
 
   // Snapshot: só a resposta mais nova é aplicada (duas consultas cruzadas não voltam o estado no tempo), e a falha
   // de uma consulta antiga não põe a faixa de erro sobre o sucesso de uma mais nova (mesma guarda, em settleRefresh).
@@ -121,6 +140,16 @@ export function LiveStage({ initial, initialError, pinnedCode }: Props) {
   const counting = ring.state === "CONTANDO" || ring.state === "BLOQUEADO_REGRA_5";
   const run = counting && rule && ring.observed > 0 ? { from: rule.at - rule.observedSeconds * 1000, to: rule.at } : null;
   const flowSeal = lastReading ? sensorSeal("flow", lastReading.source, rule && rule.sequence === lastReading.sequence ? rule.channel : undefined) : null;
+  // Status da ocorrência de fluxo do sensor em foco (OPEN pisca, ACKNOWLEDGED fixo). Sem snapshot ainda = acabou de abrir.
+  const flowOccStatus = flowOcc ? active.find(o => o.id === flowOcc.id)?.status ?? null : null;
+  const alarm = alarmMode(ring.state, flowOccStatus, ring.foreign);
+  // Carimbo do gêmeo: leitura em foco simulada OU alarme aceso por ocorrência simulada (alarme simulado nunca parece real).
+  const flowSim = twinSimulated(flowSeal?.simulated ?? false, alarm, flowOcc?.source);
+  // Pulso do gêmeo: muda a cada leitura GRAVADA do sensor em foco (chave bootId:sequence). Vem das leituras do modelo, que o
+  // sensor.live (temperatura/peso, mesma mensagem da bancada e do MQTT) não sobrescreve; o "último pacote" sobrescrevia.
+  const pulseKey = lastReading ? `${lastReading.bootId}:${lastReading.sequence}` : null;
+  // A legenda do pulso só aparece quando ele pode disparar: sem movimento ou sem stream, a falta de pulso não diz nada.
+  const pulseOn = !still && conn === "live";
 
   const temp = latestLive(model.temperature, nextFocus);
   const tempView = temp ? temperatureView(temp, refNow) : null;
@@ -134,13 +163,15 @@ export function LiveStage({ initial, initialError, pinnedCode }: Props) {
   const lostFor = lostAt !== null && model.clientNow !== null ? secondsSince(lostAt, model.clientNow) : null;
   const unit = snap ? [snap.organization.name, snap.organization.city].filter(Boolean).join(" · ") : "—";
 
-  return <main className="stage" data-stage="" data-live-state={conn} data-signal={lost ? "lost" : "ok"} data-idle={idle ? "" : undefined} data-reduced={reduced ? "" : undefined}>
+  return <main className="stage" data-stage="" data-live-state={conn} data-signal={lost ? "lost" : "ok"} data-idle={idle ? "" : undefined} data-reduced={reduced ? "" : undefined} data-paused={paused ? "" : undefined}>
     <header className="stage-head">
       <div className="brand-stage">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 29 28H3Z" fill="none" stroke="#3fd0a7" strokeWidth="2.6" strokeLinejoin="round" /><path d="M16 13 22 24H10Z" fill="#3fd0a7" opacity=".85" /></svg>
         <b>RICHARDS</b><span>Sala ao vivo</span>
       </div>
       <span className="unit">{unit}</span>
+      {paused && <span className="paused-pill" aria-hidden="true">⏸ MOVIMENTO PAUSADO · P retoma · números seguem ao vivo</span>}
+      <span className="sr-only" role="status">{pauseMsg}</span>
       <time className="clock num" aria-label="Hora de São Paulo">{now !== null ? clockBR(now) : "--:--:--"}</time>
       <span className={`conn ${conn}`} role="status"><i key={model.pulse} className={model.pulse ? "beat" : ""} aria-hidden="true" />{CONN_LABEL[conn]}{conn === "down" ? " · consulta a cada 5 s" : ""}</span>
       <GlobalSeal seal={seal} />
@@ -162,7 +193,7 @@ export function LiveStage({ initial, initialError, pinnedCode }: Props) {
         </header>
         <div className="flow-top">
           <div className={`flow-number${fresh ? "" : " stale"}`}>
-            <b className="num huge">{lastReading ? fixedBR(lastReading.flowLpm, 2) : "—"}</b>
+            <b className="num huge"><Digits text={lastReading ? fixedBR(lastReading.flowLpm, 2) : "—"} /></b>
             <span className="unit-lpm">L/min</span>
             <p className="flow-meta">
               {!lastReading ? "aguardando leitura" : now === null ? " "
@@ -170,19 +201,20 @@ export function LiveStage({ initial, initialError, pinnedCode }: Props) {
             </p>
             <p className="flow-note">observado ≠ economizado · suspeita ≠ vazamento comprovado</p>
           </div>
-          <figure className="twin">
-            <PipeTwin flowLpm={fresh && lastReading ? lastReading.flowLpm : null} tone={pipeTone(ring.state, ring.foreign)} reduced={reduced} />
-            <span className="twin-note">representação esquemática</span>
+          <figure className="twin" data-alarm={alarm ?? undefined} data-sim={flowSim ? "" : undefined}>
+            <TwinSlot flowLpm={fresh && lastReading ? lastReading.flowLpm : null} tone={pipeTone(ring.state, ring.foreign)} simulated={flowSim} live={fresh}
+              pulseKey={pulseKey} still={still} reduced={reduced} want3d={want3d} diag={diag} />
+            <span className="twin-note">representação esquemática{pulseOn ? " · pulso no medidor = leitura gravada" : paused ? " · movimento pausado (P)" : ""}</span>
             <figcaption>
               {focus && <span className="twin-tag"><span className="mono">{lastReading && fresh ? `${fixedBR(lastReading.flowLpm, 2)} L/min` : "sem leitura recente"}</span>{flowSeal && <Seal label={flowSeal.label} simulated={flowSeal.simulated} small />}</span>}
             </figcaption>
           </figure>
         </div>
-        <FlowStrip points={points} minFlowLpm={focus?.minFlowLpm ?? 1.5} anchorMs={model.anchorMs} offsetMs={model.offsetMs} nowMs={now} run={run} lost={lost} reduced={reduced} />
+        <FlowStrip points={points} minFlowLpm={focus?.minFlowLpm ?? 1.5} anchorMs={model.anchorMs} offsetMs={model.offsetMs} nowMs={now} run={run} lost={lost} reduced={still} />
         <p className="strip-legend"><i className="lg solid" /> sensor <i className="lg dash" /> simulado <i className="lg thr" /> limiar de {fixedBR(focus?.minFlowLpm ?? 1.5, 1)} L/min do dispositivo · janela de {STRIP_WINDOW_MS / 1000} s · sem amostra = sem linha</p>
       </section>
 
-      <RuleRing view={ring} deviceCode={focus?.code ?? null} />
+      <RuleRing view={ring} deviceCode={focus?.code ?? null} alarm={alarm} />
 
       <TemperaturePanel t={temp} view={tempView} occurrence={tempOcc} nowMs={now} />
       <ScalePanel s={scale} view={scaleV} nowMs={now} />
@@ -190,9 +222,9 @@ export function LiveStage({ initial, initialError, pinnedCode }: Props) {
       <section className="inst today" aria-labelledby="stg-today-title">
         <header className="inst-head"><h2 id="stg-today-title">Hoje</h2>{snap && <span className="inst-code">desde 00:00</span>}</header>
         {!snap ? <p className="waiting">sem dados do servidor</p> : <>
-          <div className="count"><b className="num">{kgNumBR(snap.today.deliveredKg.value)}<small> kg</small></b><span>entregues hoje (recebimento) <CounterSeal provenance={snap.today.deliveredKg.provenance} /></span></div>
-          <div className="count"><b className="num">{snap.today.pendingReview.value}</b><span>{snap.today.pendingReview.value === 1 ? "lote aguardando" : "lotes aguardando"} verificação humana <CounterSeal provenance={snap.today.pendingReview.provenance} /></span></div>
-          <div className="count"><b className="num">{snap.today.activeOccurrences.value}</b><span>{snap.today.activeOccurrences.value === 1 ? "ocorrência ativa" : "ocorrências ativas"} <CounterSeal provenance={snap.today.activeOccurrences.provenance} /></span></div>
+          <div className="count"><b className="num"><Digits text={kgNumBR(snap.today.deliveredKg.value)} /><small> kg</small></b><span>entregues hoje (recebimento) <CounterSeal provenance={snap.today.deliveredKg.provenance} /></span></div>
+          <div className="count"><b className="num"><Digits text={String(snap.today.pendingReview.value)} /></b><span>{snap.today.pendingReview.value === 1 ? "lote aguardando" : "lotes aguardando"} verificação humana <CounterSeal provenance={snap.today.pendingReview.provenance} /></span></div>
+          <div className="count"><b className="num"><Digits text={String(snap.today.activeOccurrences.value)} /></b><span>{snap.today.activeOccurrences.value === 1 ? "ocorrência ativa" : "ocorrências ativas"} <CounterSeal provenance={snap.today.activeOccurrences.provenance} /></span></div>
           {active[0] && <p className={`occ-latest ${active[0].status === "OPEN" ? "open" : "ack"}`}>
             {/* Origem da ocorrência em destaque: com o contador MISTO, só o selo dela diz se ela é simulada. */}
             <strong><SourceSeal source={active[0].source} />{active[0].title}</strong>
@@ -201,10 +233,10 @@ export function LiveStage({ initial, initialError, pinnedCode }: Props) {
         </>}
       </section>
 
-      <EventFeed lines={model.feed} readingCount={model.readingCount} lastReadingAt={model.lastReadingAt} nowMs={now} pulse={model.pulse} />
+      <EventFeed lines={model.feed} readingCount={model.readingCount} lastReadingAt={model.lastReadingAt} nowMs={now} pulse={model.pulse} still={still} />
 
-      <PacketTrip trip={model.trip} view={trip} reduced={reduced} />
+      <PacketTrip trip={model.trip} view={trip} reduced={still} />
     </div>
-    <p className="stage-keys" aria-hidden="true">F tela cheia · Esc sai</p>
+    {shortcuts && <p className="stage-keys">Teclas: F tela cheia · P pausa o movimento · 3 gêmeo 3D · D diagnóstico · Esc sai</p>}
   </main>;
 }

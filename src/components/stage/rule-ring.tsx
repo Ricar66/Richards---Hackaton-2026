@@ -1,4 +1,4 @@
-import { clockBR, type RingView } from "./stage-logic";
+import { clockBR, type AlarmMode, type RingView } from "./stage-logic";
 import { BadgeSeal } from "./seal";
 
 const STATE_CLASS: Record<RingView["state"], string> = {
@@ -8,12 +8,14 @@ const STATE_CLASS: Record<RingView["state"], string> = {
 /**
  * Anel da regra de fluxo: um traço por segundo (até 60), aceso pelos segundos DECIDIDOS pela FlowAlertPolicy na última
  * leitura. Só a opacidade dos traços muda (nada de progresso animado entre leituras).
+ * `alarm` (ISA-18.2): "pulse" enquanto a ocorrência do sensor está aberta e ninguém assumiu (pisca a no máximo 1 Hz),
+ * "steady" depois de assumida. Forma (▲) e texto acompanham a cor; nunca se diz "vazamento".
  */
-export function RuleRing({ view, deviceCode }: { view: RingView; deviceCode: string | null }) {
+export function RuleRing({ view, deviceCode, alarm }: { view: RingView; deviceCode: string | null; alarm: AlarmMode }) {
   const n = Math.max(1, Math.min(60, view.limit));
   const lit = view.state === "OCORRENCIA_ABERTA" ? n : Math.floor(view.fraction * n + 1e-9);
   const cls = STATE_CLASS[view.state];
-  return <section className={`inst rule-ring rr-${cls}`} aria-labelledby="stg-ring-title">
+  return <section className={`inst rule-ring rr-${cls}`} data-alarm={alarm ?? undefined} aria-labelledby="stg-ring-title">
     <header className="inst-head">
       <h2 id="stg-ring-title">Regra · fluxo contínuo</h2>
       {deviceCode && <span className="inst-code">{deviceCode}</span>}
@@ -34,6 +36,7 @@ export function RuleRing({ view, deviceCode }: { view: RingView; deviceCode: str
     <div className={`ring-state ${cls}`}>
       <strong>{view.label}</strong>
       <span>{view.detail}</span>
+      {alarm && <em className="ring-ack">{alarm === "pulse" ? "▲ suspeita · ainda não assumida por um operador" : "assumida por um operador · alarme reconhecido"}</em>}
     </div>
     <p className="ring-rule">{view.rule}</p>
     {view.decidedAt !== null && <p className="ring-decided">decidido pela regra na leitura das <span className="mono">{clockBR(view.decidedAt)}</span></p>}

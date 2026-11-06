@@ -23,11 +23,48 @@ export function useIdleCursor(ms = 3000) {
   return idle;
 }
 
-/** F alterna tela cheia; Esc sai (o navegador também sai sozinho). */
-export function useStageKeys() {
+/** Teclas da Sala além de F/Esc. Cada handler é opcional; a referência pode mudar a cada render. */
+export type StageKeyHandlers = { onPause?: () => void; onToggle3d?: () => void; onDiag?: () => void };
+
+const TWIN_KEY = "richards.sala.3d";
+const twinListeners = new Set<() => void>();
+function readTwinFlag(): boolean | null {
+  try { const v = window.localStorage.getItem(TWIN_KEY); return v === "1" ? true : v === "0" ? false : null; } catch { return null; }
+}
+/**
+ * Chave do gêmeo 3D. Prioridade: a tecla 3 nesta sessão > `?3d=1` / `?3d=0` > o que ficou gravado neste navegador >
+ * DESLIGADO. A tecla grava a escolha (localStorage em try/catch: aba privada ou bloqueio não quebram a Sala).
+ */
+export function useTwinFlag(urlFlag: boolean | null): [boolean, () => void] {
+  const stored = useSyncExternalStore(
+    cb => { twinListeners.add(cb); window.addEventListener("storage", cb); return () => { twinListeners.delete(cb); window.removeEventListener("storage", cb); }; },
+    readTwinFlag,
+    () => null,
+  );
+  const [override, setOverride] = useState<boolean | null>(null);
+  const flag = override ?? urlFlag ?? stored ?? false;
+  const toggle = () => {
+    const next = !flag;
+    setOverride(next);
+    try { window.localStorage.setItem(TWIN_KEY, next ? "1" : "0"); } catch { /* sem armazenamento: vale só nesta aba */ }
+    twinListeners.forEach(l => l());
+  };
+  return [flag, toggle];
+}
+
+/**
+ * F alterna tela cheia; Esc sai (o navegador também sai sozinho). P pausa e retoma o movimento (WCAG 2.2.2):
+ * água, rolagem da faixa e viagem do pacote param; números, feed e relógio seguem o servidor.
+ * 3 liga e desliga o gêmeo 3D; D mostra o diagnóstico do gêmeo (modo, motivo, renderizador, quadro).
+ */
+export function useStageKeys(handlers: StageKeyHandlers = {}, enabled = true) {
+  const saved = useRef(handlers);
+  useEffect(() => { saved.current = handlers; });
   useEffect(() => {
+    // `?atalhos=0` (WCAG 2.1.4): atalhos de uma tecla desligados; tela cheia pelo F11 do navegador.
+    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
       if (e.key === "f" || e.key === "F") {
@@ -35,10 +72,13 @@ export function useStageKeys() {
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
         else void document.documentElement.requestFullscreen?.().catch(() => {});
       } else if (e.key === "Escape" && document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      else if ((e.key === "p" || e.key === "P") && saved.current.onPause) { e.preventDefault(); saved.current.onPause(); }
+      else if (e.key === "3" && saved.current.onToggle3d) { e.preventDefault(); saved.current.onToggle3d(); }
+      else if ((e.key === "d" || e.key === "D") && saved.current.onDiag) { e.preventDefault(); saved.current.onDiag(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [enabled]);
 }
 
 /** Tamanho em px do elemento (o SVG da faixa desenha em px reais: círculo redondo e traço nítido). */

@@ -174,6 +174,113 @@ export const pipeTone = (s: RingState, foreign = false): PipeTone => {
   return s === "OCORRENCIA_ABERTA" || s === "BLOQUEADO_REGRA_5" ? "danger" : s === "CONTANDO" ? "warn" : "ok";
 };
 
+// ---------- gêmeo: água, alarme e dígitos (o SVG e o 3D usam as MESMAS funções e não podem divergir) ----------
+/** Água do gêmeo: unidades do desenho por segundo para cada L/min MEDIDO. Sem leitura recente, zero ou negativo = parada. */
+export const WATER_PER_LPM = 30;
+export const WATER_MAX_SPEED = 260;
+export function waterSpeed(flowLpm: number | null): number {
+  return flowLpm !== null && Number.isFinite(flowLpm) && flowLpm > 0 ? Math.min(WATER_MAX_SPEED, flowLpm * WATER_PER_LPM) : 0;
+}
+/**
+ * Fase da água acumulada quadro a quadro (velocidade × dt, com dt limitado a 0,1 s), em módulo do período.
+ * Nunca calcula tempo total × velocidade: quando a vazão muda, a água muda de ritmo sem saltar de posição.
+ */
+export function advancePhase(phase: number, speed: number, dt: number, period: number): number {
+  if (!(period > 0)) return 0;
+  const step = speed * Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
+  return (((phase + step) % period) + period) % period;
+}
+
+/** Alarme do cano e do anel no padrão ISA-18.2: pisca enquanto ninguém assumiu, fica fixo depois de assumido. */
+export type AlarmMode = "pulse" | "steady" | null;
+/**
+ * `status` é o da ocorrência de fluxo ativa do sensor em foco (null = ainda sem snapshot: acabou de abrir, então OPEN).
+ * Ocorrência de OUTRA origem (`foreign`) não acende o cano: o selo dela fica no anel.
+ */
+export function alarmMode(state: RingState, status: string | null, foreign: boolean): AlarmMode {
+  if (foreign || (state !== "OCORRENCIA_ABERTA" && state !== "BLOQUEADO_REGRA_5")) return null;
+  return status === "ACKNOWLEDGED" ? "steady" : "pulse";
+}
+
+/**
+ * O gêmeo leva o carimbo de simulado quando a leitura em foco é simulada OU quando o alarme que ele acende vem de uma
+ * ocorrência simulada (ex.: a do seed aberta e nenhuma leitura recente): alarme de dado simulado nunca parece real.
+ */
+export function twinSimulated(readingSimulated: boolean, alarm: AlarmMode, occurrenceSource: LiveSource | null | undefined): boolean {
+  return readingSimulated || (alarm !== null && occurrenceSource === "SIMULATED");
+}
+
+/** Uma posição do número formatado: o caractere atual, o anterior na MESMA posição (alinhado à direita) e se mudou. */
+export type DigitCell = { ch: string; prev: string | null; changed: boolean };
+/**
+ * Troca de dígito sem valor intermediário: só a posição que mudou anima, saindo o caractere anterior e entrando o novo.
+ * Alinhado à direita (1,85 → 12,40 compara centésimo com centésimo). `prev` null = primeiro valor, nada anima.
+ */
+export function digitCells(prev: string | null, next: string): DigitCell[] {
+  const chars = [...next], before = prev === null ? null : [...prev];
+  return chars.map((ch, i) => {
+    if (before === null) return { ch, prev: null, changed: false };
+    const old = before[before.length - (chars.length - i)] ?? null;
+    return { ch, prev: old, changed: old !== ch };
+  });
+}
+
+// ---------- gêmeo 3D: quando ligar e quando voltar ao SVG (o SVG está sempre montado por baixo) ----------
+/** Motivo de o gêmeo estar no SVG. "off" é o padrão (chave desligada). */
+export type TwinReason = "off" | "reduced" | "no-webgl" | "software" | "error" | "lost" | "budget";
+/** Renderizador por software (WARP, SwiftShader, llvmpipe): o WebGL "existe", mas a 24 fps. Fica no SVG. */
+export const SOFTWARE_RENDERER = /SwiftShader|Basic Render|llvmpipe|softpipe/i;
+export type TwinProbe = { webgl2: boolean; caveatOk: boolean; renderer: string | null };
+/** Ordem da cadeia de reserva: chave desligada vence; depois reduzir movimento; depois sem WebGL2; depois software. */
+export function twinCapability(i: TwinProbe & { flag: boolean; reduced: boolean }): "ok" | TwinReason {
+  if (!i.flag) return "off";
+  if (i.reduced) return "reduced";
+  if (!i.webgl2) return "no-webgl";
+  if (!i.caveatOk || (i.renderer !== null && SOFTWARE_RENDERER.test(i.renderer))) return "software";
+  return "ok";
+}
+
+/** Orçamento de quadro do 3D: nível 0 = DPR até 1,5; 1 = DPR 1; 2 = desiste e volta ao SVG. Só desce (não oscila). */
+export const BUDGET_WARMUP_MS = 1000;
+export const BUDGET_SLOW_MS = 20;
+export const BUDGET_HOLD_MS = 3000;
+/** Tela de 30 Hz (ou navegador limitado a 30 fps): o limite passa a ser 24 fps, não 50. */
+export const BUDGET_SLOW_30HZ_MS = 41.7;
+/**
+ * `baseMs` é a cadência medida no aquecimento (mediana do intervalo do rAF). O intervalo do rAF mede a cadência da TELA,
+ * não o custo do quadro: numa tela ou num navegador a 30 Hz a mediana já nasce em ~33 ms, e um limite fixo de 20 ms
+ * derrubaria o 3D com a GPU ociosa.
+ */
+export type BudgetState = { level: 0 | 1 | 2; startedAt: number; slowSince: number | null; baseMs: number | null };
+export const budgetStart = (nowMs: number): BudgetState => ({ level: 0, startedAt: nowMs, slowSince: null, baseMs: null });
+/** Laço retomado (pausa, aba oculta, vazão zerada): aquece e mede a cadência de novo, sem perder o nível já baixado. */
+export const budgetRestart = (s: BudgetState, nowMs: number): BudgetState => ({ ...s, startedAt: nowMs, slowSince: null, baseMs: null });
+/** Limite do quadro conforme a cadência: ~60 Hz → 20 ms; ~30 Hz → 41,7 ms; já lento no aquecimento (> 36 ms) → 20 ms. */
+export const budgetLimit = (baseMs: number | null) => (baseMs !== null && baseMs > 22 && baseMs <= 36 ? BUDGET_SLOW_30HZ_MS : BUDGET_SLOW_MS);
+/**
+ * Um passo do monitor: no fim do aquecimento grava a cadência-base; depois, com a mediana do quadro acima do limite por
+ * 3 s seguidos, desce um nível e aquece de novo. Mediana boa zera a contagem.
+ */
+export function frameBudgetStep(s: BudgetState, nowMs: number, medianFrameMs: number): BudgetState {
+  if (s.level === 2 || !Number.isFinite(medianFrameMs)) return s;
+  if (nowMs - s.startedAt < BUDGET_WARMUP_MS) return s;
+  if (s.baseMs === null) return { ...s, baseMs: medianFrameMs };
+  if (medianFrameMs <= budgetLimit(s.baseMs)) return s.slowSince === null ? s : { ...s, slowSince: null };
+  if (s.slowSince === null) return { ...s, slowSince: nowMs };
+  if (nowMs - s.slowSince < BUDGET_HOLD_MS) return s;
+  return { level: (s.level + 1) as 1 | 2, startedAt: nowMs, slowSince: null, baseMs: null };
+}
+export function median(values: readonly number[]): number {
+  if (!values.length) return Number.NaN;
+  const s = [...values].sort((a, b) => a - b), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** Perda de contexto WebGL: a 1ª remonta o 3D num canvas novo; 2 perdas em 60 s = SVG até recarregar a página. */
+export function contextLossPolicy(lossTimes: readonly number[], nowMs: number, windowMs = 60_000): "remount" | "stay-svg" {
+  return lossTimes.filter(t => nowMs - t <= windowMs && t <= nowMs).length >= 2 ? "stay-svg" : "remount";
+}
+
 // ---------- faixa da vazão ----------
 export type StripPoint = { t: number; v: number; source: LiveSource };
 /**

@@ -9,11 +9,15 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 /**
  * Tela de palco. O primeiro quadro já sai com o snapshot do servidor; banco fora não derruba a página:
  * a Sala abre dizendo que não há dado e continua tentando (nunca mostra número de enfeite).
- * `?dispositivo=CODIGO` fixa o sensor da vazão.
+ * `?dispositivo=CODIGO` fixa o sensor da vazão. `?3d=1` liga e `?3d=0` desliga o gêmeo 3D (padrão: desligado;
+ * a tecla 3 alterna na hora). `?atalhos=0` desliga os atalhos de uma tecla (F, P, 3, D).
  */
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
-  const raw = (await searchParams).dispositivo;
+  const sp = await searchParams;
+  const raw = sp.dispositivo;
   const pinned = typeof raw === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(raw) ? raw : null;
+  const initial3d = sp["3d"] === "1" ? true : sp["3d"] === "0" ? false : null;
+  const shortcuts = sp.atalhos !== "0";
   let initial: StageSnapshot | null = null;
   let error: "not-seeded" | "database" | null = null;
   try { initial = await getStageSnapshot(); }
@@ -21,5 +25,5 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
     error = e instanceof OverviewNotSeededError ? "not-seeded" : "database";
     if (error === "database") console.error("sala ao vivo", e);
   }
-  return <LiveStage initial={initial} initialError={error} pinnedCode={pinned} />;
+  return <LiveStage initial={initial} initialError={error} pinnedCode={pinned} initial3d={initial3d} shortcuts={shortcuts} />;
 }

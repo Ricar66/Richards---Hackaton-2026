@@ -1,3 +1,6 @@
+"use client";
+import { useRef } from "react";
+import { useFlip } from "@/lib/use-flip";
 import { clockBR, secondsSince, type FeedLine, type FeedTone } from "./stage-logic";
 
 const GLYPH: Record<FeedTone, string> = { danger: "▲", warn: "◔", ok: "✓", info: "◆", muted: "○" };
@@ -7,7 +10,10 @@ const SOURCE: Record<string, [string, string]> = { DEVICE: ["SENSOR", "real"], S
  * Feed da sessão, mais novo no topo. Leitura não vira linha: fica o pulso ("N leituras nesta sessão · última há X s").
  * Ganham linha só fatos: regra contou/zerou, ocorrência e lote mudaram, mensagem descartada, dispositivo calado.
  */
-export function EventFeed({ lines, readingCount, lastReadingAt, nowMs, pulse }: { lines: FeedLine[]; readingCount: number; lastReadingAt: number | null; nowMs: number | null; pulse: number }) {
+export function EventFeed({ lines, readingCount, lastReadingAt, nowMs, pulse, still = false }: { lines: FeedLine[]; readingCount: number; lastReadingAt: number | null; nowMs: number | null; pulse: number; still?: boolean }) {
+  const list = useRef<HTMLOListElement>(null);
+  // As linhas antigas deslizam para baixo quando entra uma nova (FLIP); parado (reduzir movimento ou P) = troca seca.
+  useFlip(list, lines, !still);
   const last = lastReadingAt !== null && nowMs !== null ? secondsSince(lastReadingAt, nowMs) : null;
   return <section className="inst feed" aria-labelledby="stg-feed-title">
     <header className="inst-head"><h2 id="stg-feed-title">Eventos</h2></header>
@@ -16,10 +22,10 @@ export function EventFeed({ lines, readingCount, lastReadingAt, nowMs, pulse }: 
       <span className="num">{readingCount}</span> {readingCount === 1 ? "leitura" : "leituras"} nesta sessão
       {last !== null ? <> · última há <span className="num">{last}</span> s</> : " · aguardando a primeira"}
     </p>
-    <ol className="feed-list">
+    <ol className="feed-list" ref={list}>
       {lines.map(l => {
         const src = l.source ? SOURCE[l.source] : null;
-        return <li key={l.key} className={`feed-line ${l.tone}`}>
+        return <li key={l.key} data-flip={l.key} className={`feed-line ${l.tone}`}>
           <time className="mono">{clockBR(l.at)}</time>
           <span className="glyph" aria-hidden="true">{GLYPH[l.tone]}</span>
           <div><strong>{l.title}</strong><span>{l.detail}</span></div>
