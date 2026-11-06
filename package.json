@@ -21,7 +21,9 @@
     "test:integration": "pnpm test:db && tsx --test --test-concurrency=1 tests/integration/*.test.ts",
     "test:e2e": "node scripts/e2e/run.mjs",
     "simulate": "node scripts/iot-simulator.mjs",
-    "mqtt": "tsx src/iot/run-mqtt.ts"
+    "mqtt": "tsx src/iot/run-mqtt.ts",
+    "bancada": "tsx src/iot/run-bancada-virtual.ts",
+    "palco:checar": "tsx src/iot/run-bancada-virtual.ts --checar"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
