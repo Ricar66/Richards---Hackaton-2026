@@ -1,15 +1,22 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { Area, AreaChart, ResponsiveContainer } from "recharts";
-import { FlaskConical, Info, TrendingDown, TrendingUp } from "lucide-react";
+import { Info, TrendingDown, TrendingUp } from "lucide-react";
 import type { DashboardDTO, Provenance } from "@/modules/analytics/domain/dashboard";
 import { dateBR, numBR } from "@/lib/format";
 import { usePrefersReducedMotion } from "./hooks";
-import { PROVENANCE_LABEL } from "./labels";
+import { useLiveState } from "./live-stream";
+import { PROVENANCE_LABEL, SOURCE_LABEL } from "./labels";
 
 export type Tone = "ok" | "warn" | "info" | "neutral" | "danger" | "sim";
+/** Etiqueta de ESTADO (aberta, entregue, comunicando). Origem do dado não é estado: usa o Seal. */
 export function Tag({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   return <span className={`tag ${tone}`}>{children}</span>;
+}
+
+/** Selo de origem (sensor, simulado, manual): contorno, caixa alta. Roxo só para simulado. */
+export function Seal({ source, children }: { source: string; children?: React.ReactNode }) {
+  const key = source in SOURCE_LABEL ? source as keyof typeof SOURCE_LABEL : null;
+  return <span className={`seal ${source.toLowerCase()}`}>{children ?? (key ? SOURCE_LABEL[key] : source)}</span>;
 }
 
 export function Panel({ eyebrow, title, caption, actions, children, className = "", id }: { eyebrow?: string; title: string; caption?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode; className?: string; id?: string }) {
@@ -43,19 +50,7 @@ export function AnimatedNumber({ value, digits = 1 }: { value: number; digits?: 
   return <span ref={el}>{numBR(value, digits)}</span>;
 }
 
-export function Sparkline({ data, color }: { data: { t: number; v: number | null }[]; color: string }) {
-  if (data.filter(d => d.v !== null).length < 2) return null;
-  return <div className="spark" aria-hidden="true">
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-        <defs><linearGradient id={`sp-${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity={0.22} /><stop offset="1" stopColor={color} stopOpacity={0} /></linearGradient></defs>
-        <Area dataKey="v" type="monotone" stroke={color} strokeWidth={1.6} fill={`url(#sp-${color.slice(1)})`} isAnimationActive={false} connectNulls={false} dot={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  </div>;
-}
-
-/** Variação contra o período anterior — só quando o backend tem base de comparação com cobertura parecida. */
+/** Variação contra o período anterior — só quando o backend tem base de comparação com cobertura parecida. Texto, não pílula. */
 export function Delta({ current, previous, previousSamples, samples, label }: { current: number | null; previous: number | null; previousSamples: number; samples: number; label: string }) {
   if (current === null) return null;
   if (previous === null || previous === 0 || previousSamples < samples * 0.5) return <span className="delta none" title={`Período anterior com ${previousSamples} leitura(s): base insuficiente para comparar.`}>sem base de comparação</span>;
@@ -66,17 +61,21 @@ export function Delta({ current, previous, previousSamples, samples, label }: { 
   </span>;
 }
 
-export function KpiTile({ label, icon, value, digits = 1, unit, empty, accent, foot, children, spark }: {
-  label: string; icon: React.ReactNode; value: number | null; digits?: number; unit?: string; empty?: string; accent: string;
-  foot: React.ReactNode; children?: React.ReactNode; spark?: React.ReactNode;
+/**
+ * Indicador. Sem faixa lateral nem cor por cartão: o valor só ganha cor quando significa estado (`tone`).
+ * `.kpi-value` guarda só número e unidade (o E2E lê esse texto).
+ */
+export function KpiTile({ label, icon, value, digits = 1, unit, empty, tone, foot, children }: {
+  label: string; icon: React.ReactNode; value: number | null; digits?: number; unit?: string; empty?: string; tone?: "warn" | "ok";
+  foot: React.ReactNode; children?: React.ReactNode;
 }) {
-  return <article className="kpi" style={{ "--kpi": accent } as React.CSSProperties}>
-    <div className="kpi-top"><span className="kpi-label">{icon}{label}</span>{children}</div>
+  // A variação (children) fica no rodapé: os números dos quatro cartões ficam na mesma linha.
+  return <article className={`kpi ${tone && value !== null ? tone : ""}`}>
+    <div className="kpi-top"><span className="kpi-label">{icon}{label}</span></div>
     <div className="kpi-mid">
       <div className="kpi-value">{value === null ? <span className="kpi-empty">{empty ?? "sem dados"}</span> : <><AnimatedNumber value={value} digits={digits} />{unit && <small>{unit}</small>}</>}</div>
-      {spark}
     </div>
-    <div className="kpi-foot"><Info size={12} />{foot}</div>
+    <div className="kpi-foot">{children && <div className="kpi-extra">{children}</div>}{foot}</div>
   </article>;
 }
 
@@ -90,7 +89,7 @@ export function ProvenanceBanner({ p }: { p: DashboardDTO["provenance"] }) {
     NONE: "Nenhuma leitura no período e recorte escolhidos. Os indicadores de água ficam vazios em vez de mostrar zero.",
   };
   return <div className={`prov-banner ${p.label.toLowerCase()}`} role="note">
-    <FlaskConical size={15} /><b>{PROVENANCE_LABEL[p.label]}</b><span>{text[p.label]}</span>
+    <b className={`stamp ${p.label.toLowerCase()}`}>{PROVENANCE_LABEL[p.label]}</b><span>{text[p.label]}</span>
   </div>;
 }
 
@@ -103,16 +102,18 @@ export function EmptyState({ title, children, icon }: { title: string; children?
   return <div className="empty"><span className="empty-icon">{icon ?? <Info size={18} />}</span><b>{title}</b>{children && <p>{children}</p>}</div>;
 }
 
+/** Título da tela com o contexto (unidade, sensor) ao lado, na mesma linha: o título fala primeiro, sem rótulo em caixa alta acima. */
 export function PageHeader({ kicker, title, children, actions }: { kicker: string; title: string; children?: React.ReactNode; actions?: React.ReactNode }) {
   return <div className="page-head">
-    <div><span className="kicker">{kicker}</span><h1>{title}</h1>{children && <p>{children}</p>}</div>
+    <div><div className="page-title"><h1>{title}</h1><span className="kicker">{kicker}</span></div>{children && <p>{children}</p>}</div>
     {actions && <div className="page-actions">{actions}</div>}
   </div>;
 }
 
 export function Footnote({ data }: { data: DashboardDTO }) {
+  const state = useLiveState();
   return <footer className="meta-foot">
-    <span>Gerado {dateBR(data.generatedAt)} · consulta automática a cada 15 s</span>
+    <span>Gerado {dateBR(data.generatedAt)} · {state === "live" ? "stream ao vivo: refeito no servidor a cada mudança relevante" : "stream fora: consulta automática a cada 15 s"}</span>
     <span>{data.provenance.samples} leituras · origem: {PROVENANCE_LABEL[data.provenance.label]}</span>
     <span>Volume observado não é economia comprovada · ocorrência não é vazamento confirmado</span>
   </footer>;

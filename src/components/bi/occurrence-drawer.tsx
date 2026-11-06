@@ -4,8 +4,9 @@ import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, Responsiv
 import { CheckCircle2, Eye, X, XCircle } from "lucide-react";
 import type { OccurrenceDetailDTO } from "@/modules/monitoring/application/get-occurrence-detail";
 import { dateBR, numBR, timeBR } from "@/lib/format";
-import { CONNECTIVITY_LABEL, FLOW, KIND_LABEL, SEVERITY_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "./labels";
-import { Tag } from "./primitives";
+import { AXIS_TICK, CHART, CONNECTIVITY_LABEL, FLOW, FLOW_AVG, KIND_LABEL, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_LABEL, STATUS_TONE, TIP_STYLE } from "./labels";
+import { Seal, Tag } from "./primitives";
+import { useLiveVersion } from "./live-stream";
 
 const actionLabel: Record<string, string> = { CREATED: "Ocorrência aberta", ACKNOWLEDGED: "Investigação assumida", RESOLVED: "Resolvida", DISMISSED: "Descartada", COMMUNICATION_RESTORED: "Comunicação restabelecida" };
 const VISIBLE_READINGS = 8;
@@ -28,17 +29,17 @@ function EvidenceChart({ ev }: { ev: NonNullable<OccurrenceDetailDTO["evidence"]
   if (ev.readings.length && ev.followUp.length) rows[ev.readings.length - 1].depois = rows[ev.readings.length - 1].janela;
   const ws = new Date(ev.windowStart).getTime(), we = new Date(ev.windowEnd).getTime();
   return <figure className="evidence-chart" aria-label="Vazão das leituras de evidência">
-    <div className="mini-legend"><span><i style={{ background: FLOW }} />Janela avaliada pela regra</span>{ev.followUp.length > 0 && <span><i style={{ background: "#9aabaf" }} />Depois da abertura</span>}{ev.rule && <span><i className="dash" />Limiar {numBR(ev.rule.minFlowLpm, 2)} L/min</span>}</div>
+    <div className="mini-legend"><span><i style={{ background: FLOW }} />Janela avaliada pela regra</span>{ev.followUp.length > 0 && <span><i style={{ background: FLOW_AVG }} />Depois da abertura</span>}{ev.rule && <span><i className="dash" />Limiar {numBR(ev.rule.minFlowLpm, 2)} L/min</span>}</div>
     <ResponsiveContainer width="100%" height={170}>
       <LineChart data={rows} margin={{ top: 8, right: 10, bottom: 0, left: -18 }}>
-        <CartesianGrid stroke="#eef2f1" vertical={false} />
-        <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={t => timeBR(new Date(t)).slice(0, 5)} tick={{ fontSize: 10, fill: "#7a8d92" }} axisLine={false} tickLine={false} minTickGap={30} />
-        <YAxis tick={{ fontSize: 10, fill: "#7a8d92" }} axisLine={false} tickLine={false} width={44} tickFormatter={v => numBR(v, 1)} />
-        <ReferenceArea x1={ws} x2={we} fill={FLOW} fillOpacity={0.07} />
-        {ev.rule && <ReferenceLine y={ev.rule.minFlowLpm} stroke="#cf7a12" strokeDasharray="5 4" />}
-        <Tooltip labelFormatter={t => timeBR(new Date(Number(t)))} formatter={(v, n) => [`${numBR(Number(v), 2)} L/min`, n === "janela" ? "Na janela" : "Depois"]} contentStyle={{ borderRadius: 10, border: "1px solid #e3e9e7", fontSize: 12 }} />
-        <Line dataKey="janela" stroke={FLOW} strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} connectNulls={false} />
-        <Line dataKey="depois" stroke="#9aabaf" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} connectNulls={false} />
+        <CartesianGrid stroke={CHART.grid} vertical={false} />
+        <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={t => timeBR(new Date(t)).slice(0, 5)} tick={AXIS_TICK} axisLine={false} tickLine={false} minTickGap={30} />
+        <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} tickFormatter={v => numBR(v, 1)} />
+        <ReferenceArea x1={ws} x2={we} fill={FLOW} fillOpacity={0.1} />
+        {ev.rule && <ReferenceLine y={ev.rule.minFlowLpm} stroke={CHART.threshold} strokeDasharray="5 4" />}
+        <Tooltip labelFormatter={t => timeBR(new Date(Number(t)))} formatter={(v, n) => [`${numBR(Number(v), 2)} L/min`, n === "janela" ? "Na janela" : "Depois"]} contentStyle={TIP_STYLE} />
+        <Line dataKey="janela" stroke={FLOW} strokeWidth={2} dot={{ r: 2.5, fill: FLOW, stroke: FLOW }} isAnimationActive={false} connectNulls={false} />
+        <Line dataKey="depois" stroke={FLOW_AVG} strokeWidth={2} dot={{ r: 2, fill: FLOW_AVG, stroke: FLOW_AVG }} isAnimationActive={false} connectNulls={false} />
       </LineChart>
     </ResponsiveContainer>
   </figure>;
@@ -57,6 +58,10 @@ export function OccurrenceDrawer({ id, onClose, onChanged }: { id: string; onClo
 
   // `version` muda após cada ação para recarregar a timeline confirmada pelo servidor.
   const [version, setVersion] = useState(0);
+  // Ao vivo: outra tela mudou o estado desta ocorrência, ou chegou leitura do mesmo sensor e origem enquanto ela está ativa
+  // ("Depois da abertura" cresce). Sempre refaz a busca no servidor; nada é desenhado a partir do evento.
+  const liveVersion = useLiveVersion(["occurrence.status", "reading.created"], e => e.type === "occurrence.status" ? e.id === id
+    : !!detail?.device && e.deviceId === detail.device.id && e.source === detail.source && (detail.status === "OPEN" || detail.status === "ACKNOWLEDGED"), { gap: 3000 });
   useEffect(() => {
     let alive = true;
     fetchDetail(id).then(r => {
@@ -64,7 +69,7 @@ export function OccurrenceDrawer({ id, onClose, onChanged }: { id: string; onClo
       if (r.ok) { setDetail(r.detail); setLoadError(""); } else setLoadError(r.error);
     });
     return () => { alive = false; };
-  }, [id, version]);
+  }, [id, version, liveVersion]);
 
   // Teclado: foco entra no painel, Escape fecha e o foco volta para quem abriu.
   useEffect(() => {
@@ -103,10 +108,11 @@ export function OccurrenceDrawer({ id, onClose, onChanged }: { id: string; onClo
       {loadError && <p role="alert" className="form-error">{loadError}</p>}
       {!d && !loadError && <div className="drawer-loading" role="status"><span className="sk" /><span className="sk" /><span className="sk short" /></div>}
       {d && <div className="drawer-body">
+        {/* Estado é etiqueta; severidade é texto com ponto; origem é selo (forma diferente, não mais uma pílula). */}
         <div className="tag-row">
           <Tag tone={STATUS_TONE[d.status as keyof typeof STATUS_TONE] ?? "neutral"}>{STATUS_LABEL[d.status as keyof typeof STATUS_LABEL] ?? d.status}</Tag>
-          <Tag tone="neutral">Severidade {SEVERITY_LABEL[d.severity as keyof typeof SEVERITY_LABEL] ?? d.severity}</Tag>
-          <Tag tone={d.source === "DEVICE" ? "ok" : "sim"}>{SOURCE_LABEL[d.source as keyof typeof SOURCE_LABEL] ?? d.source}</Tag>
+          <span className="sev-text"><span className="sev-dot" style={{ background: SEVERITY_COLOR[d.severity as keyof typeof SEVERITY_COLOR] ?? CHART.tick }} aria-hidden="true" />Severidade {(SEVERITY_LABEL[d.severity as keyof typeof SEVERITY_LABEL] ?? d.severity).toLowerCase()}</span>
+          <Seal source={d.source} />
         </div>
         <p className="muted-text">{d.description}</p>
         <dl className="facts">

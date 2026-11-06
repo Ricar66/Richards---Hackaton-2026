@@ -1,15 +1,17 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Clock3, Cpu, Download, Droplets, HeartHandshake, Radio, TriangleAlert, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Cpu, Download, Droplets, HeartHandshake, TriangleAlert, Zap } from "lucide-react";
 import type { DashboardDTO, DashboardOccurrence } from "@/modules/analytics/domain/dashboard";
 import { agoBR, dateBR, durationBR, hourBR, numBR } from "@/lib/format";
 import { notifyDataChanged, useDashboard, useNow } from "../hooks";
 import { useShell } from "../shell";
+import { useLiveStream, type LiveView } from "../live-stream";
 import { GlobalFilters } from "../filters";
 import { Heatmap, LiveSpark, SeriesTable, StatusBreakdown, TableToggle, VolumeChart } from "../charts";
-import { Delta, EmptyState, Footnote, KpiTile, PageHeader, Panel, ProvenanceBanner, Sparkline, StaleBanner, Tag } from "../primitives";
-import { CONNECTIVITY_LABEL, CONNECTIVITY_TONE, DONATION_LABEL, SEVERITY_COLOR, SEVERITY_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, WATER } from "../labels";
+import { Delta, EmptyState, Footnote, KpiTile, PageHeader, Panel, ProvenanceBanner, Seal, StaleBanner, Tag } from "../primitives";
+import { activeOrigin, TwinFigure, type TwinState } from "../digital-twin";
+import { CONNECTIVITY_LABEL, CONNECTIVITY_TONE, DONATION_LABEL, SEVERITY_COLOR, SEVERITY_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "../labels";
 
 const SEV_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 const RANGE_TEXT = { "24h": "últimas 24 h", "7d": "últimos 7 dias", "30d": "últimos 30 dias", custom: "período escolhido" } as const;
@@ -40,8 +42,8 @@ export function AttentionQueue({ items, onOpen }: { items: DashboardOccurrence[]
   return <ul className="queue">
     {active.slice(0, 6).map(o => <li key={o.id}>
       <button onClick={() => onOpen(o.id)}>
-        <span className="sev-bar" style={{ background: SEVERITY_COLOR[o.severity] }} aria-hidden="true" />
-        <span className="queue-main"><b>{o.title}</b><small>{o.deviceCode ?? o.siteName} · {SEVERITY_LABEL[o.severity]} · {SOURCE_LABEL[o.source]}</small></span>
+        <span className="sev-dot" style={{ background: SEVERITY_COLOR[o.severity] }} aria-hidden="true" />
+        <span className="queue-main"><b>{o.title}</b><small>{o.deviceCode ?? o.siteName} · severidade {SEVERITY_LABEL[o.severity].toLowerCase()} · {SOURCE_LABEL[o.source]}</small></span>
         <span className="queue-side"><Tag tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Tag><small>{now === null ? hourBR(o.openedAt) : agoBR(new Date(o.openedAt).getTime(), now)}</small></span>
       </button>
     </li>)}
@@ -60,48 +62,99 @@ export function DonationFlow({ data }: { data: DashboardDTO }) {
   </ol>;
 }
 
+/** Legenda do painel ao vivo: diz como o número chega AGORA (stream, consulta de reserva ou parado). */
+const LIVE_CAPTION: Record<LiveView, string> = {
+  connecting: "Conectando ao stream…",
+  live: "Ao vivo pelo stream · cada leitura gravada aparece na hora",
+  reconnecting: "Reconectando ao stream · consulta a cada 5 s enquanto isso",
+  polling: "Consulta a cada 5 s · stream indisponível",
+  offline: "Servidor indisponível · números parados",
+};
+const SIGNAL_FRESH_MS = 120_000;
+
+/**
+ * Gêmeo digital da unidade + sinal dos últimos 30 minutos. Painel separado: a leitura nova re-renderiza só ele, não os gráficos.
+ * Tudo o que aparece vem do servidor: valor GRAVADO da última leitura, limiar configurado do sensor, contagem de ocorrências ativas.
+ */
+function TwinPanel({ data }: { data: DashboardDTO }) {
+  const { state, live } = useLiveStream();
+  const now = useNow();
+  const r = live?.lastReading ?? null;
+  const atMs = r ? new Date(r.at).getTime() : null;
+  const fresh = now !== null && atMs !== null && now - atMs <= SIGNAL_FRESH_MS;
+  const device = r ? data.devices.find(d => d.code === r.deviceCode) : undefined;
+  const limit = device?.minFlowLpm ?? data.threshold?.minFlowLpm ?? null;
+  const twin: TwinState = !r ? "none" : !fresh ? "stale" : r.flowLpm <= 0 ? "idle" : limit !== null && r.flowLpm >= limit ? "over" : "flow";
+  const site = device?.siteName ?? data.devices[0]?.siteName ?? data.organization.name;
+  const active = live?.activeCount ?? 0;
+  // A baliza conta ocorrências de qualquer origem: o selo delas fica ao lado, separado do selo da leitura.
+  const origin = activeOrigin(live?.active ?? [], active);
+  const originText = origin ? `origem ${origin.label.toLowerCase()}${origin.partial ? ` nas ${origin.listed} mais recentes` : ""}` : "";
+  const reading = r ? `${numBR(r.flowLpm, 2)} L/min` : "sem leitura";
+  const verdict = !r ? (live ? "Nenhuma leitura recebida." : state === "offline" ? "Servidor indisponível." : "Conectando…")
+    : twin === "stale" ? `Última leitura ${dateBR(r.at)}`
+    : twin === "idle" ? "Sem fluxo na última leitura"
+    : limit === null ? "Sensor sem limiar único"
+    : `${twin === "over" ? "Acima" : "Abaixo"} do limiar de ${numBR(limit, 2)} L/min`;
+  const label = `Representação esquemática de ${site}. Última leitura: ${reading}${r ? `, ${r.deviceCode}, origem ${SOURCE_LABEL[r.source]}` : ""}. ${verdict}.${active ? ` ${active} ocorrência(s) ativa(s), ${originText}.` : ""}`;
+
+  return <Panel id="p-twin" title="Gêmeo digital · unidade" caption={<>{site} · {LIVE_CAPTION[state]}</>} actions={r ? <Seal source={r.source} /> : undefined} className="twin-panel">
+    <figure className={`twin-stage ${twin}`}>
+      <span className="twin-note">Representação esquemática</span>
+      {active > 0 && <span className="twin-alert" title={`Ocorrências ativas: ${originText}`}>
+        <TriangleAlert size={13} /> {active} ocorrência{active > 1 ? "s" : ""} ativa{active > 1 ? "s" : ""}
+        {origin && <Seal source={origin.seal}>{origin.label}{origin.partial ? ` · ${origin.listed} mais recentes` : ""}</Seal>}
+      </span>}
+      <TwinFigure state={twin} display={r ? numBR(r.flowLpm, 2) : "--"} pulseKey={r && fresh && state === "live" ? r.at : null} alert={active > 0} label={label} />
+      <figcaption className={`twin-read ${twin}`}>
+        <span className="twin-val"><small>{r ? `${r.deviceCode} · vazão` : "Vazão"}</small><strong>{r ? <>{numBR(r.flowLpm, 2)}<small> L/min</small></> : "—"}</strong></span>
+        <span className="twin-state">
+          <span className="twin-verdict">{verdict}</span>
+          {r && <span className="twin-when">{fresh && now !== null ? `comunicando · ${agoBR(atMs!, now)}` : "sem leitura nova há mais de 2 min"}</span>}
+        </span>
+      </figcaption>
+    </figure>
+    <div className="twin-sub"><b>Últimos 30 minutos</b>{limit !== null && <span><i className="lg-dash" /> limiar {numBR(limit, 2)} L/min</span>}</div>
+    <LiveSpark recent={live?.recent ?? []} threshold={data.threshold?.minFlowLpm ?? null} />
+    <ul className="device-mini">
+      {data.devices.map(d => <li key={d.id}><Cpu size={15} /><span><b>{d.code}</b><small>{d.label}</small></span><Tag tone={CONNECTIVITY_TONE[d.connectivity]}>{CONNECTIVITY_LABEL[d.connectivity]}</Tag></li>)}
+    </ul>
+  </Panel>;
+}
+
 export function ControlCenter({ initial }: { initial: DashboardDTO }) {
   const { data, stale } = useDashboard(initial);
-  const { openOccurrence, openInterval, live } = useShell();
+  const { openOccurrence, openInterval } = useShell();
   const { simulate, busy } = useSimulateAlert();
   const [table, setTable] = useState(false);
   const k = data.kpis;
   const range = RANGE_TEXT[data.filter.range];
-  const spark = data.series.map(p => ({ t: p.t, v: p.liters }));
-  const now = useNow();
-  const liveFresh = now !== null && !!live?.lastReading && now - new Date(live.lastReading.at).getTime() <= 120_000;
 
   return <>
     <PageHeader kicker={`${data.organization.name} · ${data.organization.city}`} title="Centro de controle" actions={<>
       <a className="btn" href={`/api/reports/summary${data.filter.query ? `?${data.filter.query}` : ""}`}><Download size={15} /> Exportar PDF</a>
-      <button className="btn dark" onClick={() => void simulate()} disabled={busy}><Zap size={15} /> Simular alerta</button>
+      <button className="btn sim" onClick={() => void simulate()} disabled={busy}><Zap size={15} /> Simular alerta</button>
     </>}>Do sinal do sensor à decisão registrada: água observada, ocorrências e alimentos entregues no mesmo recorte.</PageHeader>
     <GlobalFilters data={data} />
     <StaleBanner since={stale} />
     <ProvenanceBanner p={data.provenance} />
 
     <div className="kpi-grid">
-      <KpiTile label="Volume observado" icon={<Droplets size={15} />} value={k.observedLiters} unit=" L" accent={WATER}
-        foot={<>{range} · não equivale a economia</>} spark={<Sparkline data={spark} color={WATER} />}>
+      <KpiTile label="Volume observado" icon={<Droplets size={15} />} value={k.observedLiters} unit=" L"
+        foot={<>{range} · não equivale a economia</>}>
         <Delta current={k.observedLiters} previous={k.previousLiters} previousSamples={k.previousSamples} samples={data.provenance.samples} label={PREV_TEXT[data.filter.range]} />
       </KpiTile>
-      <KpiTile label="Ocorrências ativas" icon={<TriangleAlert size={15} />} value={k.activeOccurrences} digits={0} accent="#cf7a12"
-        foot={<>agora · exigem verificação humana</>}>
-        <span className="kpi-chips"><span>{k.openOccurrences} abertas</span><span>{k.acknowledgedOccurrences} em análise</span></span>
-      </KpiTile>
-      <KpiTile label="Tempo até resolução" icon={<Clock3 size={15} />} value={k.avgResolutionMin} digits={0} unit=" min" empty="nenhuma resolvida" accent="#4466d6"
-        foot={<>média de {k.resolvedInPeriod} resolvida(s) · {range}</>}>
-        {k.avgAckMin !== null && <span className="kpi-chips"><span>assumida em {durationBR(k.avgAckMin)}</span></span>}
-      </KpiTile>
-      <KpiTile label="Alimentos entregues" icon={<HeartHandshake size={15} />} value={k.deliveredKg} unit=" kg" accent="#0e9a73"
-        foot={<>{k.deliveredCount} entrega(s) com recebimento confirmado · {range}</>}>
-        <span className="kpi-chips"><span>{numBR(k.availableKg)} kg a caminho</span></span>
-      </KpiTile>
+      <KpiTile label="Ocorrências ativas" icon={<TriangleAlert size={15} />} value={k.activeOccurrences} digits={0} tone={k.activeOccurrences > 0 ? "warn" : undefined}
+        foot={<>{k.openOccurrences} aberta(s) · {k.acknowledgedOccurrences} em análise · exigem verificação humana</>} />
+      <KpiTile label="Tempo até resolução" icon={<Clock3 size={15} />} value={k.avgResolutionMin} digits={0} unit=" min" empty="nenhuma resolvida"
+        foot={<>média de {k.resolvedInPeriod} resolvida(s){k.avgAckMin !== null ? ` · assumida em ${durationBR(k.avgAckMin)}` : ""} · {range}</>} />
+      <KpiTile label="Alimentos entregues" icon={<HeartHandshake size={15} />} value={k.deliveredKg} unit=" kg"
+        foot={<>{k.deliveredCount} entrega(s) confirmada(s) · {numBR(k.availableKg)} kg a caminho</>} />
     </div>
 
     <div className="grid-main">
-      <Panel id="p-volume" eyebrow="Análise hídrica" title="Volume observado por intervalo" className={`dim-${data.filter.bucket}`}
-        caption={<>Clique em um ponto para ver as leituras · os marcadores <i className="mk" /> são ocorrências abertas no intervalo · arraste a régua inferior para dar zoom.</>}
+      <Panel id="p-volume" title="Volume observado por intervalo" className={`dim-${data.filter.bucket}`}
+        caption="Clique num ponto para abrir as leituras daquele intervalo."
         actions={<TableToggle on={table} onChange={setTable} />}>
         {table ? <SeriesTable data={data} /> : <VolumeChart data={data} height={310} onBucket={p => openInterval({ start: p.t, end: p.end })} onMarker={openOccurrence} />}
         <div className="chart-legend">
@@ -109,41 +162,32 @@ export function ControlCenter({ initial }: { initial: DashboardDTO }) {
           <span><i className="lg-dot" style={{ background: SEVERITY_COLOR.HIGH }} />Ocorrência alta</span>
           <span><i className="lg-dot" style={{ background: SEVERITY_COLOR.MEDIUM }} />Média</span>
           <span><i className="lg-dot hollow" />Intervalo em andamento</span>
-          <span className="push">Pico de vazão no período: <b>{k.peakFlowLpm === null ? "—" : `${numBR(k.peakFlowLpm, 2)} L/min`}</b></span>
+          <span className="push">Pico de vazão no período <b>{k.peakFlowLpm === null ? "—" : `${numBR(k.peakFlowLpm, 2)} L/min`}</b></span>
         </div>
       </Panel>
-      <Panel id="p-queue" eyebrow="Agora" title="Fila de atenção" caption="Ordenada por severidade e idade" actions={<Link href="/ocorrencias" className="link">Central <ArrowRight size={14} /></Link>}>
+      <TwinPanel data={data} />
+    </div>
+
+    <div className="grid-half">
+      <Panel id="p-queue" title="Fila de atenção" caption="Por severidade e idade" actions={<Link href="/ocorrencias" className="link">Central <ArrowRight size={14} /></Link>}>
         <AttentionQueue items={data.occurrences} onOpen={openOccurrence} />
         <div className="sub-block">
-          <span className="eyebrow">Abertas no período · {k.openedInPeriod}</span>
+          <span className="sub-title">Abertas no período · <b>{k.openedInPeriod}</b></span>
           <StatusBreakdown items={data.statusBreakdown} />
         </div>
+      </Panel>
+      <Panel id="p-food" title="Do excedente à entrega" caption="Lotes ativos e entregas confirmadas no período · verificação sanitária é humana" actions={<Link href="/doacoes" className="link">Doações <ArrowRight size={14} /></Link>}>
+        <DonationFlow data={data} />
       </Panel>
     </div>
 
     <div className="grid-main">
-      <Panel id="p-heat" eyebrow="Padrão de uso" title="Consumo médio por hora e dia da semana" caption={<>Horário de Brasília · fluxo na madrugada (0h–5h) é o primeiro lugar para procurar desperdício contínuo. Volume nessa faixa: <b>{k.nightLiters === null ? "—" : `${numBR(k.nightLiters)} L`}</b>.</>}>
+      <Panel id="p-heat" title="Consumo médio por hora e dia da semana" caption={<>Horário de Brasília. Fluxo na madrugada (0h–5h) é o primeiro lugar para procurar desperdício contínuo: <b>{k.nightLiters === null ? "—" : `${numBR(k.nightLiters)} L`}</b> nessa faixa.</>}>
         <Heatmap cells={data.heatmap} />
       </Panel>
-      <Panel id="p-live" eyebrow="Sinal" title="Últimos 30 minutos" caption="Consulta a cada 5 s · não é streaming" actions={<Radio size={16} className={liveFresh ? "pulse-ico" : "muted-ico"} />}>
-        {live?.lastReading ? <div className={`live-now ${liveFresh ? "" : "old"}`}>
-          <span className="live-num">{numBR(live.lastReading.flowLpm, 2)}<small> L/min</small></span>
-          <span className="live-meta">{liveFresh ? "agora" : `última leitura, ${dateBR(live.lastReading.at)}`} · {live.lastReading.deviceCode} · {SOURCE_LABEL[live.lastReading.source]}</span>
-        </div> : <p className="empty-note">{live ? "Nenhuma leitura recebida." : "Conectando…"}</p>}
-        <LiveSpark recent={live?.recent ?? []} threshold={data.threshold?.minFlowLpm ?? null} />
-        <ul className="device-mini">
-          {data.devices.map(d => <li key={d.id}><Cpu size={15} /><span><b>{d.code}</b><small>{d.label}</small></span><Tag tone={CONNECTIVITY_TONE[d.connectivity]}>{CONNECTIVITY_LABEL[d.connectivity]}</Tag></li>)}
-        </ul>
-      </Panel>
-    </div>
-
-    <div className="grid-half">
-      <Panel id="p-food" eyebrow="Impacto alimentar" title="Do excedente à entrega" caption="Lotes ativos e entregas confirmadas no período · verificação sanitária é humana" actions={<Link href="/doacoes" className="link">Doações <ArrowRight size={14} /></Link>}>
-        <DonationFlow data={data} />
-      </Panel>
-      <Panel id="p-recent" eyebrow="Registro" title="Últimas ocorrências" actions={<Link href="/ocorrencias" className="link">Todas <ArrowRight size={14} /></Link>}>
+      <Panel id="p-recent" title="Últimas ocorrências" actions={<Link href="/ocorrencias" className="link">Todas <ArrowRight size={14} /></Link>}>
         {data.occurrences.length ? <ul className="recent">
-          {data.occurrences.slice(0, 4).map(o => <li key={o.id}><button onClick={() => openOccurrence(o.id)}>
+          {data.occurrences.slice(0, 5).map(o => <li key={o.id}><button onClick={() => openOccurrence(o.id)}>
             <i style={{ background: SEVERITY_COLOR[o.severity] }} /><span className="recent-main"><b>{o.title}</b><small>{dateBR(o.openedAt)} · {o.deviceCode ?? "—"} · {SOURCE_LABEL[o.source]}</small></span>
             <Tag tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Tag>
           </button></li>)}

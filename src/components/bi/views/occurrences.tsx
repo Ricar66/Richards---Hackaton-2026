@@ -7,8 +7,8 @@ import { useDashboard } from "../hooks";
 import { useShell } from "../shell";
 import { GlobalFilters } from "../filters";
 import { StatusBreakdown } from "../charts";
-import { EmptyState, Footnote, KpiTile, PageHeader, Panel, StaleBanner, Tag } from "../primitives";
-import { KIND_LABEL, SEVERITY_COLOR, SEVERITY_LABEL, SOURCE_LABEL, STATUS_COLOR, STATUS_LABEL, STATUS_TONE } from "../labels";
+import { EmptyState, Footnote, KpiTile, PageHeader, Panel, Seal, StaleBanner, Tag } from "../primitives";
+import { KIND_LABEL, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_LABEL, STATUS_TONE } from "../labels";
 import { AttentionQueue, useSimulateAlert } from "./control-center";
 
 const PAGE = 10;
@@ -42,19 +42,19 @@ export function Occurrences({ initial }: { initial: DashboardDTO }) {
   const count = (key: (typeof VIEWS)[number]["key"]) => key === "all" ? data.occurrences.length : key === "active" ? data.occurrences.filter(o => o.status === "OPEN" || o.status === "ACKNOWLEDGED").length : data.occurrences.filter(o => o.status === key).length;
 
   return <>
-    <PageHeader kicker="Operação & resposta" title="Central de ocorrências" actions={<button className="btn dark" onClick={() => void simulate()} disabled={busy}><Zap size={15} /> Simular alerta</button>}>
+    <PageHeader kicker="Operação & resposta" title="Central de ocorrências" actions={<button className="btn sim" onClick={() => void simulate()} disabled={busy}><Zap size={15} /> Simular alerta</button>}>
       Cada suspeita tem origem, evidência, responsável e trilha. Resolver exige descrever a verificação feita.
     </PageHeader>
     <GlobalFilters data={data} />
     <StaleBanner since={stale} />
     <div className="kpi-grid">
-      <KpiTile label="Abertas agora" icon={<TriangleAlert size={15} />} value={k.openOccurrences} digits={0} accent={STATUS_COLOR.OPEN} foot="aguardam alguém assumir" />
-      <KpiTile label="Em análise agora" icon={<Eye size={15} />} value={k.acknowledgedOccurrences} digits={0} accent={STATUS_COLOR.ACKNOWLEDGED} foot="investigação assumida" />
-      <KpiTile label="Resolvidas no período" icon={<CheckCircle2 size={15} />} value={k.resolvedInPeriod} digits={0} accent={STATUS_COLOR.RESOLVED} foot={`${k.dismissedInPeriod} descartada(s) como falso alarme`} />
-      <KpiTile label="Tempo até resolução" icon={<Clock3 size={15} />} value={k.avgResolutionMin} digits={0} unit=" min" empty="nenhuma resolvida" accent="#6f8389" foot={`assumida em média em ${durationBR(k.avgAckMin)}`} />
+      <KpiTile label="Abertas agora" icon={<TriangleAlert size={15} />} value={k.openOccurrences} digits={0} tone={k.openOccurrences > 0 ? "warn" : undefined} foot="aguardam alguém assumir" />
+      <KpiTile label="Em análise agora" icon={<Eye size={15} />} value={k.acknowledgedOccurrences} digits={0} foot="investigação assumida" />
+      <KpiTile label="Resolvidas no período" icon={<CheckCircle2 size={15} />} value={k.resolvedInPeriod} digits={0} foot={`${k.dismissedInPeriod} descartada(s) como falso alarme`} />
+      <KpiTile label="Tempo até resolução" icon={<Clock3 size={15} />} value={k.avgResolutionMin} digits={0} unit=" min" empty="nenhuma resolvida" foot={`assumida em média em ${durationBR(k.avgAckMin)}`} />
     </div>
     <div className="grid-main reverse">
-      <Panel id="p-occ-table" eyebrow="Registro completo" title="Ocorrências do recorte" caption="Abertas no período ou ainda ativas. Clique para ver evidência, timeline e ações.">
+      <Panel id="p-occ-table" title="Ocorrências do recorte" caption="Abertas no período ou ainda ativas. Clique para ver evidência, timeline e ações.">
         <div className="toolbar">
           <label className="search"><Search size={15} /><span className="sr-only">Buscar ocorrência</span>
             <input type="search" placeholder="Buscar por título, sensor ou ID" value={q} onChange={e => { setQ(e.target.value); setPage(0); }} />
@@ -79,11 +79,11 @@ export function Occurrences({ initial }: { initial: DashboardDTO }) {
             </tr></thead>
             <tbody>{visible.map(o => <tr key={o.id} onClick={() => openOccurrence(o.id)}>
               <td><button className="row-open" onClick={e => { e.stopPropagation(); openOccurrence(o.id); }}>
-                <span className="sev-bar" style={{ background: SEVERITY_COLOR[o.severity] }} aria-hidden="true" />
+                <span className="sev-dot" style={{ background: SEVERITY_COLOR[o.severity] }} aria-hidden="true" />
                 <span><b>{o.title}</b><small className="cell-sub">{KIND_LABEL[o.kind] ?? o.kind} · severidade {SEVERITY_LABEL[o.severity].toLowerCase()}</small></span>
               </button></td>
               <td className="nowrap">{o.deviceCode ?? "—"}</td>
-              <td><Tag tone={o.source === "DEVICE" ? "ok" : "sim"}>{SOURCE_LABEL[o.source]}</Tag></td>
+              <td><Seal source={o.source} /></td>
               <td><Tag tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Tag></td>
               <td className="nowrap">{dateBR(o.openedAt)}</td>
               <td className="num">{o.resolutionMin === null ? "—" : durationBR(o.resolutionMin)}</td>
@@ -97,8 +97,8 @@ export function Occurrences({ initial }: { initial: DashboardDTO }) {
         </div>
       </Panel>
       <div className="stack">
-        <Panel id="p-occ-queue" eyebrow="Agora" title="Fila de atenção"><AttentionQueue items={data.occurrences} onOpen={openOccurrence} /></Panel>
-        <Panel id="p-occ-status" eyebrow={`Abertas no período · ${k.openedInPeriod}`} title="Situação atual"><StatusBreakdown items={data.statusBreakdown} /></Panel>
+        <Panel id="p-occ-queue" title="Fila de atenção"><AttentionQueue items={data.occurrences} onOpen={openOccurrence} /></Panel>
+        <Panel id="p-occ-status" title="Situação atual" caption={`${k.openedInPeriod} aberta(s) no período`}><StatusBreakdown items={data.statusBreakdown} /></Panel>
       </div>
     </div>
     <Footnote data={data} />

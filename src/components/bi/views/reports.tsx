@@ -32,7 +32,7 @@ export function Reports({ initial }: { initial: DashboardDTO }) {
   }
 
   return <>
-    <PageHeader kicker="Evidência para decisão" title="Relatórios" actions={<button className="btn dark" onClick={() => void generate()} disabled={gen.state === "busy"}>
+    <PageHeader kicker="Evidência para decisão" title="Relatórios" actions={<button className="btn primary" onClick={() => void generate()} disabled={gen.state === "busy"}>
       {gen.state === "busy" ? <><LoaderCircle size={15} className="spin" /> Gerando PDF…</> : <><FileDown size={15} /> Gerar PDF deste recorte</>}
     </button>}>O PDF usa o mesmo serviço e os mesmos filtros do BI: o que está na prévia é o que vai para o arquivo.</PageHeader>
     <GlobalFilters data={data} />
@@ -71,11 +71,11 @@ export function Reports({ initial }: { initial: DashboardDTO }) {
         <p className="paper-note">Sensor registra fluxo; não prova desperdício, vazamento ou economia. Doações dependem de verificação humana e confirmação de recebimento. Dados simulados ficam carimbados.</p>
       </article>
       <div className="stack">
-        <Panel id="p-check" eyebrow="Conferência" title="BI × PDF" caption="Mesmo serviço (getDashboard) e mesmo filtro na URL.">
+        <Panel id="p-check" title="BI × PDF" caption="Mesmo serviço (getDashboard) e mesmo filtro na URL.">
           <ul className="check-list">{reportFigures(data).map(([l, v]) => <li key={l}><span>{l}</span><b>{v}</b></li>)}</ul>
           <p className="muted-text small">Arquivo: 2 páginas A4 · rodapé com página e data · nome <code>richards-relatorio-AAAA-MM-DD.pdf</code>.</p>
         </Panel>
-        <Panel id="p-prov" eyebrow="Proveniência" title="De onde vêm os números">
+        <Panel id="p-prov" title="De onde vêm os números">
           <ul className="check-list">
             {data.provenance.sources.length ? data.provenance.sources.map(s => <li key={s.source}><span>Leituras {SOURCE_LABEL[s.source].toLowerCase()}</span><b>{s.samples}</b></li>) : <li><span>Leituras</span><b>nenhuma</b></li>}
             <li><span>Primeira leitura</span><b>{data.provenance.firstReading ? dateBR(data.provenance.firstReading) : "—"}</b></li>

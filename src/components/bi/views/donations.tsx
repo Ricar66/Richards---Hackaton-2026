@@ -7,8 +7,8 @@ import { notifyDataChanged, useDashboard } from "../hooks";
 import { useShell } from "../shell";
 import { GlobalFilters } from "../filters";
 import { DonationDrawer } from "../donation-drawer";
-import { EmptyState, Footnote, KpiTile, PageHeader, Panel, StaleBanner, Tag } from "../primitives";
-import { DONATION_LABEL, SOURCE_LABEL } from "../labels";
+import { EmptyState, Footnote, KpiTile, PageHeader, Panel, Seal, StaleBanner, Tag } from "../primitives";
+import { DONATION_LABEL } from "../labels";
 
 const COLUMNS: { status: DonationStatus; hint: string; next: string }[] = [
   { status: "PENDING_REVIEW", hint: "Aguardam verificação humana", next: "Verificar" },
@@ -54,7 +54,7 @@ function BatchCard({ d, action, onOpen }: { d: DashboardDonation; action: string
         {d.status === "RESERVED" && <>para {d.recipient ?? "—"}</>}
         {d.status === "DELIVERED" && <>{d.recipient ?? "—"} · recebido por {d.receivedBy ?? "não registrado"}</>}
       </span>
-      <span className="batch-foot">{d.source !== "MANUAL" && <Tag tone="sim">{SOURCE_LABEL[d.source]}</Tag>}<span className="batch-action">{action} <ChevronRight size={14} /></span></span>
+      <span className="batch-foot">{d.source !== "MANUAL" && <Seal source={d.source} />}<span className="batch-action">{action} <ChevronRight size={14} /></span></span>
     </button>
   </li>;
 }
@@ -79,12 +79,12 @@ export function Donations({ initial }: { initial: DashboardDTO }) {
     <StaleBanner since={stale} />
     {data.filter.siteId || data.filter.deviceId ? <p className="info-note">Lotes pertencem à organização: filtros de unidade e sensor não se aplicam a doações.</p> : null}
     <div className="kpi-grid">
-      <KpiTile label="Kg entregues" icon={<HeartHandshake size={15} />} value={k.deliveredKg} unit=" kg" accent="#0e9a73" foot={`${k.deliveredCount} entrega(s) confirmada(s) no período`} />
-      <KpiTile label="Kg a caminho" icon={<Truck size={15} />} value={k.availableKg} unit=" kg" accent="#4466d6" foot="disponíveis + reservados (ainda não é impacto)" />
-      <KpiTile label="Aguardando verificação" icon={<ClipboardCheck size={15} />} value={k.pendingReview} digits={0} accent="#cf7a12" foot="lotes sem verificação humana" />
-      <KpiTile label="Instituições atendidas" icon={<PackageOpen size={15} />} value={recipients} digits={0} accent="#6f8389" foot="com entrega confirmada no período" />
+      <KpiTile label="Kg entregues" icon={<HeartHandshake size={15} />} value={k.deliveredKg} unit=" kg" foot={`${k.deliveredCount} entrega(s) confirmada(s) no período`} />
+      <KpiTile label="Kg a caminho" icon={<Truck size={15} />} value={k.availableKg} unit=" kg" foot="disponíveis + reservados (ainda não é impacto)" />
+      <KpiTile label="Aguardando verificação" icon={<ClipboardCheck size={15} />} value={k.pendingReview} digits={0} tone={k.pendingReview > 0 ? "warn" : undefined} foot="lotes sem verificação humana" />
+      <KpiTile label="Instituições atendidas" icon={<PackageOpen size={15} />} value={recipients} digits={0} foot="com entrega confirmada no período" />
     </div>
-    {form && <Panel id="p-new" eyebrow="Cadastro" title="Novo lote de excedente" caption="Nasce como verificação pendente e origem MANUAL."><NewBatch onDone={() => setForm(false)} /></Panel>}
+    {form && <Panel id="p-new" title="Novo lote de excedente" caption="Nasce como verificação pendente e origem MANUAL."><NewBatch onDone={() => setForm(false)} /></Panel>}
     <div className="board" role="list" aria-label="Fluxo dos lotes">
       {COLUMNS.map(c => { const xs = inColumn(c.status); return <section key={c.status} className={`board-col ${c.status.toLowerCase()}`} role="listitem" aria-labelledby={`col-${c.status}`}>
         <header><span><b id={`col-${c.status}`}>{DONATION_LABEL[c.status]}</b><small>{c.hint}</small></span><span className="col-sum"><b>{xs.length}</b><small>{numBR(xs.reduce((n, d) => n + d.kg, 0))} kg</small></span></header>
@@ -92,11 +92,11 @@ export function Donations({ initial }: { initial: DashboardDTO }) {
       </section>; })}
     </div>
     <div className="grid-half">
-      <Panel id="p-cancel" eyebrow="Fora do fluxo" title={`Cancelados no período · ${cancelled.length}`}>
-        {cancelled.length ? <ul className="recent">{cancelled.map(d => <li key={d.id}><button onClick={() => setOpenId(d.id)}><i style={{ background: "#8b989d" }} /><span className="recent-main"><b>{d.description}</b><small>{numBR(d.kg)} kg · {dateBR(d.createdAt)}</small></span><Tag tone="neutral">Cancelado</Tag></button></li>)}</ul>
+      <Panel id="p-cancel" title={`Cancelados no período · ${cancelled.length}`}>
+        {cancelled.length ? <ul className="recent">{cancelled.map(d => <li key={d.id}><button onClick={() => setOpenId(d.id)}><i style={{ background: "#7a8a90" }} /><span className="recent-main"><b>{d.description}</b><small>{numBR(d.kg)} kg · {dateBR(d.createdAt)}</small></span><Tag tone="neutral">Cancelado</Tag></button></li>)}</ul>
           : <EmptyState title="Nenhum lote cancelado" />}
       </Panel>
-      <Panel id="p-rules" eyebrow="Regras" title="O que a plataforma garante">
+      <Panel id="p-rules" title="O que a plataforma garante">
         <ul className="method">
           <li><ShieldCheck size={14} /> <b>Disponível</b> só com nome de quem verificou e checklist declarado.</li>
           <li><HeartHandshake size={14} /> <b>Reservado</b> só para instituição ativa cadastrada.</li>

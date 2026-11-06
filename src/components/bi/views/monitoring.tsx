@@ -8,7 +8,7 @@ import { useShell } from "../shell";
 import { GlobalFilters } from "../filters";
 import { FlowChart, Heatmap, SeriesTable, TableToggle, VolumeChart } from "../charts";
 import { Delta, Footnote, KpiTile, PageHeader, Panel, ProvenanceBanner, StaleBanner, Tag } from "../primitives";
-import { CONNECTIVITY_LABEL, CONNECTIVITY_TONE, FLOW, WATER } from "../labels";
+import { CONNECTIVITY_LABEL, CONNECTIVITY_TONE, FLOW, FLOW_AVG } from "../labels";
 
 export function DeviceTable({ data }: { data: DashboardDTO }) {
   return <div className="table-scroll">
@@ -38,39 +38,37 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
   const onBucket = (p: { t: number; end: number }) => openInterval({ start: p.t, end: p.end });
 
   return <>
-    <PageHeader kicker="Telemetria ESP32 · YF-S201" title="Monitoramento hídrico">Volume e vazão em gráficos separados (grandezas diferentes), sincronizados: passe o cursor em um e veja o mesmo instante no outro.</PageHeader>
+    <PageHeader kicker="Telemetria ESP32 · YF-S201" title="Monitoramento hídrico">Volume e vazão do recorte, com o limiar de cada regra e as janelas de evidência das ocorrências.</PageHeader>
     <GlobalFilters data={data} />
     <StaleBanner since={stale} />
     <ProvenanceBanner p={data.provenance} />
     <div className="kpi-grid">
-      <KpiTile label="Volume observado" icon={<Droplets size={15} />} value={k.observedLiters} unit=" L" accent={WATER} foot="soma das leituras do recorte">
+      <KpiTile label="Volume observado" icon={<Droplets size={15} />} value={k.observedLiters} unit=" L" foot="soma das leituras do recorte">
         <Delta current={k.observedLiters} previous={k.previousLiters} previousSamples={k.previousSamples} samples={data.provenance.samples} label="período anterior" />
       </KpiTile>
-      <KpiTile label="Pico de vazão" icon={<Gauge size={15} />} value={k.peakFlowLpm} digits={2} unit=" L/min" accent={FLOW}
+      <KpiTile label="Pico de vazão" icon={<Gauge size={15} />} value={k.peakFlowLpm} digits={2} unit=" L/min"
         foot={data.threshold ? `limiar da regra: ${numBR(data.threshold.minFlowLpm, 2)} L/min` : "sensores com regras diferentes"} />
-      <KpiTile label="Volume na madrugada" icon={<MoonStar size={15} />} value={k.nightLiters} unit=" L" accent="#5b4fb3"
-        foot="0h–5h, horário de Brasília">
-        {nightShare !== null && <span className="kpi-chips"><span>{numBR(nightShare, 1)}% do volume</span></span>}
-      </KpiTile>
-      <KpiTile label="Cobertura de leituras" icon={<Activity size={15} />} value={data.series.length ? (withData / data.series.length) * 100 : null} digits={0} unit="%" accent="#6f8389"
+      <KpiTile label="Volume na madrugada" icon={<MoonStar size={15} />} value={k.nightLiters} unit=" L"
+        foot={<>0h–5h, horário de Brasília{nightShare !== null ? ` · ${numBR(nightShare, 1)}% do volume` : ""}</>} />
+      <KpiTile label="Cobertura de leituras" icon={<Activity size={15} />} value={data.series.length ? (withData / data.series.length) * 100 : null} digits={0} unit="%"
         foot={`${withData} de ${data.series.length} intervalos com leitura · lacuna não vira zero`} />
     </div>
 
-    <Panel id="p-sync" eyebrow="Série temporal" title="Volume e vazão no mesmo período" caption="Clique em qualquer ponto para abrir as leituras daquele intervalo. Faixas coloridas no gráfico de vazão são janelas de evidência de ocorrências."
+    <Panel id="p-sync" title="Volume e vazão no mesmo período" caption="Gráficos separados (grandezas diferentes) e sincronizados. Faixas no gráfico de vazão são janelas de evidência de ocorrências."
       actions={<TableToggle on={table} onChange={setTable} />}>
       {table ? <SeriesTable data={data} /> : <>
         <div className="chart-title"><span><i className="lg-area" />Volume por intervalo (L)</span></div>
         <VolumeChart data={data} height={230} syncId="monitor" brush={false} onBucket={onBucket} onMarker={openOccurrence} />
-        <div className="chart-title"><span><i className="lg-line" style={{ background: FLOW }} />Vazão máxima (L/min)</span><span><i className="lg-line" style={{ background: "#8fa6b8" }} />Vazão média</span><span><i className="lg-dash" />Limiar da regra</span></div>
+        <div className="chart-title"><span><i className="lg-line" style={{ background: FLOW }} />Vazão máxima (L/min)</span><span><i className="lg-line" style={{ background: FLOW_AVG }} />Vazão média</span><span><i className="lg-dash" />Limiar da regra</span></div>
         <FlowChart data={data} height={250} syncId="monitor" onBucket={onBucket} />
       </>}
     </Panel>
 
     <div className="grid-main">
-      <Panel id="p-heat-m" eyebrow="Padrão de uso" title="Consumo médio por hora e dia da semana" caption="Média de litros por hora nos dias com leitura (horário de Brasília).">
+      <Panel id="p-heat-m" title="Consumo médio por hora e dia da semana" caption="Média de litros por hora nos dias com leitura (horário de Brasília).">
         <Heatmap cells={data.heatmap} />
       </Panel>
-      <Panel id="p-method" eyebrow="Método" title="Como ler estes números">
+      <Panel id="p-method" title="Como ler estes números">
         <ul className="method">
           <li><b>Volume observado</b> é a soma de <code>deltaLiters</code> enviados pelo sensor. Não é economia nem desperdício comprovado.</li>
           <li><b>Ocorrência</b> abre quando a vazão fica ≥ limiar por todo o tempo da regra, com no máximo 45 s entre leituras.</li>
@@ -79,7 +77,7 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
         </ul>
       </Panel>
     </div>
-    <Panel id="p-devices-m" eyebrow="Infraestrutura" title="Sensores no recorte"><DeviceTable data={data} /></Panel>
+    <Panel id="p-devices-m" title="Sensores no recorte"><DeviceTable data={data} /></Panel>
     <Footnote data={data} />
   </>;
 }

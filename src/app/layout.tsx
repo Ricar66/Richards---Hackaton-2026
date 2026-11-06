@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 // Fontes empacotadas no build (sem requisição ao Google em tempo de uso). Plus Jakarta Sans é a identidade herdada do V3.
@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   title: "RICHARDS Intelligence | BI de recursos, ocorrências e impacto",
   description: "Observabilidade operacional, prevenção e impacto social com IoT",
 };
+/** Tema escuro "sala de operação": controles nativos (select, data, rolagem) e barra do navegador no mesmo tom. */
+export const viewport: Viewport = { colorScheme: "dark", themeColor: "#071217" };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return <html lang="pt-BR" className={`${body.variable} ${display.variable}`}><body>{children}</body></html>;
 }

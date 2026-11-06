@@ -1,4 +1,4 @@
-// pnpm test:e2e — jornadas no navegador contra uma instância ISOLADA (porta 3100, banco richards_test).
+// pnpm test:e2e — jornadas no navegador contra uma instância ISOLADA (porta 3100, banco richards_test), com o stream SSE ao vivo.
 // Pré-requisitos: `pnpm build`, container do Postgres no ar, Chrome/Edge instalado (CHROME_PATH se não for o padrão).
 // Opções: --with-db-outage (para o container db por alguns segundos para testar o erro honesto), --keep (não derruba a instância).
 // O banco de DESENVOLVIMENTO nunca é tocado: o nome precisa terminar em _test (conferido aqui e no Postgres).
@@ -17,6 +17,9 @@ const url = process.env.TEST_DATABASE_URL;
 if (!url || !/_test$/.test(new URL(url).pathname)) { console.error("TEST_DATABASE_URL ausente ou sem sufixo _test: E2E recusado."); process.exit(1); }
 const auth = { username: process.env.RICHARDS_OPERATOR_USER, password: process.env.RICHARDS_OPERATOR_PASSWORD };
 if (!auth.username || !auth.password) { console.error("Defina RICHARDS_OPERATOR_USER/PASSWORD no .env."); process.exit(1); }
+// Chave do sensor: o check A0 e o simulador do A5 enviam leituras pela mesma rota do ESP32 (o seed grava o hash desta chave).
+const deviceKey = process.env.IOT_DEMO_DEVICE_KEY;
+if (!deviceKey) { console.error("Defina IOT_DEMO_DEVICE_KEY no .env (A0 e A5 enviam leituras como o ESP32)."); process.exit(1); }
 const chromePath = process.env.CHROME_PATH || [
   "C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "/usr/bin/google-chrome", "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -47,7 +50,7 @@ if (!up) { server.kill(); console.error(`Instância não respondeu em ${base}.`)
 const outDir = join(project, ".e2e"); mkdirSync(outDir, { recursive: true });
 let failed = 1;
 try {
-  const results = await runJourneys({ base, project, chromePath, outDir, auth, withDbOutage: args.has("--with-db-outage") });
+  const results = await runJourneys({ base, project, chromePath, outDir, auth, deviceKey, withDbOutage: args.has("--with-db-outage") });
   failed = results.filter(r => !r.ok).length;
   console.log(`Capturas em ${outDir}`);
 } finally {

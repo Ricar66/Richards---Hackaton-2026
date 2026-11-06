@@ -4,8 +4,10 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { ArrowUpRight, X } from "lucide-react";
 import type { IntervalDTO } from "@/modules/analytics/domain/dashboard";
 import { hourBR, numBR, timeBR, weekdayBR, dayBR } from "@/lib/format";
-import { FLOW, SEVERITY_COLOR, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "./labels";
+import { AXIS_TICK, CHART, FLOW, SEVERITY_COLOR, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, TIP_STYLE } from "./labels";
 import { Tag } from "./primitives";
+import { useLiveVersion } from "./live-stream";
+import { readingInInterval } from "./live-scope";
 
 export type IntervalRequest = { start: number; end: number };
 
@@ -17,15 +19,17 @@ export function IntervalDrawer({ request, scope, onClose, onOpenOccurrence }: { 
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; });
 
+  // Intervalo em andamento: leitura nova do recorte entra na lista (busca espaçada; o total vem do servidor).
+  const liveVersion = useLiveVersion("reading.created", e => readingInInterval(e, scope, request.start, request.end), { gap: 3000 });
   useEffect(() => {
     let alive = true;
     const q = new URLSearchParams(scope);
     q.set("start", new Date(request.start).toISOString()); q.set("end", new Date(request.end).toISOString());
     fetch(`/api/analytics/interval?${q}`, { cache: "no-store" })
       .then(async r => { const body = await r.json(); if (!r.ok) throw new Error(body.error || "Falha ao carregar o intervalo"); return body as IntervalDTO; })
-      .then(d => { if (alive) setData(d); }, e => { if (alive) setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Sem conexão com o servidor"); });
+      .then(d => { if (alive) { setData(d); setError(""); } }, e => { if (alive) setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Sem conexão com o servidor"); });
     return () => { alive = false; };
-  }, [request.start, request.end, scope]);
+  }, [request.start, request.end, scope, liveVersion]);
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -69,10 +73,10 @@ export function IntervalDrawer({ request, scope, onClose, onOpenOccurrence }: { 
           <figure className="evidence-chart" aria-label="Vazão de cada leitura do intervalo">
             <ResponsiveContainer width="100%" height={150}>
               <BarChart data={chart} margin={{ top: 6, right: 6, bottom: 0, left: -18 }} barCategoryGap={1}>
-                <CartesianGrid stroke="#eef2f1" vertical={false} />
-                <XAxis dataKey="t" tickFormatter={t => hourBR(t)} tick={{ fontSize: 10, fill: "#7a8d92" }} axisLine={false} tickLine={false} minTickGap={36} />
-                <YAxis tick={{ fontSize: 10, fill: "#7a8d92" }} axisLine={false} tickLine={false} width={44} tickFormatter={v => numBR(v, 1)} />
-                <Tooltip cursor={{ fill: "#137e7712" }} labelFormatter={t => timeBR(new Date(Number(t)))} formatter={v => [`${numBR(Number(v), 2)} L/min`, "Vazão"]} contentStyle={{ borderRadius: 10, border: "1px solid #e3e9e7", fontSize: 12 }} />
+                <CartesianGrid stroke={CHART.grid} vertical={false} />
+                <XAxis dataKey="t" tickFormatter={t => hourBR(t)} tick={AXIS_TICK} axisLine={false} tickLine={false} minTickGap={36} />
+                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} tickFormatter={v => numBR(v, 1)} />
+                <Tooltip cursor={{ fill: "rgba(108, 201, 230, .08)" }} labelFormatter={t => timeBR(new Date(Number(t)))} formatter={v => [`${numBR(Number(v), 2)} L/min`, "Vazão"]} contentStyle={TIP_STYLE} />
                 <Bar dataKey="flow" fill={FLOW} radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>

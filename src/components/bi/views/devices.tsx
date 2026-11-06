@@ -32,7 +32,7 @@ export function Devices({ initial }: { initial: DashboardDTO }) {
         <p className="muted-text small">Versão de firmware não é enviada pelo dispositivo hoje; não exibimos valor presumido.</p>
       </article>)}
     </div> : <EmptyState title="Nenhum dispositivo cadastrado" icon={<Cpu size={18} />} />}
-      <Panel id="p-dev-contract" eyebrow="Contrato" title="Como o ESP32 fala com a plataforma">
+      <Panel id="p-dev-contract" title="Como o ESP32 fala com a plataforma">
         <ul className="method">
           <li><code>POST /api/iot/telemetry</code> com <code>x-device-key</code> (chave por dispositivo, guardada só como hash).</li>
           <li>Cada leitura leva <code>bootId</code> + <code>sequence</code>: reenvio não duplica volume.</li>
@@ -41,7 +41,7 @@ export function Devices({ initial }: { initial: DashboardDTO }) {
         </ul>
       </Panel>
     </div>
-    <Panel id="p-dev-table" eyebrow="Inventário" title="Leituras por sensor no período"><DeviceTable data={data} /></Panel>
+    <Panel id="p-dev-table" title="Leituras por sensor no período"><DeviceTable data={data} /></Panel>
     <Footnote data={data} />
   </>;
 }

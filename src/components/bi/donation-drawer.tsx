@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { Ban, CheckCircle2, HandHeart, PackageCheck, ShieldCheck, X } from "lucide-react";
 import type { DonationDetailDTO } from "@/modules/donations/application/donation-service";
 import { dateBR, numBR } from "@/lib/format";
-import { DONATION_LABEL, DONATION_TONE, SOURCE_LABEL } from "./labels";
-import { Tag } from "./primitives";
+import { DONATION_LABEL, DONATION_TONE } from "./labels";
+import { Seal, Tag } from "./primitives";
 import type { DonationStatus } from "@/modules/analytics/domain/dashboard";
+import { useLiveVersion } from "./live-stream";
 
 type Recipient = { id: string; name: string; city: string };
 const STEP_TITLE: Partial<Record<DonationStatus, string>> = { PENDING_REVIEW: "Registrar verificação humana", AVAILABLE: "Reservar para uma instituição", RESERVED: "Confirmar a entrega" };
@@ -32,12 +33,14 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; });
 
+  // Ao vivo: o mesmo lote mudou (em outra aba ou tela) → busca de novo a trilha confirmada pelo servidor.
+  const liveVersion = useLiveVersion("donation.status", e => e.id === id);
   useEffect(() => {
     let alive = true;
     fetch(`/api/donations/${encodeURIComponent(id)}`, { cache: "no-store" }).then(r => json<DonationDetailDTO>(r))
       .then(x => { if (alive) { setD(x); setError(""); } }, e => { if (alive) setError(e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Sem conexão com o servidor"); });
     return () => { alive = false; };
-  }, [id, version]);
+  }, [id, version, liveVersion]);
   const needsRecipients = d?.status === "AVAILABLE";
   useEffect(() => {
     if (!needsRecipients) return;
@@ -81,7 +84,7 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
       {error && <p role="alert" className="form-error">{error}</p>}
       {!d && !error && <div className="drawer-loading" role="status"><span className="sk" /><span className="sk" /></div>}
       {d && status && <div className="drawer-body">
-        <div className="tag-row"><Tag tone={DONATION_TONE[status]}>{DONATION_LABEL[status]}</Tag><Tag tone={d.source === "SIMULATED" ? "sim" : "neutral"}>{SOURCE_LABEL[d.source as "MANUAL"] ?? d.source}</Tag></div>
+        <div className="tag-row"><Tag tone={DONATION_TONE[status]}>{DONATION_LABEL[status]}</Tag><Seal source={d.source} /></div>
         <dl className="facts">
           <div><dt>Peso declarado</dt><dd>{numBR(d.kg, 2)} kg</dd></div>
           <div><dt>Cadastrado em</dt><dd>{dateBR(d.createdAt)}</dd></div>

@@ -8,15 +8,6 @@
         "value": "plus jakarta sans",
         "createdAt": "2026-11-03T13:18:32.542Z",
         "reason": "identidade tipográfica herdada do BI V3 original da equipe (src/app/globals.css desde o commit de7c41f); regra do CLAUDE.md global manda respeitar o design system existente; a Fase 2 só adicionou fallback de sistema, não escolheu a fonte"
-      },
-      {
-        "rule": "side-tab",
-        "value": "*",
-        "files": [
-          "src/app/globals.css"
-        ],
-        "createdAt": "2026-11-03T17:29:39.380Z",
-        "reason": "Agent: unica ocorrencia restante e o trilho neutro (2px var(--line)) da linha do tempo vertical .timeline nas gavetas de ocorrencia/doacao, nao e card; o toast com aba colorida foi corrigido (virou ponto de status)"
       }
     ]
   }

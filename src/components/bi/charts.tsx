@@ -1,15 +1,43 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { Area, Brush, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Table2 } from "lucide-react";
 import type { DashboardDTO, HeatCell, OccurrenceMarker, SeriesPoint } from "@/modules/analytics/domain/dashboard";
 import { bucketLabel, dayBR, hourBR, numBR, weekdayBR } from "@/lib/format";
 import { usePrefersReducedMotion } from "./hooks";
-import { FLOW, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_COLOR, STATUS_LABEL, WATER } from "./labels";
+import { AXIS_TICK, CHART, FLOW, FLOW_AVG, SEVERITY_COLOR, SEVERITY_LABEL, STATUS_COLOR, STATUS_LABEL, TIP_STYLE, WATER } from "./labels";
 
 type Bucket = DashboardDTO["filter"]["bucket"];
-const AXIS = { fontSize: 11, fill: "#6f8389" };
+const AXIS = AXIS_TICK;
 const bucketOf = (iso: string, series: SeriesPoint[]) => { const t = new Date(iso).getTime(); return series.find(p => t >= p.t && t < p.end) ?? null; };
+
+/** Anima só a primeira carga: com a busca refeita a cada evento do stream, o gráfico não pode reanimar a cada leitura. */
+function useFirstAnimation() {
+  const reduced = usePrefersReducedMotion();
+  const [done, setDone] = useState(false);
+  return { isAnimationActive: !reduced && !done, animationDuration: 500, onAnimationEnd: () => setDone(true) };
+}
+
+/**
+ * Zoom da régua (Brush) controlado: cada busca nova troca `data` e, sem isto, o Recharts volta a régua para o período inteiro.
+ * Guardado por recorte e por syncId (os gráficos sincronizados do Monitoramento andam juntos); se a régua estava no fim, acompanha o fim.
+ */
+type BrushWin = { start: number; end: number; follow: boolean };
+const brushWins = new Map<string, BrushWin>();
+const brushSubs = new Set<() => void>();
+const brushSubscribe = (cb: () => void) => { brushSubs.add(cb); return () => { brushSubs.delete(cb); }; };
+function useBrushWindow(key: string, len: number) {
+  const win = useSyncExternalStore(brushSubscribe, () => brushWins.get(key), () => undefined);
+  const last = Math.max(0, len - 1);
+  const startIndex = win ? Math.min(win.start, last) : 0;
+  const endIndex = win ? (win.follow ? last : Math.min(win.end, last)) : last;
+  const onChange = (r: { startIndex?: number; endIndex?: number }) => {
+    if (typeof r.startIndex !== "number" || typeof r.endIndex !== "number") return;
+    brushWins.set(key, { start: r.startIndex, end: r.endIndex, follow: r.endIndex >= last });
+    brushSubs.forEach(f => f());
+  };
+  return { startIndex: Math.min(startIndex, endIndex), endIndex, onChange };
+}
 
 /** Marcas do eixo em fronteiras legíveis (meia-noite para série horária, horas cheias para 15 min). */
 function timeTicks(series: SeriesPoint[], bucket: Bucket) {
@@ -54,7 +82,7 @@ function MarkerShape({ cx, cy, marker, onOpen }: { cx?: number; cy?: number; mar
   return <g className="marker" role="button" tabIndex={0} aria-label={`Ocorrência ${marker.title}, severidade ${SEVERITY_LABEL[marker.severity]}, ${STATUS_LABEL[marker.status]}. Abrir detalhe.`}
     onClick={open} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") open(e); }}>
     <circle cx={cx} cy={cy} r={14} fill="transparent" />
-    <circle cx={cx} cy={cy} r={8} fill={color} stroke="#fff" strokeWidth={2.5} />
+    <circle cx={cx} cy={cy} r={8} fill={color} stroke={CHART.surface} strokeWidth={2.5} />
     <path d={`M${cx} ${cy - 3.6}v4.2`} stroke="#fff" strokeWidth={2} strokeLinecap="round" />
     <circle cx={cx} cy={cy + 3.4} r={1.1} fill="#fff" />
   </g>;
@@ -66,9 +94,9 @@ function PointDot(props: { cx?: number; cy?: number; payload?: SeriesPoint; inde
   const { cx, cy, payload, index = 0, series } = props;
   if (cx === undefined || cy === undefined || !payload || payload.liters === null) return <g />;
   // Intervalo em andamento ganha marca vazada (o total ainda vai crescer).
-  if (payload.partial) return <circle cx={cx} cy={cy} r={4} fill="#fff" stroke={WATER} strokeWidth={2} strokeDasharray="2 2" />;
+  if (payload.partial) return <circle cx={cx} cy={cy} r={4} fill={CHART.surface} stroke={WATER} strokeWidth={2} strokeDasharray="2 2" />;
   // Ponto cercado de lacunas não forma linha: sem marca ele sumiria do gráfico.
-  if (series.length <= 48 || isolated(series, index, "liters")) return <circle cx={cx} cy={cy} r={3} fill="#fff" stroke={WATER} strokeWidth={2} />;
+  if (series.length <= 48 || isolated(series, index, "liters")) return <circle cx={cx} cy={cy} r={3} fill={CHART.surface} stroke={WATER} strokeWidth={2} />;
   return <g />;
 }
 
@@ -78,53 +106,59 @@ function FlowDot(props: { cx?: number; cy?: number; payload?: SeriesPoint; index
   return isolated(series, index, "maxFlowLpm") ? <circle cx={cx} cy={cy} r={2.6} fill={props.color} /> : <g />;
 }
 
-/** Série de volume por intervalo: clique em qualquer ponto abre as leituras; marcadores levam à ocorrência. */
+/**
+ * Série de volume por intervalo: clique em qualquer ponto abre as leituras; marcadores levam à ocorrência.
+ * Degrau (stepAfter), não curva: cada valor é o total de um intervalo; nada é desenhado entre amostras que o sensor não mediu.
+ */
 export function VolumeChart({ data, height = 300, syncId, brush = true, onBucket, onMarker }: {
   data: DashboardDTO; height?: number; syncId?: string; brush?: boolean;
   onBucket: (p: SeriesPoint) => void; onMarker: (id: string) => void;
 }) {
-  const reduced = usePrefersReducedMotion();
+  const anim = useFirstAnimation();
   const { series, markers, filter } = data;
+  const range = useBrushWindow(`${syncId ?? "solo"}|${filter.query}|${filter.bucket}`, series.length);
   const axis = timeTicks(series, filter.bucket);
   const placed = markers.map(m => ({ m, p: bucketOf(m.openedAt, series) })).filter((x): x is { m: OccurrenceMarker; p: SeriesPoint } => !!x.p);
   return <div className="chart" style={{ height }}>
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart data={series} syncId={syncId} syncMethod="value" margin={{ top: 14, right: 12, bottom: 0, left: 4 }} accessibilityLayer
         onClick={s => { const i = s?.activeTooltipIndex; if (typeof i === "number" && series[i]) onBucket(series[i]); }}>
-        <defs><linearGradient id="vol-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={WATER} stopOpacity={0.24} /><stop offset="1" stopColor={WATER} stopOpacity={0.02} /></linearGradient></defs>
-        <CartesianGrid stroke="#edf1f0" vertical={false} />
-        <XAxis dataKey="t" ticks={axis.ticks} tickFormatter={axis.fmt} tick={AXIS} axisLine={{ stroke: "#dfe6e4" }} tickLine={false} minTickGap={24} interval="preserveStartEnd" />
+        <CartesianGrid stroke={CHART.grid} vertical={false} />
+        <XAxis dataKey="t" ticks={axis.ticks} tickFormatter={axis.fmt} tick={AXIS} axisLine={{ stroke: CHART.axis }} tickLine={false} minTickGap={24} interval="preserveStartEnd" />
         <YAxis tick={AXIS} axisLine={false} tickLine={false} width={58} tickFormatter={v => `${numBR(v, 0)} L`} domain={[0, "auto"]} />
         <Tooltip content={<SeriesTooltip bucket={filter.bucket} mode="volume" markers={markers} series={series} />} cursor={{ stroke: WATER, strokeWidth: 1, strokeOpacity: 0.5 }} />
-        <Area dataKey="liters" name="Volume observado" type="monotone" stroke={WATER} strokeWidth={2} fill="url(#vol-fill)" connectNulls={false}
-          dot={<PointDot series={series} />} activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2, fill: WATER, cursor: "pointer" }}
-          isAnimationActive={!reduced} animationDuration={500} />
+        <Area dataKey="liters" name="Volume observado" type="stepAfter" stroke={WATER} strokeWidth={2} fill={WATER} fillOpacity={0.09} connectNulls={false}
+          dot={<PointDot series={series} />} activeDot={{ r: 5, stroke: CHART.surface, strokeWidth: 2, fill: WATER, cursor: "pointer" }}
+          {...anim} />
         {placed.map(({ m, p }) => <ReferenceDot key={m.id} x={p.t} y={p.liters ?? 0} ifOverflow="extendDomain" shape={(s: { cx?: number; cy?: number }) => <MarkerShape cx={s.cx} cy={s.cy} marker={m} onOpen={onMarker} />} />)}
-        {brush && series.length > 24 && <Brush dataKey="t" height={26} travellerWidth={9} stroke="#8fb9b2" fill="#f7faf9" tickFormatter={t => bucketLabel(t, filter.bucket)} />}
+        {brush && series.length > 24 && <Brush dataKey="t" height={26} travellerWidth={9} stroke={CHART.brushStroke} fill={CHART.brushFill} tickFormatter={t => bucketLabel(t, filter.bucket)} {...range} />}
+        {/* Sem régua própria mas sincronizado: régua invisível só para seguir o zoom do gráfico vizinho depois de cada busca. */}
+        {!brush && syncId && series.length > 24 && <Brush dataKey="t" height={1} travellerWidth={1} stroke="transparent" fill="transparent" tickFormatter={() => ""} {...range} />}
       </ComposedChart>
     </ResponsiveContainer>
   </div>;
 }
 
-/** Vazão (L/min) em gráfico separado do volume: grandezas diferentes nunca dividem eixo. */
+/** Vazão (L/min) em gráfico separado do volume: grandezas diferentes nunca dividem eixo. Reta entre pontos medidos, sem suavização. */
 export function FlowChart({ data, height = 240, syncId, onBucket }: { data: DashboardDTO; height?: number; syncId?: string; onBucket: (p: SeriesPoint) => void }) {
-  const reduced = usePrefersReducedMotion();
+  const anim = useFirstAnimation();
   const { series, markers, filter, threshold } = data;
+  const range = useBrushWindow(`${syncId ?? "solo"}|${filter.query}|${filter.bucket}`, series.length);
   const axis = timeTicks(series, filter.bucket);
   const windows = markers.filter(m => m.windowStart && m.windowEnd).map(m => ({ m, a: bucketOf(m.windowStart!, series), b: bucketOf(m.windowEnd!, series) })).filter(w => w.a && w.b);
   return <div className="chart" style={{ height }}>
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart data={series} syncId={syncId} syncMethod="value" margin={{ top: 14, right: 12, bottom: 0, left: 4 }} accessibilityLayer
         onClick={s => { const i = s?.activeTooltipIndex; if (typeof i === "number" && series[i]) onBucket(series[i]); }}>
-        <CartesianGrid stroke="#edf1f0" vertical={false} />
-        <XAxis dataKey="t" ticks={axis.ticks} tickFormatter={axis.fmt} tick={AXIS} axisLine={{ stroke: "#dfe6e4" }} tickLine={false} minTickGap={24} interval="preserveStartEnd" />
-        <YAxis tick={AXIS} axisLine={false} tickLine={false} width={58} tickFormatter={v => `${numBR(v, 1)}`} domain={[0, (max: number) => Math.max(max, (threshold?.minFlowLpm ?? 0) * 1.25)]} label={{ value: "L/min", position: "insideTopLeft", offset: -2, dy: -12, style: { fontSize: 10, fill: "#6f8389" } }} />
+        <CartesianGrid stroke={CHART.grid} vertical={false} />
+        <XAxis dataKey="t" ticks={axis.ticks} tickFormatter={axis.fmt} tick={AXIS} axisLine={{ stroke: CHART.axis }} tickLine={false} minTickGap={24} interval="preserveStartEnd" />
+        <YAxis tick={AXIS} axisLine={false} tickLine={false} width={58} tickFormatter={v => `${numBR(v, 1)}`} domain={[0, (max: number) => Math.max(max, (threshold?.minFlowLpm ?? 0) * 1.25)]} label={{ value: "L/min", position: "insideTopLeft", offset: -2, dy: -12, style: { fontSize: 11, fill: CHART.tick } }} />
         <Tooltip content={<SeriesTooltip bucket={filter.bucket} mode="flow" markers={markers} series={series} />} cursor={{ stroke: FLOW, strokeWidth: 1, strokeOpacity: 0.5 }} />
         {windows.map(({ m, a, b }) => <ReferenceArea key={m.id} x1={a!.t} x2={b!.t} fill={SEVERITY_COLOR[m.severity]} fillOpacity={0.12} stroke={SEVERITY_COLOR[m.severity]} strokeOpacity={0.35} ifOverflow="extendDomain" />)}
-        {threshold && <ReferenceLine y={threshold.minFlowLpm} stroke="#cf7a12" strokeDasharray="6 4" strokeWidth={1.5} label={{ value: `limiar da regra ${numBR(threshold.minFlowLpm, 2)} L/min por ${threshold.continuousSeconds} s`, position: "insideTopRight", style: { fontSize: 10.5, fill: "#9a5a0c", fontWeight: 600 } }} />}
-        <Line dataKey="maxFlowLpm" name="Vazão máxima" type="monotone" stroke={FLOW} strokeWidth={2} dot={<FlowDot series={series} color={FLOW} field="maxFlowLpm" />} activeDot={{ r: 4.5, stroke: "#fff", strokeWidth: 2 }} connectNulls={false} isAnimationActive={!reduced} animationDuration={500} />
-        <Line dataKey="avgFlowLpm" name="Vazão média" type="monotone" stroke="#8fa6b8" strokeWidth={1.5} dot={<FlowDot series={series} color="#8fa6b8" field="avgFlowLpm" />} activeDot={false} connectNulls={false} isAnimationActive={!reduced} animationDuration={500} />
-        {series.length > 24 && <Brush dataKey="t" height={26} travellerWidth={9} stroke="#9fb3c4" fill="#f7f9fb" tickFormatter={t => bucketLabel(t, filter.bucket)} />}
+        {threshold && <ReferenceLine y={threshold.minFlowLpm} stroke={CHART.threshold} strokeDasharray="6 4" strokeWidth={1.5} label={{ value: `limiar da regra ${numBR(threshold.minFlowLpm, 2)} L/min por ${threshold.continuousSeconds} s`, position: "insideTopRight", style: { fontSize: 11.5, fill: CHART.thresholdText, fontWeight: 600 } }} />}
+        <Line dataKey="maxFlowLpm" name="Vazão máxima" type="linear" stroke={FLOW} strokeWidth={2} dot={<FlowDot series={series} color={FLOW} field="maxFlowLpm" />} activeDot={{ r: 4.5, stroke: CHART.surface, strokeWidth: 2 }} connectNulls={false} {...anim} />
+        <Line dataKey="avgFlowLpm" name="Vazão média" type="linear" stroke={FLOW_AVG} strokeWidth={1.5} dot={<FlowDot series={series} color={FLOW_AVG} field="avgFlowLpm" />} activeDot={false} connectNulls={false} {...anim} />
+        {series.length > 24 && <Brush dataKey="t" height={26} travellerWidth={9} stroke={CHART.brushStroke} fill={CHART.brushFill} tickFormatter={t => bucketLabel(t, filter.bucket)} {...range} />}
       </ComposedChart>
     </ResponsiveContainer>
   </div>;
@@ -147,7 +181,8 @@ export function TableToggle({ on, onChange }: { on: boolean; onChange: (v: boole
   return <button className={`btn ghost small ${on ? "on" : ""}`} aria-pressed={on} onClick={() => onChange(!on)}><Table2 size={14} /> {on ? "Ver gráfico" : "Ver tabela"}</button>;
 }
 
-const RAMP = ["#e8f5f2", "#c6e6df", "#9bd2c7", "#66b8aa", "#36988b", "#137e77", "#0b5650"];
+/** Rampa sequencial no escuro: mais litros, mais claro (luminosidade monotônica, do painel ao menta). */
+const RAMP = ["#123134", "#15433f", "#185748", "#1f6e57", "#2a8a68", "#3cab80", "#62d6a4"];
 const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 /** Padrão semanal: média de litros por hora (Brasília) nos dias com leitura. Célula sem leitura fica hachurada, não clara. */
@@ -207,12 +242,11 @@ export function LiveSpark({ recent, threshold }: { recent: { t: number; flowLpm:
   return <div className="chart" style={{ height: 120 }}>
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart data={recent} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
-        <defs><linearGradient id="live-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={FLOW} stopOpacity={0.25} /><stop offset="1" stopColor={FLOW} stopOpacity={0} /></linearGradient></defs>
-        <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={t => hourBR(t)} tick={{ fontSize: 10, fill: "#6f8389" }} axisLine={false} tickLine={false} minTickGap={50} />
-        <YAxis tick={{ fontSize: 10, fill: "#6f8389" }} axisLine={false} tickLine={false} width={40} tickCount={4} tickFormatter={v => numBR(v, 1)} domain={[0, (m: number) => Math.max(m, (threshold ?? 0) * 1.2)]} />
-        {threshold && <ReferenceLine y={threshold} stroke="#cf7a12" strokeDasharray="5 4" />}
-        <Tooltip labelFormatter={t => hourBR(Number(t))} formatter={v => [`${numBR(Number(v), 2)} L/min`, "Vazão"]} contentStyle={{ borderRadius: 10, border: "1px solid #e3e9e7", fontSize: 12 }} />
-        <Area dataKey="flowLpm" type="monotone" stroke={FLOW} strokeWidth={2} fill="url(#live-fill)" isAnimationActive={false} dot={false} />
+        <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={t => hourBR(t)} tick={AXIS} axisLine={false} tickLine={false} minTickGap={50} />
+        <YAxis tick={AXIS} axisLine={false} tickLine={false} width={40} tickCount={4} tickFormatter={v => numBR(v, 1)} domain={[0, (m: number) => Math.max(m, (threshold ?? 0) * 1.2)]} />
+        {threshold && <ReferenceLine y={threshold} stroke={CHART.threshold} strokeDasharray="5 4" />}
+        <Tooltip labelFormatter={t => hourBR(Number(t))} formatter={v => [`${numBR(Number(v), 2)} L/min`, "Vazão"]} contentStyle={TIP_STYLE} cursor={{ stroke: FLOW, strokeOpacity: 0.5 }} />
+        <Area dataKey="flowLpm" type="linear" stroke={FLOW} strokeWidth={2} fill={FLOW} fillOpacity={0.08} isAnimationActive={false} dot={false} />
       </ComposedChart>
     </ResponsiveContainer>
   </div>;

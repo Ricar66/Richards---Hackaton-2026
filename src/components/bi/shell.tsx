@@ -2,10 +2,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Activity, Bell, ChevronRight, Cpu, Droplets, FileChartColumn, HeartHandshake, LayoutDashboard, Menu, Radar, TriangleAlert, X } from "lucide-react";
-import type { LiveDTO } from "@/modules/analytics/domain/dashboard";
+import { Activity, Bell, ChevronRight, Cpu, Droplets, ExternalLink, FileChartColumn, HeartHandshake, LayoutDashboard, Menu, MonitorPlay, TriangleAlert, X } from "lucide-react";
 import { agoBR, hourBR, numBR } from "@/lib/format";
-import { DATA_CHANGED, notifyDataChanged, useNow } from "./hooks";
+import { notifyDataChanged, PREVIEW_OUTDATED, PREVIEW_REFRESH, useNow, usePrefersReducedMotion } from "./hooks";
+import { useLiveEvent, useLiveStream, useNewOccurrence, type LiveView } from "./live-stream";
 import { SEVERITY_COLOR, SOURCE_LABEL, STATUS_LABEL } from "./labels";
 import { OccurrenceDrawer } from "./occurrence-drawer";
 import { IntervalDrawer, type IntervalRequest } from "./interval-drawer";
@@ -29,8 +29,6 @@ type Ctx = {
   openOccurrence: (id: string) => void;
   openInterval: (req: IntervalRequest) => void;
   toast: (t: Omit<Toast, "id">) => void;
-  live: LiveDTO | null;
-  liveError: boolean;
 };
 const ShellCtx = createContext<Ctx | null>(null);
 export function useShell() {
@@ -39,54 +37,91 @@ export function useShell() {
   return ctx;
 }
 
-const LIVE_MS = 5_000;
 const SIGNAL_FRESH_MS = 120_000;
+const ORIGIN_SHORT = { DEVICE: "sensor", SIMULATED: "simulado", MANUAL: "manual" } as const;
+/** Como a tela recebe os números agora (vai no title e no anúncio do leitor de tela, que só fala quando o estado muda). */
+const MODE_TEXT: Record<LiveView, string> = {
+  connecting: "Conectando ao sinal ao vivo",
+  live: "Ao vivo: cada leitura gravada chega pelo stream",
+  reconnecting: "Reconectando ao stream; enquanto isso, consulta a cada 5 s",
+  polling: "Stream indisponível: consulta a cada 5 s",
+  offline: "Servidor indisponível: números parados",
+};
 
-function useLive(onNew: (items: LiveDTO["active"]) => void) {
-  const [live, setLive] = useState<LiveDTO | null>(null);
-  const [error, setError] = useState(false);
-  const seen = useRef<Set<string> | null>(null);
-  const onNewRef = useRef(onNew);
-  useEffect(() => { onNewRef.current = onNew; });
-  useEffect(() => {
-    let alive = true;
-    const poll = async () => {
-      if (document.hidden) return;
-      try {
-        const res = await fetch("/api/analytics/live", { cache: "no-store" });
-        if (!res.ok) throw new Error(String(res.status));
-        const body = await res.json() as LiveDTO;
-        if (!alive) return;
-        // Primeira leitura só registra o que já existia: aviso é para o que surgir com a tela aberta.
-        if (seen.current) { const fresh = body.active.filter(o => !seen.current!.has(o.id)); if (fresh.length) onNewRef.current(fresh); }
-        seen.current = new Set([...(seen.current ?? []), ...body.active.map(o => o.id)]);
-        setLive(body); setError(false);
-      } catch { if (alive) setError(true); }
-    };
-    const timer = window.setInterval(poll, LIVE_MS);
-    const first = window.setTimeout(poll, 0);
-    window.addEventListener(DATA_CHANGED, poll);
-    return () => { alive = false; window.clearInterval(timer); window.clearTimeout(first); window.removeEventListener(DATA_CHANGED, poll); };
-  }, []);
-  return { live, error };
-}
-
-function LivePill({ live, error }: { live: LiveDTO | null; error: boolean }) {
+/** Pílula do sinal. `data-live-state` é o estado real da conexão (o E2E lê o mesmo atributo). */
+function LivePill() {
+  const { state, live } = useLiveStream();
   const now = useNow();
-  if (error) return <span className="live-pill down" role="status"><i /> Servidor indisponível · números parados</span>;
-  if (!live) return <span className="live-pill idle"><i /> Conectando ao sinal…</span>;
-  const r = live.lastReading;
-  if (!r) return <span className="live-pill idle"><i /> Nenhuma leitura recebida ainda</span>;
-  const at = new Date(r.at).getTime();
-  const fresh = now !== null && now - at <= SIGNAL_FRESH_MS;
-  return <span className={`live-pill ${fresh ? "on" : "stale"}`} title={`Última leitura ${hourBR(at)} · ${r.deviceCode} · origem ${SOURCE_LABEL[r.source]} · consulta a cada 5 s (não é streaming)`}>
-    <i />
-    {fresh ? <>Sinal {r.source === "SIMULATED" ? "simulado" : "do sensor"} · <b>{numBR(r.flowLpm, 2)} L/min</b></> : <>Sem sinal novo · última leitura {hourBR(at)}</>}
-    <span className="live-ago">{now === null ? hourBR(at) : agoBR(at, now)}</span>
-  </span>;
+  const reduced = usePrefersReducedMotion();
+  const dot = useRef<HTMLElement>(null);
+  const prevAt = useRef<string | null>(null);
+  const r = live?.lastReading ?? null;
+  const at = r?.at ?? null;
+  // Pisca UMA vez por leitura nova (não em loop); o primeiro retrato não pisca.
+  useEffect(() => {
+    const before = prevAt.current;
+    prevAt.current = at;
+    if (!before || !at || at === before || reduced || state !== "live") return;
+    dot.current?.animate?.([{ boxShadow: "0 0 0 0 rgba(99, 235, 191, .6)" }, { boxShadow: "0 0 0 8px rgba(99, 235, 191, 0)" }], { duration: 900, easing: "ease-out" });
+  }, [at, reduced, state]);
+
+  const atMs = at ? new Date(at).getTime() : null;
+  const ago = atMs === null ? null : <span className="live-ago">{now === null ? hourBR(atMs) : agoBR(atMs, now)}</span>;
+  const title = r ? `Última leitura ${hourBR(r.at)} · ${r.deviceCode} · origem ${SOURCE_LABEL[r.source]} · ${MODE_TEXT[state]}` : MODE_TEXT[state];
+  let tone = "idle", body: React.ReactNode;
+  if (state === "offline") { tone = "down"; body = "Servidor indisponível · números parados"; }
+  else if (state === "connecting") body = "Conectando ao sinal…";
+  else if (state === "reconnecting") { tone = "stale"; body = <>Reconectando…{ago}</>; }
+  else if (state === "polling") { tone = "stale"; body = <>Consulta a cada 5 s · stream indisponível{ago}</>; }
+  else if (!live) { tone = "on"; body = "Ao vivo · carregando…"; }
+  else if (!r || atMs === null) body = "Ao vivo · nenhuma leitura recebida ainda";
+  else if (now !== null && now - atMs > SIGNAL_FRESH_MS) { tone = "stale"; body = <>Conectado · sem leitura nova desde {hourBR(atMs)}</>; }
+  else { tone = "on"; body = <>Ao vivo · {ORIGIN_SHORT[r.source]} · <b>{numBR(r.flowLpm, 2)} L/min</b>{ago}</>; }
+  return <>
+    <span className={`live-pill ${tone}`} data-live-state={state} title={title}>
+      {/* O ponto não fica pulsando: a animação em loop do CSS é desligada e ele pisca só quando chega leitura. */}
+      <i ref={dot} style={{ animation: "none" }} />{body}
+    </span>
+    <span className="sr-only" role="status">{MODE_TEXT[state]}</span>
+  </>;
 }
 
-function AlertMenu({ live, onOpen }: { live: LiveDTO | null; onOpen: (id: string) => void }) {
+/** Contador lateral de ativas (contagem do servidor). */
+function SideCount() {
+  const { live } = useLiveStream();
+  return live && live.activeCount > 0 ? <span className="side-count">{live.activeCount}</span> : null;
+}
+
+const CHANNEL_TEXT: Record<LiveView, string> = {
+  connecting: "Conectando…",
+  live: "Stream ao vivo",
+  reconnecting: "Reconectando · consulta a cada 5 s",
+  polling: "Consulta a cada 5 s",
+  offline: "Servidor indisponível",
+};
+const CHANNEL_TONE: Record<LiveView, string> = { connecting: "idle", live: "on", reconnecting: "stale", polling: "stale", offline: "down" };
+
+/** Bloco "Sistema" da barra lateral: estado real do canal, última leitura gravada e contagem do servidor (nada calculado aqui). */
+function SystemBlock({ onNavigate }: { onNavigate: () => void }) {
+  const { state, live } = useLiveStream();
+  const now = useNow();
+  const r = live?.lastReading ?? null;
+  const atMs = r ? new Date(r.at).getTime() : null;
+  return <section className="side-sys" aria-labelledby="side-sys-h">
+    <h2 id="side-sys-h">Sistema</h2>
+    <dl>
+      <div><dt>Canal</dt><dd><i className={`sys-dot ${CHANNEL_TONE[state]}`} aria-hidden="true" />{CHANNEL_TEXT[state]}</dd></div>
+      <div><dt>Última leitura</dt><dd>{r && atMs !== null ? <>{now === null ? hourBR(atMs) : agoBR(atMs, now)}<small>{r.deviceCode} · <span className={`sys-src ${r.source.toLowerCase()}`}>{ORIGIN_SHORT[r.source]}</span></small></> : live ? "nenhuma ainda" : "—"}</dd></div>
+      <div><dt>Ocorrências ativas</dt><dd className={live && live.activeCount > 0 ? "warn" : ""}>{live ? live.activeCount : "—"}</dd></div>
+    </dl>
+    <a className="btn side-stage" href="/ao-vivo" target="_blank" rel="noopener" onClick={onNavigate}>
+      <MonitorPlay size={16} /> Abrir Sala ao vivo <ExternalLink size={13} aria-hidden="true" /><span className="sr-only">(abre em nova aba)</span>
+    </a>
+  </section>;
+}
+
+function AlertMenu({ onOpen }: { onOpen: (id: string) => void }) {
+  const { live } = useLiveStream();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -148,12 +183,24 @@ export function BiShell({ children }: { children: React.ReactNode }) {
   const openOccurrence = useCallback((id: string) => { setIntervalReq(null); setOccurrenceId(id); syncOc(id); }, []);
   const closeOccurrence = useCallback(() => { setOccurrenceId(null); syncOc(null); }, []);
 
-  const { live, error: liveError } = useLive(items => {
-    for (const o of items) toast({ tone: "warn", title: `Nova ocorrência · ${o.title}`, body: `${SOURCE_LABEL[o.source]} · aberta às ${hourBR(o.openedAt)}`, action: { label: "Investigar", run: () => openOccurrence(o.id) } });
-    notifyDataChanged();
+  // Avisos a partir do stream. Ocorrência: uma vez por id (o mesmo conjunto vale para o evento e para a consulta de reserva).
+  useNewOccurrence(o => {
+    toast({ tone: "warn", title: `Nova ocorrência · ${o.title}`, body: `${SOURCE_LABEL[o.source]} · aberta às ${hourBR(o.openedAt)}`, action: { label: "Investigar", run: () => openOccurrence(o.id) } });
+    // Com o stream fora, as telas não receberam o evento: avisa para buscarem de novo.
+    if (o.via === "snapshot") notifyDataChanged();
   });
+  useLiveEvent("donation.created", e => {
+    if (e.origin !== "scale") return;
+    toast({ tone: "info", title: `Lote ${numBR(e.kg, 1)} kg aguardando verificação`, body: `Balança${e.deviceCode ? ` ${e.deviceCode}` : ""} · ${SOURCE_LABEL[e.source]} · só fica disponível depois da verificação humana`,
+      action: { label: "Ver doações", run: () => router.push(filterQuery ? `/doacoes?${filterQuery}` : "/doacoes") } });
+  });
+  useEffect(() => {
+    const onOutdated = () => toast({ tone: "info", title: "Há dados novos desde a prévia", body: "A prévia não muda sozinha, para continuar igual ao PDF.", action: { label: "Atualizar prévia", run: () => window.dispatchEvent(new Event(PREVIEW_REFRESH)) } });
+    window.addEventListener(PREVIEW_OUTDATED, onOutdated);
+    return () => window.removeEventListener(PREVIEW_OUTDATED, onOutdated);
+  }, [toast]);
 
-  const ctx = useMemo<Ctx>(() => ({ pending, params, setFilter, openOccurrence, openInterval: setIntervalReq, toast, live, liveError }), [pending, params, setFilter, openOccurrence, toast, live, liveError]);
+  const ctx = useMemo<Ctx>(() => ({ pending, params, setFilter, openOccurrence, openInterval: setIntervalReq, toast }), [pending, params, setFilter, openOccurrence, toast]);
   const current = NAV.find(n => n.href === "/" ? pathname === "/" : pathname.startsWith(n.href)) ?? NAV[0];
 
   return <ShellCtx.Provider value={ctx}>
@@ -172,16 +219,12 @@ export function BiShell({ children }: { children: React.ReactNode }) {
             const active = current.href === href;
             return <Link key={href} href={filterQuery ? `${href}?${filterQuery}` : href} className={`side-link ${active ? "active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => setNavOpen(false)}>
               <Icon size={17} /><span>{label}</span>
-              {href === "/ocorrencias" && (live?.activeCount ?? 0) > 0 && <span className="side-count">{live!.activeCount}</span>}
+              {href === "/ocorrencias" && <SideCount />}
             </Link>;
           })}
         </nav>
         <div className="side-foot">
-          <div className="side-card">
-            <Radar size={17} />
-            <strong>Do sinal à ação</strong>
-            <p>Leitura vira suspeita, suspeita vira verificação humana registrada.</p>
-          </div>
+          <SystemBlock onNavigate={() => setNavOpen(false)} />
           <a className="side-legacy" href="/intelligence">Abrir BI V3 legado (contingência)</a>
           <small>Hackathon Senac RP · 2026</small>
         </div>
@@ -191,8 +234,8 @@ export function BiShell({ children }: { children: React.ReactNode }) {
           <button className="icon-btn menu-btn" onClick={() => setNavOpen(true)} aria-label="Abrir menu"><Menu size={18} /></button>
           <div className="crumb"><span>RICHARDS</span><ChevronRight size={13} /><strong>{current.label}</strong></div>
           <div className="top-actions">
-            <LivePill live={live} error={liveError} />
-            <AlertMenu live={live} onOpen={openOccurrence} />
+            <LivePill />
+            <AlertMenu onOpen={openOccurrence} />
             <span className="avatar" title="Operador autenticado (Basic Auth de laboratório)">OP</span>
           </div>
         </header>
