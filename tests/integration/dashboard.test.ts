@@ -32,7 +32,11 @@ test("T40 período sem leitura: volume null e série só de lacunas (nunca zero 
 });
 
 test("T41 soma da série = KPI do período e intervalos sem amostra ficam null", async () => {
-  await history([{ hoursAgo: 30, liters: 10 }, { hoursAgo: 20, liters: 4 }, { hoursAgo: 20.1, liters: 6 }, { hoursAgo: 2, liters: 5 }]);
+  // As duas do meio caem DENTRO da mesma hora (aos 24 e aos 30 min da hora de ~20 h atrás). Com 20 h e 20,1 h fixos,
+  // rodar nos primeiros 6 min de uma hora punha uma em cada hora e o teste falhava sem defeito (06/11, 13:01 UTC).
+  // São Paulo é UTC−3 inteiro, então a hora UTC e a hora local da série coincidem.
+  const now = Date.now(), slot = Math.floor((now - 20 * HOUR) / HOUR) * HOUR, ago = (t: number) => (now - t) / HOUR;
+  await history([{ hoursAgo: 30, liters: 10 }, { hoursAgo: ago(slot + 0.5 * HOUR), liters: 4 }, { hoursAgo: ago(slot + 0.4 * HOUR), liters: 6 }, { hoursAgo: 2, liters: 5 }]);
   const d = await getDashboard(parseAnalyticsFilter({ range: "7d" }));
   assert.equal(d.kpis.observedLiters, 25);
   assert.equal(d.series.reduce((n, p) => n + (p.liters ?? 0), 0), 25);

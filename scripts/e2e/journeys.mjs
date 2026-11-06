@@ -66,6 +66,10 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     await page.click("[aria-label=Período] button:nth-child(1)");
     await page.waitForFunction(() => location.search.includes("range=24h"), { timeout: 15000 });
     check("A2 filtro 24 h vai para a URL e recalcula (intervalos de 15 min)", await waitText("a cada 15 min"));
+    // A2c: a troca de filtro atualiza a tela no lugar (crossfade por tipo de transição), sem remontar: quem filtra pelo
+    // teclado continua no controle. Uma `key` por filtro remontava a tela e jogava o foco no <body>.
+    const focusAfter = await page.evaluate(() => { const a = document.activeElement; return a && a !== document.body ? `${a.tagName} "${a.textContent?.trim()}" no ${a.closest("[aria-label]")?.getAttribute("aria-label")}` : "body"; });
+    check("A2c troca de filtro mantém o foco no controle (a tela não remonta)", /Período/.test(focusAfter) && /24/.test(focusAfter), focusAfter);
     await wait(900);
     const kpiTrail = await page.evaluate(() => { window.__kpiObs.disconnect(); return window.__kpiSeen; });
     const nums = kpiTrail.map(s => s && /\d/.test(s) ? Number(s.replace(/\./g, "").replace(",", ".")) : null).filter(n => n !== null && Number.isFinite(n));
@@ -201,6 +205,17 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     await clickButton("", "Gerar PDF");
     check("C2 botão gera o PDF e mostra nome, hora e tamanho", await waitText("richards-relatorio-"));
 
+    // N1: trocar de tela pela barra lateral (deslize de saída) e clicar num filtro logo depois: o clique tem de valer.
+    // Durante uma view transition o navegador não entrega clique a quem participa dela; por isso a única animação é a
+    // saída da tela anterior, sem nomes próprios. Uma revelação/crossfade engolia o clique (pego em 06/11).
+    await go("/");
+    await page.evaluate(() => [...document.querySelectorAll(".side-link")].find(a => a.innerText.includes("Monitoramento"))?.click());
+    await page.waitForFunction(() => location.pathname === "/monitoramento", { timeout: 15000 }).catch(() => {});
+    await page.waitForSelector("[aria-label=Período] button", { visible: true, timeout: 20000 }).catch(() => {});
+    await page.click("[aria-label=Período] button:nth-child(3)").catch(() => {});
+    const n1 = await page.waitForFunction(() => location.search.includes("range=30d"), { timeout: 8000 }).then(() => true, () => false);
+    check("N1 barra lateral → filtro clicado logo depois: o clique vale (nenhuma transição engole o clique)", n1, n1 ? "" : `url ${await page.evaluate(() => location.pathname + location.search)}`);
+
     // ---------- Sala ao vivo (telão, outra aba: a raiz traz data-stage e o estado real do stream em data-live-state) ----------
     const stage = await browser.newPage();
     stage.on("pageerror", e => pageErrors.push(`/ao-vivo: ${e.message}`));
@@ -210,6 +225,26 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     const stageState = stageOk ? await stage.$eval("[data-stage]", el => el.getAttribute("data-live-state")) : null;
     if (stageOk) { await wait(1500); await stage.screenshot({ path: shot("j-sala-ao-vivo.png") }); }
     check("S1 Sala ao vivo carrega (raiz [data-stage] com data-live-state)", stageOk, stageState ? `estado ${stageState}` : "");
+    // S2–S5: gêmeo (SVG padrão, 3D por chave com reserva), tecla 3 e tecla P. O SVG é sempre o elemento acessível.
+    const twin = () => stage.$eval(".twin-slot", el => [el.getAttribute("data-twin-mode"), el.getAttribute("data-twin-reason")]).catch(() => [null, null]);
+    const [m0, r0] = stageOk ? await twin() : [null, null];
+    check("S2 sem chave: gêmeo no SVG (motivo 'off'), sem canvas 3D", m0 === "svg" && r0 === "off" && !(await stage.$(".twin-canvas")), `modo=${m0} motivo=${r0}`);
+    await stage.goto(base + "/ao-vivo?3d=1", { waitUntil: "load" }).catch(() => {});
+    await stage.waitForFunction(() => { const el = document.querySelector(".twin-slot"); return el && (el.getAttribute("data-twin-mode") === "3d" || el.getAttribute("data-twin-reason")); }, { timeout: 15000 }).catch(() => {});
+    const [m1, r1] = await twin();
+    const svgA11y = await stage.$eval(".twin-slot > svg.pipe", el => el.getAttribute("role") === "img" && /esquemática/.test(el.getAttribute("aria-label") ?? "")).catch(() => false);
+    // Sem GPU (ambiente de CI) a reserva é o resultado CERTO: vale 3d ou SVG com o motivo dito, sempre com o SVG acessível.
+    check("S3 ?3d=1: cano 3D por cima (ou SVG com motivo de reserva) e o SVG continua role=img", (m1 === "3d" || (m1 === "svg" && ["no-webgl", "software", "budget", "error"].includes(r1))) && svgA11y, `modo=${m1} motivo=${r1}`);
+    if (m1 === "3d") await stage.screenshot({ path: shot("j-sala-3d.png") });
+    await stage.keyboard.press("3");
+    await stage.waitForFunction(() => document.querySelector(".twin-slot")?.getAttribute("data-twin-reason") === "off", { timeout: 4000 }).catch(() => {});
+    const [m2, r2] = await twin();
+    check("S4 tecla 3 desliga o 3D: volta ao SVG (motivo 'off') sem canvas", m2 === "svg" && r2 === "off" && !(await stage.$(".twin-canvas")), `modo=${m2} motivo=${r2}`);
+    await stage.keyboard.press("p");
+    const pausedOk = await stage.waitForSelector("[data-stage][data-paused] .paused-pill", { timeout: 3000 }).then(() => true, () => false);
+    await stage.keyboard.press("p");
+    const resumed = await stage.waitForFunction(() => !document.querySelector("[data-stage]")?.hasAttribute("data-paused") && !document.querySelector(".paused-pill"), { timeout: 3000 }).then(() => true, () => false);
+    check("S5 tecla P pausa o movimento (pílula no cabeçalho) e P retoma", pausedOk && resumed);
     await stage.close();
 
     // ---------- Responsividade ----------

@@ -71,6 +71,13 @@ Dependência só de desenvolvimento: `puppeteer-core` 24.43.1, para o E2E. Usa o
 
 `mqtt` 5.16.1 (MIT, cerca de 2 MB, 32 pacotes): cliente MQTT da ponte da bancada. Roda só no processo `pnpm mqtt` e não entra no bundle do Next.
 
+`three` 0.186.1 (MIT, zero dependências, versão exata) + `@types/three` 0.186.0 (desenvolvimento): gêmeo 3D opcional da Sala ao vivo.
+- **Peso:** pedaço sob demanda de 137,6 KB gzip, que só é baixado com o 3D ligado. As rotas do BI e o primeiro quadro da Sala ganham 0 KB (medido no build).
+- **Fica fora de propósito**, pela pesquisa de 06/11 (`docs/plano` não muda; o raciocínio está na seção 10):
+  - React Three Fiber e drei: +115 a 150 KB, React fixo abaixo de 19.4 e uso de CDN escondido;
+  - pós-processamento e bloom: cerca de 14 ms por quadro na GPU integrada;
+  - Motion, GSAP, NumberFlow, Lottie, Rive e Spline.
+
 ## 6. Mapa do código
 
 | Pasta | Conteúdo |
@@ -79,7 +86,9 @@ Dependência só de desenvolvimento: `puppeteer-core` 24.43.1, para o E2E. Usa o
 | `src/app/(palco)/` | Sala ao vivo (`/ao-vivo`), sem o BiShell, com CSS próprio escopado em `.stage` (`stage.css`) |
 | `src/app/api/` | APIs: `iot/telemetry`, `analytics/{dashboard,interval,live,overview}`, `occurrences`, `donations`, `recipients`, `reports/summary`, `admin/simulate`, `health`, `live/stream` (SSE), `live/snapshot` (Sala) |
 | `src/modules/realtime/` | Contrato do evento ao vivo (`domain/live-event.ts`, versionado), `public-actor.ts` (autor mascarado), hub LISTEN/NOTIFY (`infrastructure/event-hub.ts`) e `notifyLive`/`notifyLiveSafe` |
-| `src/components/stage/` | Componentes da Sala: lógica pura (`stage-logic.ts`), redutor (`stage-model.ts`), gêmeo do cano, anel da regra, sensores, feed, viagem do pacote |
+| `src/components/stage/` | Componentes da Sala: lógica pura (`stage-logic.ts`: água, alarme, dígitos e cadeia de reserva do 3D), redutor (`stage-model.ts`), gêmeo do cano (`pipe-twin.tsx` SVG; `twin-slot.tsx` decide SVG × 3D; `pipe-twin-3d.tsx` + `three/pipe-scene.ts` three imperativo; `twin-boundary.tsx`), `digits.tsx`, anel da regra, sensores, feed com FLIP, viagem do pacote |
+| `src/components/bi/page-transition.tsx` | `<ViewTransition>` do React 19.3: deslize entre telas e crossfade na troca de filtro |
+| `src/lib/use-flip.ts` | FLIP próprio (WAAPI) para listas |
 | `src/lib/live-client.ts` | `EventSource` com estados (connecting/live/reconnecting/down), backoff e watchdog de 35 s |
 | `src/app/intelligence/` | BI V3 antigo em iframe, só **contingência**. Tem o botão "← Voltar ao BI" |
 | `src/components/bi/` | Shell, filtros, gráficos, gavetas (ocorrência, intervalo, doação), primitivas e telas em `views/` |
@@ -162,10 +171,13 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 | Verificação | Resultado | Data |
 |---|---|---|
 | typecheck, lint e build de produção | PASSOU | 06/11/2026 (tempo real e palco) |
-| `pnpm test` (unitários) | PASSOU 95/95 | 06/11/2026 |
-| `pnpm test:integration` (Postgres real, banco richards_test) | PASSOU 69/69 | 06/11/2026 |
+| `pnpm test` (unitários) | PASSOU 107/107 | 06/11/2026 (efeitos e 3D) |
+| `pnpm test:integration` (Postgres real, banco richards_test) | PASSOU 69/69 (T41 ancorado na hora: falhava nos 6 primeiros min de cada hora) | 06/11/2026 |
 | `pnpm test:e2e --with-db-outage` | PASSOU 34/34 (A0: leitura → pílula em 109 ms; A5b: 202 → aviso em 8 ms; S1: Sala ao vivo; E1b: sinal volta sozinho com o banco) | 06/11/2026 |
-| `pnpm test:e2e` (sem queda de banco) | PASSOU 29/29 | 06/11/2026 |
+| `pnpm test:e2e` (sem queda de banco) | PASSOU 36/36. Inclui A2b (KPI nunca fora do intervalo), A2c (filtro mantém o foco), N1 (clique logo depois de navegar vale), S2–S5 (gêmeo SVG/3D, teclas 3 e P) | 06/11/2026 |
+| Ensaio dos efeitos da Sala (`next start` + bancada + Chrome 1920×1080) | PASSOU 11/11. Água a 60 fps (p95 16,8 ms); hachura e contorno simulados; alarme pulse → steady ao assumir; P para o alarme piscando; reduzir movimento; 21 textos do número grande, todos de leituras reais; 4 pulsos em 8 s com a bancada; 0 erros | 06/11/2026 |
+| Ensaio do gêmeo 3D (GPU Intel real, ANGLE D3D11) | PASSOU 16/16. three fora dos scripts iniciais das 7 rotas (pedaço sob demanda de 137,9 KB gzip); 60 fps (p95 16,8 ms, 15 draw calls); perda de contexto → loading em 8 ms → 3D num canvas novo em 369 ms; 2ª perda fica no SVG; religar passa por loading; maior tarefa longa ao religar 123 ms; reduzir movimento, sem WebGL e GPU desligada caem no SVG; 0 pedidos externos; 0 erros | 06/11/2026 |
+| 3D no projetor real | **NÃO EXECUTADO** (sem acesso ao projetor do evento): ensaiar antes de ligar no palco | — |
 | Ensaio de palco de ponta a ponta (`next start` + `pnpm bancada --cenario palco` + `/ao-vivo` no Chrome 1920×1080, banco de teste) | PASSOU: 91 leituras SIMULATED (0 perdidas), UNUSUAL_FLOW em T+30, TEMPERATURE_EXCURSION em T+48, lote de 6,0 kg PENDING_REVIEW; atraso servidor → tela de cada leitura: mediana 19 ms, máximo 69 ms; 0 erros de JavaScript | 06/11/2026 |
 | Revisão adversarial do diff (4 lentes + verificadores) | 14 achados confirmados (2 P0, 1 P1, 11 P2/P3), todos corrigidos com teste; correções verificadas por um segundo cético (testes de mutação) | 06/11/2026 |
 | Ponte MQTT de ponta a ponta (Mosquitto 2.1.2 em Docker + `pnpm mqtt` no banco de teste) | PASSOU: JSON inválido e id desconhecido descartados, 7 leituras SIMULATED, 1 ocorrência de temperatura e 1 lote PENDING_REVIEW de 6,2 kg, com auditoria | 04/11/2026 |
@@ -211,6 +223,36 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Bancada virtual grava tudo como SIMULATED** (canal `bancada-virtual`), pelas mesmas regras e casos de uso da ponte MQTT. O `--preparar` não apaga nada: muda o status para DISMISSED/CANCELLED, com auditoria.
 - **Tema escuro como padrão do BI** (tokens do conceito do Codex: fundo `#071217`, menta para dado e ação, laranja para alerta, **roxo só para simulado**). O selo de origem (`Seal`) é separado da etiqueta de estado. A prévia do relatório continua clara, igual ao PDF.
 - **O link da Sala ao vivo fica no bloco "Sistema"** da barra lateral (nova aba). O ignore de "aba lateral" do `.impeccable` saiu, porque o trilho da linha do tempo agora é neutro.
+
+**Efeitos visuais e gêmeo 3D (06/11, depois de pesquisa com 4 frentes e verificação cética das fontes)**
+- **O SVG é o padrão e o plano B; o 3D é opcional** (`?3d=1` ou tecla 3, gravado no navegador).
+  - O SVG fica sempre montado por baixo como elemento acessível.
+  - Qualquer elo volta ao SVG na hora: chave desligada, reduzir movimento, sem WebGL2, renderização por software (WARP/SwiftShader), erro, perda de contexto (a 2ª em 60 s fica no SVG) e orçamento de quadro (mediana acima de 20 ms por 3 s).
+- **three imperativo, sem React Three Fiber.**
+  - A cena é gerada em código, sem arquivo nem CDN.
+  - A água usa `advancePhase(waterSpeed(vazão medida))`, a mesma conta do SVG.
+  - Nenhum número é desenhado no 3D.
+  - O canvas é criado dentro do efeito, um novo por montagem: um canvas cujo contexto foi perdido nunca ganha outro.
+- **O BI segue 2D**, no padrão de tela de operação ISA-101. Ele ganhou só ViewTransition e acabamento CSS.
+- **Alarme no padrão ISA-18.2:**
+  - pisca a 0,5 Hz só enquanto a ocorrência de fluxo do sensor está OPEN;
+  - fica fixo depois de ACKNOWLEDGED;
+  - ocorrência de outra origem não acende o cano.
+- **Troca de dígito sem valor intermediário.** O dígito anterior sai em `::before` com texto alternativo vazio, então fica fora do innerText e do leitor de tela.
+- **Tecla P** pausa todo movimento decorativo (WCAG 2.2.2). A WAAPI e o laço do three não obedecem ao CSS de reduzir movimento, então recebem `still` explícito.
+- **KPI animado do BI** com um só escritor do texto, partindo do valor que está na tela. Contagem inteira troca direto. O E2E A2b vigia isso.
+- **Revisão adversarial do diff visual (06/11, 4 lentes + verificadores):** 21 de 26 achados confirmados e corrigidos.
+  - O pulso do medidor era morto com a bancada/MQTT: o `sensor.live` apagava a chave. Agora a chave é `bootId:sequence` da última leitura do sensor em foco.
+  - A tecla P não parava o alarme piscando (especificidade de CSS). A regra de pausa foi para o fim do arquivo, com `!important`.
+  - A troca de filtro remontava a tela do BI, pela `key` do crossfade, e tirava o foco. Agora o crossfade é por tipo de transição (`bi-filtro`, via `router.replace`). O E2E A2c vigia o foco.
+  - O pulso do 3D corria pela água. Agora é um anel no medidor, igual ao SVG.
+  - O 3D aparecia vazio ao religar. Agora cada religada é uma tentativa nova.
+  - O orçamento de quadro media a cadência da tela; agora é relativo à cadência-base (tela de 30 Hz não derruba).
+  - Alarme de ocorrência simulada passa a carimbar o cano.
+  - Acessibilidade: região viva da pausa, contraste da legenda de teclas e `?atalhos=0`.
+- **Aceitos, com motivo:**
+  - O `next/dynamic` guarda a falha de download do pedaço do three até recarregar a página. O pedaço é servido localmente; se falhar, a Sala segue no SVG.
+  - O ambiente PMREM é gerado na criação da cena. Medido no ensaio (T7c, tarefas longas ao religar).
 
 **Ferramentas e documentação**
 - **E2E com `puppeteer-core` em vez de Playwright**: usa o Chrome instalado e não baixa navegador. O Edge headless não funcionou.
@@ -302,3 +344,7 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Tailwind v4 gera utilitário para nome de classe genérico encontrado no código** (`ring`, `shadow`, `border`...). Em CSS próprio, use nomes específicos.
 - **O `.stamp` do `globals.css` tem `position: absolute`.** Na Sala, o carimbo é `seal-stamp`.
 - **`python -` (lendo script do stdin) trava o terminal da IA.** Escreva um arquivo `.py` ou `.cjs`.
+- **O `globals.css` do BI é global.** Classe nova da Sala não pode repetir nome do BI. Em 06/11, um `.twin-stage` na Sala herdou o fundo do gêmeo do BI e desenhou um "cartão" escuro atrás do 3D. Hoje a classe da Sala é `.twin-slot`.
+- **Teste com "N horas atrás" fixo depende da hora em que roda.** O T41 falhava nos 6 primeiros minutos de cada hora; agora as leituras são ancoradas dentro da hora.
+- **Puppeteer 24: `page.screenshot()` devolve `Uint8Array`**, não Buffer. Use `Buffer.from()` antes de ler bytes.
+- **WebGL no Chrome headless deste notebook usa a GPU real** (ANGLE D3D11). O 3D roda no E2E. Sem GPU (CI), o S3 aceita a reserva com o motivo.

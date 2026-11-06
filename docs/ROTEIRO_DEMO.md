@@ -4,7 +4,12 @@ Complementa `docs/plano/13_PITCH_JORNADA_DEMO.md` (tese, falas de abertura, slid
 
 ## Na véspera (30 min)
 1. `docker compose up -d --build` e depois conferir `http://localhost:3000/api/health`. Precisa responder `"database":"up"`.
-2. `pnpm build && pnpm test:e2e`. As 29 verificações precisam passar, inclusive A0/A5b (atraso medido em ms) e S1 (Sala ao vivo). Use banco de **teste**: o banco da demo não é tocado.
+2. `pnpm build && pnpm test:e2e`. As 34 verificações precisam passar. Entre elas:
+   - A0/A5b: o atraso medido em ms;
+   - A2b: o KPI nunca mostra número fora do intervalo;
+   - S1 a S5: Sala ao vivo, gêmeo SVG/3D, teclas 3 e P.
+
+   Use banco de **teste**: o banco da demo não é tocado.
 3. ESP32:
    - `secrets.h` com a mesma chave de `IOT_DEMO_DEVICE_KEY`;
    - Wi-Fi do evento;
@@ -17,6 +22,10 @@ Complementa `docs/plano/13_PITCH_JORNADA_DEMO.md` (tese, falas de abertura, slid
 5. Navegador:
    - **Notebook (operador):** zoom de 100%, janela de 1440 px ou mais, Basic Auth já digitada, abas `/`, `/monitoramento?range=24h`, `/doacoes` e `/relatorios`.
    - **Telão:** `/ao-vivo` (Sala ao vivo) numa segunda janela, arrastada para o projetor. Clique na página e aperte **F** para tela cheia (**Esc** sai). Para fixar o sensor da vazão: `/ao-vivo?dispositivo=RICHARDS-FLOW-001`.
+   - **Gêmeo 3D (opcional, padrão desligado):** `/ao-vivo?3d=1`, ou a tecla **3** com a Sala aberta.
+     - **D** mostra o diagnóstico: modo, GPU, fps e motivo. Confira **gpu Intel(R) Graphics · Direct3D11** e cerca de 60 fps com a água correndo.
+     - Se aparecer outro motivo (software, sem WebGL, perda de contexto ou orçamento), a Sala já voltou sozinha ao desenho 2D. Siga com ele.
+     - Use o 3D no projetor só se passar no ensaio no projetor real: notebook na tomada, perfil "Melhor desempenho", nada por cima da janela da Sala.
    - Conferir que a pílula do BI e o canto da Sala dizem **Ao vivo**.
 6. Deixar dois terminais prontos (contingência, ver abaixo):
    - `pnpm bancada --cenario palco --inicio-em 5`, que move vazão, temperatura e balança (só depois de parar a ponte `pnpm mqtt`: `pnpm palco:checar --sensores VAZAO` acusa FALHA se houver leitura de vazão dela nos últimos 10 s; se você acabou de pará-la, espere 10 s e rode de novo);
@@ -51,6 +60,17 @@ A `/ao-vivo` é a tela do projetor durante a fala de IoT e a demonstração. Ela
 - Os números de **hoje** vindos do servidor.
 - O **feed** de eventos. Mostra a instituição, nunca quem recebeu.
 - A **viagem do último pacote**, com os trechos medidos em ms. Trecho sem relógio aparece como "não medido".
+- O **gêmeo do cano** (2D, ou 3D com a tecla 3). A água corre na velocidade da vazão MEDIDA e para sem leitura recente.
+  - Leitura simulada ganha hachura e contorno roxos dentro do próprio desenho.
+  - O anel de luz que sai do medidor marca a chegada de uma leitura gravada, não é vazão.
+- O **alarme** segue o padrão industrial ISA-18.2:
+  - pisca (devagar, 0,5 Hz) enquanto a ocorrência está aberta e ninguém assumiu;
+  - fica fixo e diz "alarme reconhecido" depois de assumida no BI.
+- **Teclas:**
+  - **P** pausa o movimento (pílula "MOVIMENTO PAUSADO" no topo; os números seguem ao vivo);
+  - **3** liga e desliga o 3D;
+  - **D** mostra o diagnóstico.
+  - `/ao-vivo?atalhos=0` desliga os atalhos de uma tecla (WCAG 2.1.4). A tela cheia fica no F11 do navegador.
 
 Falas:
 
@@ -59,6 +79,8 @@ Falas:
 | A vazão sobe | "Cada leitura gravada chega aqui pelo stream." |
 | O anel conta | "A regra não dispara com um pico: ela conta segundos de fluxo contínuo, decididos no servidor a cada leitura." |
 | OCORRÊNCIA ABERTA | "Suspeita, não vazamento comprovado. Agora uma pessoa verifica." Em seguida, troque para o notebook e clique em **Investigar**. |
+| Assumir no BI → o alarme para de piscar | "Padrão de sala de controle industrial: alarme pisca até alguém assumir, depois fica fixo." |
+| Gêmeo 3D na tela | "O gêmeo é esquemático: a água só corre na velocidade que o sensor mediu." |
 | Viagem do pacote | Leia o número que **está na tela**, que é a medição daquela leitura. Não arredonde para baixo nem prometa outro valor. |
 
 Selos: se a Sala mostrar **SIMULADO** ou **MISTO**, diga "SIMULAÇÃO" em voz alta.
@@ -74,6 +96,8 @@ Selos: se a Sala mostrar **SIMULADO** ou **MISTO**, diga "SIMULAÇÃO" em voz al
 | BI nativo com problema | Abrir `/intelligence` (BI V3 de contingência, link no rodapé do menu) | |
 | Banco caiu | A tela mostra "Dados indisponíveis". Reiniciar com `docker compose start db` | "Sem banco, a plataforma não inventa número." |
 | Sem rede no palco | Rodar tudo em `localhost` no notebook (Docker local) | |
+| Gêmeo 3D travando ou estranho no projetor | Tecla **3** (volta ao desenho 2D na hora) ou `/ao-vivo?3d=0` | |
+| Visual novo com problema | Voltar à versão estável: `docker tag richards-platform-web:palco-estavel richards-platform-web:latest` e `docker compose up -d web`. Funciona sem rede e sem build; a tag git é `palco-estavel` | |
 
 ## Não diga
 - "Economizamos X litros". Diga "volume observado".
