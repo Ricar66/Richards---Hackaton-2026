@@ -51,6 +51,7 @@ Teste de bancada MQTT:
 - [ ] Confirmar que `flowLpm` perto de zero não gera ocorrência.
 - [ ] Abrir no BI a mesma amostra originada pelo dispositivo.
 - [ ] Rodar contingência `pnpm simulate` e conferir selo SIMULATED.
+- [ ] Ensaiar a contingência da bancada inteira, sem placa e sem broker: `pnpm palco:checar`, `pnpm bancada --preparar` se houver FALHA, e `pnpm bancada --cenario palco --inicio-em 5`. Tudo sai SIMULATED (canal `bancada-virtual`) e quem opera diz "SIMULAÇÃO" (ver `docs/CONTRATO_IOT.md`, seção "Bancada virtual").
 - [ ] Gravar vídeo curtíssimo de contingência (tela + bancada + origem) sem fingir execução em tempo real.
 
 ## Rede de apresentação

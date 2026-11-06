@@ -24,7 +24,21 @@
 
 ## 02:10–03:50 · Demonstração, com fala curta (slides 07–09)
 
-**Victor:** ativar circuito seguro. **Operador do painel:** filtrar origem `DEVICE`; mostrar amostra do sensor, a ocorrência aberta, o detalhe com evidência, assumir investigação e resolver com uma nota de intervenção.
+**Telão:** Sala ao vivo (`/ao-vivo`, tela cheia com F) desde o início da demonstração.
+
+**Victor:** ativar o circuito seguro. Enquanto a vazão sobe, a plateia vê o **anel da regra** contar os segundos de fluxo contínuo.
+
+Fala-guia: "A regra não dispara com um pico. Cada traço aceso é um segundo que o servidor decidiu, leitura a leitura. Ninguém está animando isso."
+
+**Operador do painel**, quando o anel virar OCORRÊNCIA ABERTA:
+
+1. Filtrar a origem `DEVICE`.
+2. Clicar em **Investigar** no aviso.
+3. Mostrar o detalhe com a evidência.
+4. Assumir a investigação.
+5. Resolver com uma nota de intervenção.
+
+Se der tempo, apontar a **viagem do pacote** no rodapé da Sala e ler o número **que está na tela**, que é a medição daquela leitura.
 
 Fala-guia: “Reparem numa coisa: a leitura chegou identificada como dado do dispositivo. O sistema sinalizou um comportamento que merece atenção; agora uma pessoa verifica e registra o que foi feito. Isso cria rastreabilidade — não só um alarme que desaparece.”
 
@@ -32,7 +46,7 @@ Mudar para a jornada alimentar. “Aqui seguimos a mesma lógica de responsabili
 
 Encerrar demo abrindo PDF. “E esse relatório usa o mesmo recorte do painel e identifica a origem dos dados.”
 
-**Plano B:** se o Victor ainda não estiver com a placa conectada, usar simulador, dizer “SIMULAÇÃO” em voz alta e mostrar o selo na tela.
+**Plano B:** se a placa não estiver conectada ou a vazão física falhar, parar a ponte (Ctrl+C no `pnpm mqtt`) e rodar `pnpm bancada --cenario palco --inicio-em 5`, que move vazão, temperatura e balança pelas mesmas regras. A ponte não descarta um sensor só: com ela ligada, a vazão se mistura e a bancada recusa começar. Com a ponte recém-parada, a bancada espera até 6 s e começa. Dizer "SIMULAÇÃO" em voz alta e mostrar o selo **SIMULADO** na Sala. Último recurso: `pnpm simulate`, só para a vazão.
 
 ## 03:50–04:25 · Diferencial proposto (slide 10)
 

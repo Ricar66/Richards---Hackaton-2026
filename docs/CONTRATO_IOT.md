@@ -129,3 +129,157 @@ A ponte também só alimenta dispositivos da organização da bancada. Use só e
 - usuário por dispositivo;
 - ACL por tópico, ligando o tópico ao código do dispositivo;
 - ou HMAC com a chave do dispositivo no payload.
+
+## Bancada virtual (contingência de palco)
+
+Se a bancada física falhar (placa, Wi-Fi, broker ou sensor), `pnpm bancada` move **vazão, temperatura/umidade e peso** sem placa e sem broker. Ela monta o mesmo JSON do firmware MQTT e o entrega, no próprio processo, à **mesma ingestão da ponte** (`MqttIngestion`). As regras são as reais: vazão pelo Device (1,5 L/min por 30 s), temperatura acima de 28 °C por 30 s, balança com 5 kg estáveis por 6 s, uma ocorrência ativa por tipo (regra 5) e lote só `PENDING_REVIEW` (regra 6). **Nenhuma regra é encurtada para caber na fala.**
+
+**Honestidade, garantida no código:**
+
+- Os três sensores são gravados como **`SIMULATED`**, qualquer que seja o `MQTT_SIMULATED_SENSORS`. A bancada virtual não mede nada.
+- A evidência e a auditoria levam `channel: "bancada-virtual"`. A timeline da ocorrência diz "leituras SIMULADAS (bancada virtual)", e o autor é `simulador:<código>`.
+- As leituras saem numa sessão própria (`bootId = bancada-<horário>`, sequência própria). Os cenários são determinísticos: oscilação por seno, nada aleatório, e o ensaio se repete igual.
+- O `capturedAt` é o instante agendado de cada leitura, a cada 2 s, como a hora de medição do HTTP. Ele nunca fica no futuro, e se o envio atrasar mais de 1 s vale a hora real.
+- O comando recusa rodar sem `DEMO_MODE="true"`, mostra o nome do banco na abertura (nunca a URL) e roda **uma instância por banco**, por trava de sessão no PostgreSQL.
+- Ctrl+C libera a trava e fecha o banco. Banco fora: a leitura é registrada como perdida e nada é reconstruído depois.
+- Ela só precisa do banco do `.env` (o Postgres do `docker compose` em `127.0.0.1:5432`). Não depende do site.
+
+### Antes de subir no palco
+
+```bash
+pnpm palco:checar          # SÓ LEITURA; sai com código 1 se houver FALHA
+pnpm bancada --preparar    # mostra o que vai encerrar e pede "SIM" (ou --confirmar, sem terminal interativo)
+```
+
+O `palco:checar` mostra:
+
+- `DEMO_MODE` e o nome do banco;
+- a regra do dispositivo e os marcos que ela produz no cenário `palco`;
+- as ocorrências ativas por tipo, indicando quais **bloqueiam** o palco pela regra 5. A `richards-oc-01` do seed bloqueia;
+- o lote da balança aguardando verificação;
+- se existe pelo menos um lote `RESERVED` para a entrega do roteiro;
+- a data da última leitura do seed (envelhecido: use o filtro **30 dias**);
+- leitura do sensor real no último minuto;
+- **vazão de outra fonte** no dispositivo nos últimos 10 s (ponte `pnpm mqtt`, ESP32 pelo HTTP ou `pnpm simulate`), de qualquer origem. No `pnpm palco:checar --sensores VAZAO` isso é **FALHA**, com a idade da leitura mais nova (o `palco:checar` é uma fotografia: se você acabou de parar a ponte, espere 10 s e rode de novo). No `palco:checar` sem `--sensores` é AVISO, porque o pré-voo também serve para a bancada física. O `pnpm bancada` com VAZAO (o padrão simula os três) espera até 6 s e só recusa o palco se chegar leitura nova nesse tempo;
+- a trava de outra bancada **neste** banco (uma trava em outro banco do mesmo servidor não conta);
+- outra bancada rodando, os processos `run-mqtt`/`run-bancada-virtual` desta máquina, e o `/api/health` do site com o desvio de relógio.
+
+O `--preparar` passa para **DISMISSED** cada ocorrência ativa de fluxo ou temperatura do dispositivo, pelo `OccurrenceService`, com:
+
+- a nota "Cenário simulado encerrado na preparação do palco" (se a ocorrência veio do sensor real, a nota é "Ensaio com o sensor encerrado na preparação do palco");
+- o autor `preparacao:<usuário do Windows>`.
+
+Ele também **cancela** o lote da balança pendente, com o motivo "lote de ensaio encerrado na preparação do palco". Tudo fica auditado e **nada é apagado**. Ocorrências de outros tipos (ex.: `DEVICE_OFFLINE`) não são tocadas.
+
+**O cenário `palco` recusa começar** se houver ocorrência ativa dos tipos que ele vai disparar ou lote da balança pendente, e sugere o `--preparar`.
+
+### No palco
+
+```bash
+pnpm bancada --cenario palco --inicio-em 5
+```
+
+Deixe o comando já digitado no terminal. A primeira leitura sai 5 s depois do Enter, e os sensores ficam parados por 20 s antes de a vazão subir. **Para a vazão subir às 02:10 da fala, dê Enter às 01:45.** Se você parou a ponte menos de 10 s antes do Enter, o comando ainda confere por até 6 s se chega leitura dela antes da contagem: pare a ponte pelo menos 10 s antes, ou dê Enter 6 s mais cedo. Ao trocar para a Sala, diga em voz alta: **"SIMULAÇÃO"**. Os selos mostram SIMULADO.
+
+| T | Leitura (a cada 2 s) | O que acontece | Quem faz o quê |
+|---|---|---|---|
+| −20 a 0 | Vazão 0 · 24,6 °C, ~60% · 0,0 kg | Painéis com sinal, nenhuma ocorrência | Troca para a Sala e diz "SIMULAÇÃO" |
+| 0 | Vazão 2,4 L/min | A regra de fluxo começa a contar (o log mostra `regra de fluxo N/30 s`, decidido pela regra) | "A regra não dispara com um pico: espera fluxo contínuo" |
+| +8 a +22 | Temperatura sobe até 29,6 °C; a 1ª acima de 28 °C sai em T+18 | | |
+| **+30** | | **UNUSUAL_FLOW** aberta (HIGH), SIMULATED | Abre a gaveta → **Assumir investigação**. "Suspeita não é vazamento comprovado" |
+| ao Assumir (limite T+55) | Vazão 0 | A vazão fecha na leitura seguinte | |
+| **+48** | 29 a 30 °C | **TEMPERATURE_EXCURSION** aberta (MEDIUM): 30 s acima de 28 °C | "É um indício a verificar, não uma perda; o DHT11 tem ±2 °C" |
+| 15 s depois (limite T+75) | Esfria até 25 °C | A 1ª leitura do resfriamento já fica abaixo de 28 °C | |
+| ao Resolver (limite T+70) | 3,1 kg → 6,06 → ~6,12 kg | Caixa na balança | Nota de resolução **honesta**: "Simulação: fluxo encerrado na bancada virtual" (nunca "registro fechado") |
+| **caixa + 8 s** | | **Lote de 6,0 kg `PENDING_REVIEW`** (menor leitura estável, arredondada para baixo, depois de 6 s estável) | "A balança não decide que é doável: uma pessoa decide" |
+| +100 a +160 | Tudo parado | Fim, com o resumo no terminal | Segue para Doações (lote Reservado → Confirmar entrega) e Relatórios |
+
+**É reativo:** o comando lê no banco (só leitura, a cada 1 s e antes de cada leitura) o status das ocorrências que abriu.
+
+- **Assumir** a de fluxo fecha a vazão.
+- **Resolver** ou **descartar** a de fluxo põe a caixa na balança.
+- **Resolver ou descartar direto, sem Assumir**, pode cair no meio da gravação de uma leitura ainda acima do limiar. Aí a regra abre outra ocorrência do mesmo tipo (a regra 5 permite: a anterior já não está ativa). O log mostra `OCORRÊNCIA de fluxo REABERTA (<id>)`. A bancada mantém a do roteiro, trata o fluxo como encerrado (fecha a vazão e põe a caixa) e lista a reaberta no resumo final. Descarte a reaberta no BI. Com a temperatura é igual: a reaberta faz esfriar. Para evitar, siga o roteiro: **Assumir** primeiro.
+- **Tratar** a de temperatura a esfria.
+
+Se ninguém mexer no BI, ele segue sozinho pelos limites da tabela, e sem reação o lote sai em T+78. A abertura do comando imprime os marcos esperados **calculados com as regras configuradas**, rodando o cenário nas próprias políticas de domínio. Se alguém mudou a regra do Device ou as variáveis `MQTT_*`, os horários impressos mudam junto, e o comando avisa se algo deixou de disparar.
+
+**O que dizer, e o que não dizer:**
+
+- Diga "SIMULAÇÃO" ao começar.
+- Não diga "tempo real" nem "em menos de 1 s" sem ter medido no ensaio.
+- Litros observados não são litros economizados, e fluxo suspeito não é vazamento comprovado.
+- O lote só fica disponível depois da verificação humana.
+
+### Outros cenários (ensaio)
+
+| `--cenario` | O que faz | Resultado esperado |
+|---|---|---|
+| `ocioso` | Sensores parados até Ctrl+C | Painéis com sinal, nada abre |
+| `vazao` | 2,4 L/min a partir de T0, fecha ao Assumir (limite T+45) | UNUSUAL_FLOW em T+30 |
+| `pico` | 3 L/min por 10 s, 5 vezes, com 10 s fechada entre eles | **Nada abre**: responde a "e se for só lavar a mão?" |
+| `calor` | Temperatura sobe a partir de T0 | TEMPERATURE_EXCURSION em T+40 |
+| `carga` | Caixa de ~6,1 kg em T0, retirada em T+30 | Lote de 6,0 kg `PENDING_REVIEW` em T+8 |
+
+Outras opções:
+
+- `--sensores VAZAO,TEMP,PESO`: escolhe o que a bancada virtual simula (padrão: os três). Com a ponte ligada, só **TEMP** e/ou **PESO** podem ser simulados à parte (veja abaixo). A vazão, não.
+- `--dispositivo`: padrão `RICHARDS-FLOW-001`; os apelidos de `MQTT_DEVICE_ALIASES` valem.
+- `--ajuda`: lista as opções.
+
+**Bancada física e virtual juntas:** as duas usam o mesmo dispositivo, então a regra 5 vale para as duas. Uma ocorrência SIMULADA ativa bloqueia a do sensor real, e o contrário também.
+
+**A ponte não descarta um sensor só.** Enquanto o ESP32 publica, `pnpm mqtt` grava a vazão dele (o potenciômetro, como SIMULATED pelo padrão `MQTT_SIMULATED_SENSORS="VAZAO"`) no mesmo dispositivo. A regra de fluxo lê o histórico da mesma origem sem separar sessão, então os zeros da ponte intercalados com os 2,4 L/min da bancada cortam o fluxo contínuo e a UNUSUAL_FLOW nunca abre. Por isso:
+
+- **Se a vazão física falhou:** pare a ponte (Ctrl+C no `pnpm mqtt`) e rode a bancada virtual com os **três** sensores (o padrão). Também serve só `--sensores VAZAO`, desde que a ponte esteja **parada** (ou que o firmware tenha deixado de mandar a vazão).
+- **Se só a temperatura ou a balança falhou:** a ponte pode continuar, e a bancada simula só esse sensor (`--sensores TEMP` ou `--sensores PESO`).
+- O `pnpm bancada` com VAZAO confere a vazão de outra sessão no dispositivo. Se houver leitura dela nos últimos 10 s, ele mostra a idade da mais nova e espera até 6 s. **Recusa o palco só se chegar leitura nova nessa espera**, porque então a ponte (ou o firmware) ainda está gravando ("Pare a ponte pnpm mqtt ou desligue a vazão no firmware"). Leituras de uma ponte que acabou de parar não recusam: elas ficam antes da primeira leitura da sessão e o palco começa depois da espera. A espera conta as leituras novas no banco e não compara relógios. Confira antes com `pnpm palco:checar --sensores VAZAO`.
+
+## Canal ao vivo (SSE) para as telas
+
+Toda gravação que muda o que as telas mostram avisa o navegador sem consulta periódica. O caminho é: `NOTIFY` no PostgreSQL (canal `richards_events`), depois o hub do servidor (`src/modules/realtime/infrastructure/event-hub.ts`, um `LISTEN` por processo), depois `GET /api/live/stream` (Server-Sent Events) e por fim o `EventSource` do navegador (`src/lib/live-client.ts`).
+
+**Garantias:**
+
+- O `NOTIFY` sai **dentro da mesma transação** da gravação. O PostgreSQL só o entrega no `COMMIT`, então rollback, conflito ou erro não avisam nada.
+- O stream e o snapshot passam pela mesma Basic Auth do BI (`src/proxy.ts`).
+- O evento leva o **mínimo** para a tela decidir se refaz a busca. Os números (KPIs, somas, contagens) sempre vêm do servidor, nunca do evento somado no navegador.
+- Não viajam:
+  - nome de quem recebeu a doação;
+  - quem verificou o lote;
+  - notas;
+  - o usuário do operador, que é metade da credencial Basic. O autor sai como `operador`, e o banco e a auditoria guardam o autor completo.
+- Payload acima de 7500 bytes vira `resync`, e a tela busca de novo.
+- `sensor.live` (temperatura, umidade e peso da bancada) é **efêmero** (`persisted: false`). Ainda não tem série no banco, então nunca entra em KPI.
+
+**Quadros do SSE:**
+
+| Quadro | Quando | Conteúdo |
+|---|---|---|
+| `hello` | Ao abrir e a cada volta da escuta do banco | `{ serverTime, listening }`. A tela refaz o snapshot, porque o que passou com a escuta fora não é reenviado |
+| `heartbeat` | A cada 15 s, e na hora em que a escuta do banco cai | `{ serverTime, listening }` |
+| `live` | Cada evento da organização | `LiveEvent` versionado (`src/modules/realtime/domain/live-event.ts`) |
+
+**Eventos (`type`):**
+
+- `reading.created`: leitura gravada, com origem, canal (`http`, `mqtt` ou `bancada-virtual`) e o **progresso da regra decidido pelo servidor**. A tela nunca interpola entre leituras.
+- `occurrence.opened` e `occurrence.status`. Os dois levam a origem (`source`), para a mudança de estado de registro SIMULATED também sair carimbada (regra 1). O autor sai mascarado.
+- `donation.created` (manual ou balança) e `donation.status`. O `donation.status` leva a origem e só o nome da instituição.
+- No `sensor.live`, a balança traz a fase decidida pela ponte:
+  - `idle`, `stabilizing`, `triggered` e `disarmed`;
+  - **`blocked`**, quando a pesagem estável não virou lote porque já há lote desta balança aguardando verificação. O evento leva `pendingLotId` e a Sala diz "já existe lote desta balança aguardando verificação · nada novo criado".
+- `sensor.live`, `message.rejected` (só o motivo, nunca o conteúdo) e `resync`.
+
+**Cabeçalhos:**
+
+- `Cache-Control: no-cache, no-transform`. Sem o `no-transform`, a compressão do `next start` segura os eventos.
+- `X-Accel-Buffering: no`.
+- O primeiro pedaço sai imediatamente (`retry: 3000` + `hello`).
+- Limite de 40 streams por processo; acima disso responde 503 e a tela passa para a consulta periódica.
+
+**Sem stream:**
+
+- No BI, o sinal da pílula do topo consulta a cada 5 s e os painéis, a cada 15 s.
+- A pílula diz o estado real: Ao vivo, Reconectando…, Consulta a cada 5 s, ou Servidor indisponível · números parados.
+- Com o stream ao vivo, ainda há uma busca de segurança: 30 s para o sinal e 60 s para os painéis.
+- A Sala ao vivo (`/ao-vivo`) consulta o snapshot (`GET /api/live/snapshot`) a cada 5 s.
+- Atrás de um proxy (Cloudflare Tunnel, Traefik), confira se o proxy não guarda a resposta em buffer. O heartbeat de 15 s mantém a conexão viva.

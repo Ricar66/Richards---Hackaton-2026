@@ -1,7 +1,7 @@
 # MEMÓRIA DO PROJETO — RICHARDS Intelligence
 
 > **Leia isto primeiro.** É o estado completo do projeto: o que é, onde está cada coisa, como rodar, o que foi decidido, o que falta e o que já deu errado.
-> Atualizado em **04/11/2026**. Este arquivo **não contém senhas nem chaves**: elas ficam só no `.env` local, que nunca vai para o git.
+> Atualizado em **06/11/2026**. Este arquivo **não contém senhas nem chaves**: elas ficam só no `.env` local, que nunca vai para o git.
 
 ---
 
@@ -34,6 +34,10 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 | Contrato do ESP32 | `docs/CONTRATO_IOT.md` |
 | Firmware | `iot/esp32_richards/esp32_richards.ino` + `secrets.h.example` (HTTP). O firmware MQTT do Victor **ainda não está no repositório** |
 | Ponte MQTT | `src/iot/` (`pnpm mqtt`); contrato em `docs/CONTRATO_IOT.md`, seção "Canal MQTT" |
+| Sala ao vivo (telão) | `http://localhost:3000/ao-vivo` (tecla F = tela cheia). Roteiro em `docs/ROTEIRO_DEMO.md`, seção "Sala ao vivo" |
+| Bancada virtual (contingência de palco) | `pnpm bancada` / `pnpm palco:checar`; contrato em `docs/CONTRATO_IOT.md`, seção "Bancada virtual" |
+| Canal ao vivo (SSE) | `docs/CONTRATO_IOT.md`, seção "Canal ao vivo (SSE) para as telas" |
+| Deploy na VPS da Tétria | `docs/DEPLOY_VPS_TETRIA.md` + `docker-compose.vps.yml`. **Não publicado**: depende do aval dos sócios e da Cloudflare (Haroldo) |
 
 ## 3. Regras invioláveis (do prompt mestre)
 
@@ -71,8 +75,12 @@ Dependência só de desenvolvimento: `puppeteer-core` 24.43.1, para o E2E. Usa o
 
 | Pasta | Conteúdo |
 |---|---|
-| `src/app/(bi)/` | BI nativo: `/`, `/monitoramento`, `/ocorrencias`, `/doacoes`, `/relatorios`, `/dispositivos`, com layout persistente (`BiShell`) |
-| `src/app/api/` | APIs: `iot/telemetry`, `analytics/{dashboard,interval,live,overview}`, `occurrences`, `donations`, `recipients`, `reports/summary`, `admin/simulate`, `health` |
+| `src/app/(bi)/` | BI nativo: `/`, `/monitoramento`, `/ocorrencias`, `/doacoes`, `/relatorios`, `/dispositivos`, com layout persistente (`BiShell`) e o provider do stream (`LiveStreamProvider`) por fora |
+| `src/app/(palco)/` | Sala ao vivo (`/ao-vivo`), sem o BiShell, com CSS próprio escopado em `.stage` (`stage.css`) |
+| `src/app/api/` | APIs: `iot/telemetry`, `analytics/{dashboard,interval,live,overview}`, `occurrences`, `donations`, `recipients`, `reports/summary`, `admin/simulate`, `health`, `live/stream` (SSE), `live/snapshot` (Sala) |
+| `src/modules/realtime/` | Contrato do evento ao vivo (`domain/live-event.ts`, versionado), `public-actor.ts` (autor mascarado), hub LISTEN/NOTIFY (`infrastructure/event-hub.ts`) e `notifyLive`/`notifyLiveSafe` |
+| `src/components/stage/` | Componentes da Sala: lógica pura (`stage-logic.ts`), redutor (`stage-model.ts`), gêmeo do cano, anel da regra, sensores, feed, viagem do pacote |
+| `src/lib/live-client.ts` | `EventSource` com estados (connecting/live/reconnecting/down), backoff e watchdog de 35 s |
 | `src/app/intelligence/` | BI V3 antigo em iframe, só **contingência**. Tem o botão "← Voltar ao BI" |
 | `src/components/bi/` | Shell, filtros, gráficos, gavetas (ocorrência, intervalo, doação), primitivas e telas em `views/` |
 | `src/modules/analytics/` | Filtro na URL (`analytics-filter.ts`), `getDashboard` (agregação no fuso de São Paulo), `getInterval`, `getLive`, `reportFigures` |
@@ -82,7 +90,7 @@ Dependência só de desenvolvimento: `puppeteer-core` 24.43.1, para o E2E. Usa o
 | `src/proxy.ts` | Basic Auth do operador; define o autor (`x-richards-actor`) e descarta o valor vindo do cliente |
 | `prisma/` | `schema.prisma`, 3 migrations e `seed.ts` (idempotente, tudo `SIMULATED`) |
 | `iot/esp32_richards/` | Firmware: fila de 12, retentativa com a mesma `sequence`, NTP, 401 espera 30 s |
-| `src/iot/` | Ponte MQTT: `mqtt-payload.ts` (JSON e configuração), `mqtt-ingestion.ts` (adaptador para os casos de uso), `mqtt-connection.ts`, `run-mqtt.ts` |
+| `src/iot/` | Ponte MQTT: `mqtt-payload.ts` (JSON e configuração), `mqtt-ingestion.ts` (adaptador para os casos de uso, emite `sensor.live`), `mqtt-connection.ts`, `run-mqtt.ts`. Bancada virtual: `bancada-virtual.ts` (cenários determinísticos) e `run-bancada-virtual.ts` (`--checar`, `--preparar`, `--cenario`) |
 | `scripts/` | `iot-simulator.mjs` (se comporta como o firmware), `e2e/` (jornadas no Chrome), `test-db-prepare.mjs`, `docs/` (geradores do dicionário e dos diagramas) |
 | `tests/` | Unitários (`*.test.ts`) e integração no Postgres (`integration/`) |
 
@@ -108,6 +116,11 @@ pnpm simulate --scenario leak --samples 14 --interval 4
 
 # Ponte MQTT da bancada (processo separado; broker e variáveis MQTT_* no .env, ver .env.example)
 pnpm mqtt
+
+# Palco: conferir, liberar (DISMISSED/CANCELLED com auditoria, pede SIM) e bancada virtual (tudo SIMULATED)
+pnpm palco:checar
+pnpm bancada --preparar
+pnpm bancada --cenario palco --inicio-em 5
 
 # Documentação de dados
 node scripts/docs/render-diagramas.mjs     # MER/DER → PNG, SVG e PDF (precisa de internet, Mermaid 11.12.0 via CDN)
@@ -140,6 +153,7 @@ python scripts/docs/dicionario_de_dados.py # dicionário em Excel (depois abrir 
 | Memória | `ea40f3b`, `866e53b` | `MEMORIA.md` e `CLAUDE.md` |
 | Galeria do pitch | `1940d59`, `012ebc5` | 10 imagens Full HD em `presentation/imagens/` |
 | Unificação IoT (PR #3) | `37d5182` (Victor) + commits seguintes | Ponte MQTT do Victor passando pela ingestão existente: regra por dispositivo, regra 5 por tipo, lote da balança em `PENDING_REVIEW`, auditoria, origem SIMULATED para o potenciômetro |
+| Tempo real e palco | branch `feat/tempo-real-palco`, integrada ao `main` em 06/11 | Stream ao vivo (LISTEN/NOTIFY + SSE) no BI inteiro; tema escuro com gêmeo digital esquemático; Sala ao vivo `/ao-vivo` para o telão; bancada virtual (`pnpm bancada`, `pnpm palco:checar`); revisão adversarial com 14 achados corrigidos; preparação do deploy na VPS (não publicado) |
 
 As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estão incorporadas ao `main`. No GitHub existe também `feat/pitch-richards-hackathon-2026`, com o kit de pitch.
 
@@ -147,11 +161,13 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 
 | Verificação | Resultado | Data |
 |---|---|---|
-| typecheck, lint e build | PASSOU | 04/11/2026 (unificação MQTT) |
-| `pnpm test` (unitários) | PASSOU 26/26 | 04/11/2026 |
-| `pnpm test:integration` (Postgres real) | PASSOU 44/44 (7 da ponte MQTT) | 04/11/2026 |
-| `pnpm test:e2e --with-db-outage` | PASSOU 30/30 | 03/11/2026 (Fase 5) |
-| `pnpm test:e2e` (sem queda de banco) | PASSOU 26/26 | 04/11/2026 (unificação MQTT) |
+| typecheck, lint e build de produção | PASSOU | 06/11/2026 (tempo real e palco) |
+| `pnpm test` (unitários) | PASSOU 95/95 | 06/11/2026 |
+| `pnpm test:integration` (Postgres real, banco richards_test) | PASSOU 69/69 | 06/11/2026 |
+| `pnpm test:e2e --with-db-outage` | PASSOU 34/34 (A0: leitura → pílula em 109 ms; A5b: 202 → aviso em 8 ms; S1: Sala ao vivo; E1b: sinal volta sozinho com o banco) | 06/11/2026 |
+| `pnpm test:e2e` (sem queda de banco) | PASSOU 29/29 | 06/11/2026 |
+| Ensaio de palco de ponta a ponta (`next start` + `pnpm bancada --cenario palco` + `/ao-vivo` no Chrome 1920×1080, banco de teste) | PASSOU: 91 leituras SIMULATED (0 perdidas), UNUSUAL_FLOW em T+30, TEMPERATURE_EXCURSION em T+48, lote de 6,0 kg PENDING_REVIEW; atraso servidor → tela de cada leitura: mediana 19 ms, máximo 69 ms; 0 erros de JavaScript | 06/11/2026 |
+| Revisão adversarial do diff (4 lentes + verificadores) | 14 achados confirmados (2 P0, 1 P1, 11 P2/P3), todos corrigidos com teste; correções verificadas por um segundo cético (testes de mutação) | 06/11/2026 |
 | Ponte MQTT de ponta a ponta (Mosquitto 2.1.2 em Docker + `pnpm mqtt` no banco de teste) | PASSOU: JSON inválido e id desconhecido descartados, 7 leituras SIMULATED, 1 ocorrência de temperatura e 1 lote PENDING_REVIEW de 6,2 kg, com auditoria | 04/11/2026 |
 | ESP32 MQTT do Victor contra a ponte | **NÃO EXECUTADO** (sem placa nesta máquina; firmware MQTT fora do repositório) | — |
 | Dicionário × banco (colunas, tipos, nulos, padrões, ordem, enums, FKs, índices) | PASSOU, 0 divergências | 03/11/2026 |
@@ -183,6 +199,19 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Missões não são criadas** pela ponte, porque não têm tela (P2).
 - **Tópico renomeado** para `richards/comercio/telemetria`, sem o nome antigo do produto. A consulta do histórico de fluxo passou a pegar as leituras mais recentes primeiro, para leituras a cada 2 s não cortarem a ponta da janela.
 
+**Tempo real e palco (branch `feat/tempo-real-palco`)**
+- **LISTEN/NOTIFY + SSE, sem dependência nova**: o `NOTIFY` sai dentro da transação da gravação, então só chega no COMMIT. Há um `pg.Client` dedicado por processo (hub em `globalThis`, com reconexão) e a rota `/api/live/stream`. Descartados: WebSocket, que exige servidor próprio, e Redis/serviço externo, que seria mais uma peça no palco.
+- **O evento leva o mínimo; números sempre do servidor.** A tela refaz a busca quando chega um evento do seu recorte, e o navegador nunca soma evento. Sem stream, a tela volta à consulta periódica e a pílula diz isso.
+- **O anel da regra acende só os segundos decididos pela `FlowAlertPolicy`** na última leitura (`reading.created.rule`). Nunca interpola entre leituras.
+- **`sensor.live` é efêmero** (`persisted: false`): temperatura, umidade e peso ainda não têm série no banco e não entram em KPI.
+- **Privacidade no stream e no telão:**
+  - não saem quem recebeu a doação, quem verificou o lote, as notas nem o usuário do operador;
+  - o autor passa por `publicActor`: `operador:<x>` vira "operador" e `preparacao:<x>` vira "preparação do palco".
+- **Sala ao vivo (`/ao-vivo`)** é rota separada, sem BiShell, com CSS escopado em `.stage`. O "gêmeo" é **representação esquemática** em SVG próprio, rotulada assim.
+- **Bancada virtual grava tudo como SIMULATED** (canal `bancada-virtual`), pelas mesmas regras e casos de uso da ponte MQTT. O `--preparar` não apaga nada: muda o status para DISMISSED/CANCELLED, com auditoria.
+- **Tema escuro como padrão do BI** (tokens do conceito do Codex: fundo `#071217`, menta para dado e ação, laranja para alerta, **roxo só para simulado**). O selo de origem (`Seal`) é separado da etiqueta de estado. A prévia do relatório continua clara, igual ao PDF.
+- **O link da Sala ao vivo fica no bloco "Sistema"** da barra lateral (nova aba). O ignore de "aba lateral" do `.impeccable` saiu, porque o trilho da linha do tempo agora é neutro.
+
 **Ferramentas e documentação**
 - **E2E com `puppeteer-core` em vez de Playwright**: usa o Chrome instalado e não baixa navegador. O Edge headless não funcionou.
 - **Diagramas em Mermaid**, para serem editáveis e versionáveis. A versão 11.4.1 desenha seta em linha que deveria ser reta, por isso fixamos a 11.12.0.
@@ -193,14 +222,17 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 ## 11. Antes da demo (resumo; o passo a passo está em `docs/ROTEIRO_DEMO.md`)
 
 1. `docker compose up -d --build` e conferir que `/api/health` responde `"database":"up"`.
-2. **Resolver a ocorrência do seed "Fluxo contínuo fora de horário"** (`richards-oc-01`). Sem isso, o alerta ao vivo não abre, por causa da regra 5.
+2. **Liberar o palco:** `pnpm palco:checar`. Se acusar bloqueio, rode `pnpm bancada --preparar`, que pede "SIM". Ele encerra a ocorrência do seed `richards-oc-01` ("Fluxo contínuo fora de horário") como DISMISSED, com auditoria. A alternativa é resolvê-la no BI. Sem isso, o alerta ao vivo não abre, por causa da regra 5, e o anel da Sala mostra BLOQUEADO PELA REGRA 5.
+   - **Telão:** abrir `/ao-vivo` na janela do projetor e apertar F.
 3. **O histórico do seed envelhece**: ele cobre de 27/10 a 03/11. No dia do evento, use o filtro **30 dias**. Recriar o banco da demo apaga dados e exige autorização.
 4. ESP32:
    - `secrets.h` com a mesma chave do `.env`;
    - Wi-Fi do evento;
    - NTP sincronizado;
    - ver `POST 202` na serial.
-5. Contingência: `pnpm simulate --scenario leak --samples 14 --interval 4`.
+5. Contingência:
+   - `pnpm bancada --cenario palco --inicio-em 5` move vazão, temperatura e balança, tudo SIMULATED. Dê Enter 25 s antes do momento em que a vazão deve subir.
+   - `pnpm simulate --scenario leak --samples 14 --interval 4` move só a vazão, pelo HTTP.
 6. Se a bancada MQTT for usada:
    - broker na rede isolada;
    - `.env` com `MQTT_BROKER_URL`, `MQTT_TOPIC` e `MQTT_DEVICE_ALIASES`;
@@ -215,7 +247,8 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - Victor: trocar o tópico do firmware MQTT para `richards/comercio/telemetria` (ou definir `MQTT_TOPIC`), conferir `dispositivo_id` × `MQTT_DEVICE_ALIASES` e rodar o teste de bancada MQTT do `presentation/CHECKLIST_VICTOR_IOT.md`.
 - Victor: subir o `.ino` do firmware MQTT em `iot/esp32_richards_mqtt/`, com `secrets.h.example` e sem senha.
 - Ensaiar o pitch 3 vezes com cronômetro, dentro de 5min40 (`presentation/FALA_5MIN40.md`).
-- Fazer a preparação da seção 11 na véspera.
+- Fazer a preparação da seção 11 antes de subir no palco. Inclui liberar a `richards-oc-01` (`pnpm palco:checar` / `pnpm bancada --preparar`) e abrir a `/ao-vivo` no projetor.
+- Ensaiar uma vez a contingência `pnpm bancada --cenario palco --inicio-em 5` com o BI e a Sala abertos. Não use `--sensores VAZAO` com a ponte `pnpm mqtt` ligada.
 - Montar o backup de palco: simulação identificada, prints, vídeo offline e cabo HDMI.
 - **Conferir no regulamento do Hackathon Senac 2026** se é permitido usar material desenvolvido antes da abertura oficial, e ser transparente sobre o histórico do projeto.
 
@@ -225,6 +258,9 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - Broker MQTT da bancada sem usuário e senha aceita leitura de qualquer equipamento da rede (a ponte só sobe assim com `DEMO_MODE="true"`). Configurar `MQTT_USERNAME`/`MQTT_PASSWORD` no Mosquitto. Autenticação por dispositivo no MQTT (usuário/ACL por dispositivo ou HMAC com a chave) fica para depois do evento.
 - Firmware MQTT mandar `bootId` e `sequence` (idempotência igual à do HTTP).
 - Temperatura no BI: guardar a série e mostrar a evidência na gaveta (hoje fica só na auditoria e na descrição).
+
+- **Deploy na VPS da Tétria** (`docs/DEPLOY_VPS_TETRIA.md`): precisa do aval dos quatro sócios (governança da Tétria) e de o Haroldo criar a rota no túnel e a política do Cloudflare Access. A porta prevista é `127.0.0.1:18082`. Não mexer no catch-all do túnel, que aponta para a Elora. O compose recusa subir sem senhas novas (`VPS_*`).
+- A linha do tempo das gavetas do BI mostra o autor completo (`operador:<usuário>`). Se o BI for projetado, considere usar um usuário de laboratório neutro.
 
 **P2 (depois do hackathon)**
 - Fase 6, que hoje é só proposta.
@@ -255,3 +291,8 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Git Bash converte `/` em caminho do Windows.** Use `MSYS_NO_PATHCONV=1` quando precisar (inclusive no `docker run ... mosquitto -c /mosquitto-no-auth.conf`).
 - **Parar `pnpm mqtt` rodando em segundo plano pelo terminal da IA deixa `node.exe` órfão no Windows.** Procure por `run-mqtt` na linha de comando dos processos e encerre.
 - **O build do Next tipa `process.env` com `NODE_ENV` obrigatório** e checa também `tests/`. Rode `pnpm typecheck` depois de escrever os testes, não antes.
+- **`networkidle0` nunca acontece com o stream SSE aberto.** No E2E, use o helper `go()` do `journeys.mjs`.
+- **SSE precisa de `Cache-Control: no-cache, no-transform`.** Sem o `no-transform`, a compressão do `next start` segura os eventos até o fim.
+- **Tailwind v4 gera utilitário para nome de classe genérico encontrado no código** (`ring`, `shadow`, `border`...). Em CSS próprio, use nomes específicos.
+- **O `.stamp` do `globals.css` tem `position: absolute`.** Na Sala, o carimbo é `seal-stamp`.
+- **`python -` (lendo script do stdin) trava o terminal da IA.** Escreva um arquivo `.py` ou `.cjs`.

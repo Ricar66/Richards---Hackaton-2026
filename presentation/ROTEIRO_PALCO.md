@@ -28,6 +28,7 @@
 
 ## Roteiro de demo — com cliques
 
+0. **Telão:** `/ao-vivo` (Sala ao vivo) em tela cheia (tecla F). O anel da regra, a temperatura, a balança e a viagem do pacote mudam a cada leitura gravada, pelo stream. Antes do palco: `pnpm palco:checar` (e, se acusar bloqueio, `pnpm bancada --preparar`).
 1. Abrir `/` e mostrar filtro por origem. Lembrar: dados do seed = **SIMULATED**.
 2. Abrir `/monitoramento?range=24h`; filtrar origem **DEVICE** quando o ESP32 estiver enviando.
 3. **Victor:** ativar o circuito de bancada. Em regra de demonstração, vazão ≥ 1,5 L/min por 30 s pode gerar uma ocorrência — confirmar configuração antes do palco. Não chamar de vazamento confirmado.
@@ -37,7 +38,12 @@
 
 ### Plano de contingência
 
-- Falhou Wi-Fi/ESP32: executar `pnpm simulate --scenario leak --samples 14 --interval 4`; mostrar o selo **SIMULATED** e afirmar que é simulação.
+- Falhou a bancada (placa, Wi-Fi, broker ou sensor):
+  - parar a ponte (Ctrl+C no `pnpm mqtt`) e executar `pnpm bancada --cenario palco --inicio-em 5`, que move vazão, temperatura e balança pelas mesmas regras;
+  - a ponte não descarta um sensor só: se a vazão falhou, a ponte precisa estar parada (com ela parada, `--sensores VAZAO` também serve). Se só a temperatura ou a balança falhou, a ponte pode seguir e a bancada simula só esse sensor (`--sensores TEMP` ou `--sensores PESO`);
+  - com a ponte parada há menos de 10 s, a bancada espera até 6 s para ver se ainda chega leitura dela e então começa. Ela só recusa se a ponte continuar gravando;
+  - mostrar o selo **SIMULADO** na Sala e afirmar que é simulação;
+  - último recurso: `pnpm simulate --scenario leak --samples 14 --interval 4`.
 - Há ocorrência ativa: encerrar a anterior antes de demonstrar. Uma ocorrência ativa do mesmo dispositivo impede nova abertura.
 - Histórico não aparece em 24h: usar 30 dias para seed e 24h para leituras novas.
 - Banco indisponível: não fingir dados em tempo real; mostrar estado de erro e utilizar vídeo/capturas preparadas como plano B.
