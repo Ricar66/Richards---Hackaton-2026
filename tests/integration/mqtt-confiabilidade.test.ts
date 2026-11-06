@@ -131,14 +131,29 @@ test("M3.6 erro permanente vai direto para a carta morta, sem esperar o prazo; e
   assert.equal(isPermanentError(new Error("Connection terminated unexpectedly")), false);
 });
 
-test("M3.7 tentativa que nunca responde: o prazo é de relógio (teto por tentativa) e a mensagem vai para a carta morta", async () => {
+test("M3.7 tentativa que nunca responde: o prazo é de relógio (teto por tentativa); a carta morta diz que a situação é incerta", async () => {
   const { cfg, ingestion } = setup({ MQTT_RETRY_BUDGET_SECONDS: "1" });
-  ingestion.apply = () => new Promise(() => {}); // pendurada para sempre
-  const process = createMessageProcessor(ingestion, cfg, { log: silent, attemptTimeoutMs: 150 });
+  let calls = 0;
+  ingestion.apply = () => { calls++; return new Promise(() => {}); }; // pendurada para sempre
+  const process = createMessageProcessor(ingestion, cfg, { log: silent, attemptTimeoutMs: 150, settleTimeoutMs: 100 });
   const t = Date.now();
   assert.equal(await process(TOPIC, body({ dispositivo_id: "hortifruti_01", VAZAO: 1 }), new Date()), "dead-letter");
   assert.ok(Date.now() - t < 3_000, `liberou em ${Date.now() - t} ms`);
-  assert.match(deadLines(cfg).at(-1)!.error, /sem resposta/);
+  assert.equal(calls, 1, "nunca duas tentativas ao mesmo tempo: a pendurada não ganha companhia");
+  const line = deadLines(cfg).at(-1)!;
+  assert.match(line.error, /sem resposta/);
+  assert.equal(line.attemptStillRunning, true, "a carta morta não afirma 'NÃO GRAVADA' com a tentativa ainda rodando");
+});
+
+test("M3.7b tentativa atrasada que termina depois do teto: a seguinte espera por ela e nada é gravado duas vezes", async () => {
+  const { cfg, ingestion } = setup({ MQTT_RETRY_BUDGET_SECONDS: "10" });
+  const real = ingestion.apply.bind(ingestion);
+  let calls = 0;
+  ingestion.apply = async m => { calls++; if (calls === 1) await new Promise(r => setTimeout(r, 400)); return real(m); };
+  const process = createMessageProcessor(ingestion, cfg, { log: silent, attemptTimeoutMs: 100, sleep: async () => {} });
+  assert.equal(await process(TOPIC, body({ dispositivo_id: "hortifruti_01", VAZAO: 1.7 }), new Date()), "persisted");
+  assert.equal(calls, 2);
+  assert.equal((await readings()).length, 1, "a atrasada gravou; a seguinte viu o done e não repetiu");
 });
 
 test("M3.8 encerrar a ponte: a mensagem em curso para de insistir e ela e o resto da fila vão para a carta morta (nada some)", async () => {

@@ -61,6 +61,8 @@ export type ProcessorOptions = {
   stopping?: () => boolean;
   /** Teto de cada tentativa (padrão 30 s, nunca além do que resta do prazo). */
   attemptTimeoutMs?: number;
+  /** Antes da carta morta, quanto esperar uma tentativa atrasada terminar, para o `partial` sair certo (padrão 5 s). */
+  settleTimeoutMs?: number;
 };
 const BACKOFF_MS = [500, 1_000, 2_000, 4_000, 8_000, 15_000];
 const ATTEMPT_TIMEOUT_MS = 30_000;
@@ -81,6 +83,8 @@ export type DeadLetterRecord = {
   deadLetterAt: string; receivedAt: string; topic: string; payload: string; attempts: number; reason: string; error: string;
   /** Partes já gravadas (vazão com bootId/sequence, contato, temperatura, lote): reprocessar só o resto. */
   partial: ReturnType<typeof doneSummary>;
+  /** Uma tentativa estourou o teto e ainda não tinha terminado: `partial` pode estar incompleto (confira no banco). */
+  attemptStillRunning?: boolean;
 };
 export async function writeDeadLetter(path: string, record: DeadLetterRecord, log: Pick<Console, "error"> = console) {
   try { await appendFile(path, `${JSON.stringify(record)}\n`, "utf8"); }
@@ -100,6 +104,7 @@ export function createMessageProcessor(ingestion: MqttIngestion, cfg: MqttBridge
   const now = opts.now ?? (() => Date.now());
   const log = opts.log ?? console;
   const attemptMax = opts.attemptTimeoutMs ?? ATTEMPT_TIMEOUT_MS;
+  const settleMax = opts.settleTimeoutMs ?? 5_000;
   return async function processMessage(topic: string, payload: Buffer, receivedAt: Date): Promise<ProcessResult> {
     const text = payload.toString();
     const topicDevice = deviceFromTopic(cfg, topic);
@@ -117,13 +122,25 @@ export function createMessageProcessor(ingestion: MqttIngestion, cfg: MqttBridge
     const started = now();
     let attempt = 0, lastError: unknown = null, reason = "prazo esgotado";
     let prepared: Awaited<ReturnType<MqttIngestion["prepare"]>> | null = null;
+    // Tentativa que estourou o teto continua rodando (não dá para cancelar a consulta). Nunca duas ao mesmo tempo: a
+    // próxima espera a atrasada terminar (os passos são idempotentes, mas o `done` e a carta morta precisam do fim dela).
+    let late: Promise<void> | null = null;
+    const bounded = <T>(work: Promise<T>, ms: number) => withTimeout(work, ms).catch((e: unknown) => {
+      if (e instanceof AttemptTimeoutError) late = work.then(() => undefined, () => undefined);
+      throw e;
+    });
     while (true) {
       if (opts.stopping?.()) { reason = "ponte encerrada antes de gravar"; break; }
       const left = cfg.retryBudgetMs - (now() - started);
+      if (late) {
+        const settled = await withTimeout(late, Math.max(1, left)).then(() => true, () => false);
+        if (!settled) { reason = "tentativa sem resposta até o fim do prazo"; break; }
+        late = null;
+      }
       try {
-        prepared ??= await withTimeout(ingestion.prepare(raw, receivedAt, topicDevice), Math.max(1, Math.min(attemptMax, left)));
+        prepared ??= await bounded(ingestion.prepare(raw, receivedAt, topicDevice), Math.max(1, Math.min(attemptMax, left)));
         if (prepared.status === "rejected") { log.warn(`[MQTT] Descartada: ${prepared.reason}`); return "rejected"; }
-        const outcome = await withTimeout(ingestion.apply(prepared.message), Math.max(1, Math.min(attemptMax, left)));
+        const outcome = await bounded(ingestion.apply(prepared.message), Math.max(1, Math.min(attemptMax, left)));
         log.log(`[MQTT] ${describe(outcome)}${attempt ? ` (gravada na tentativa ${attempt + 1}, chegou às ${receivedAt.toISOString()})` : ""}`);
         return "persisted";
       } catch (error) {
@@ -136,13 +153,16 @@ export function createMessageProcessor(ingestion: MqttIngestion, cfg: MqttBridge
         await sleep(wait);
       }
     }
+    // Tentativa atrasada ainda rodando: espera um pouco (limitado) para o `partial` refletir o que ela gravou.
+    const stillRunning = late !== null && !(await withTimeout(late as Promise<void>, settleMax).then(() => true, () => false));
     const message = prepared?.status === "ready" ? prepared.message : null;
-    if (message) ingestion.abandon(message);
+    if (message && !stillRunning) ingestion.abandon(message);
     const partial = doneSummary(message);
     const record: DeadLetterRecord = { deadLetterAt: new Date(now()).toISOString(), receivedAt: receivedAt.toISOString(), topic, payload: text.slice(0, 4000),
-      attempts: attempt + 1, reason, error: lastError instanceof Error ? lastError.message : String(lastError ?? reason), partial };
+      attempts: attempt + 1, reason, error: lastError instanceof Error ? lastError.message : String(lastError ?? reason), partial,
+      ...(stillRunning ? { attemptStillRunning: true } : {}) };
     await writeDeadLetter(cfg.deadLetterPath, record, log);
-    log.error(`[MQTT] ${anyDone(partial) ? "PARCIALMENTE gravada (veja 'partial')" : "NÃO GRAVADA"} (${reason}) depois de ${attempt + 1} tentativa(s) em ${Math.round((now() - started) / 1000)} s: guardada em ${cfg.deadLetterPath} (chegou às ${record.receivedAt}).`);
+    log.error(`[MQTT] ${stillRunning ? "SITUAÇÃO INCERTA (tentativa ainda em curso: confira no banco)" : anyDone(partial) ? "PARCIALMENTE gravada (veja 'partial')" : "NÃO GRAVADA"} (${reason}) depois de ${attempt + 1} tentativa(s) em ${Math.round((now() - started) / 1000)} s: guardada em ${cfg.deadLetterPath} (chegou às ${record.receivedAt}).`);
     await ingestion.reportRejected(anyDone(partial) ? "gravada em parte: o resto ficou na carta morta" : "falha ao gravar: guardada na carta morta");
     return "dead-letter";
   };

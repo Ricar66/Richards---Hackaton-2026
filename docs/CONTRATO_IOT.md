@@ -113,7 +113,9 @@ Payload que o firmware publica (exemplo de formato, não medição real):
     - fila cheia (`MQTT_QUEUE_MAX`, padrão 2000);
     - ponte encerrada com mensagens esperando.
 
-    Cada linha traz hora de chegada, tópico, conteúdo, motivo, erro e `partial`, isto é, o que já foi gravado: vazão com `bootId`/`sequence`, contato, temperatura e lote. "PARCIALMENTE gravada" no log quer dizer que só o resto falta. Reprocessar é decisão humana.
+    Cada linha traz hora de chegada, tópico, conteúdo, motivo, erro e `partial`, isto é, o que já foi gravado: vazão com `bootId`/`sequence`, contato, temperatura e lote. "PARCIALMENTE gravada" no log quer dizer que só o resto falta.
+    - **Tentativa atrasada:** uma consulta que estoura o teto continua rodando, porque não dá para cancelá-la. A tentativa seguinte espera por ela, e nunca rodam duas ao mesmo tempo. Se ela ainda corria no fim do prazo, a linha leva `attemptStillRunning: true` e o log diz "SITUAÇÃO INCERTA": confira no banco antes de reprocessar.
+    - Reprocessar é decisão humana.
   - **Mensagem retida** no broker (`retain`) é **ignorada**: é uma leitura velha, reentregue a cada assinatura.
   - **Curinga** em `MQTT_TOPIC` (`+`/`#`) é aceito como filtro compartilhado. Não combina com `MQTT_REQUIRE_DEVICE_TOPIC=true`, e a ponte recusa subir assim.
   - Testes: `tests/integration/mqtt-confiabilidade.test.ts` (M3.1–M3.11) e `pnpm test:mqtt-broker` (Mosquitto real em porta isolada, B1–B6).

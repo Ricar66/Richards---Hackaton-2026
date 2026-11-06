@@ -79,6 +79,8 @@ services:
       MQTT_USERNAME: richards-ponte
       MQTT_PASSWORD: ${VPS_MQTT_BRIDGE_PASSWORD:?defina VPS_MQTT_BRIDGE_PASSWORD}
       MQTT_TOPIC: richards/comercio/telemetria
+      # Só o tópico do próprio dispositivo (a ACL do broker garante quem publica nele): o JSON não fala por outro.
+      MQTT_REQUIRE_DEVICE_TOPIC: "true"
       MQTT_DEVICE_ALIASES: ${VPS_MQTT_DEVICE_ALIASES:-hortifruti_01=RICHARDS-FLOW-001}
       # Potenciômetro no lugar do YF-S201 (confirmado pelo Victor em 06/11): a vazão sai carimbada SIMULADO.
       MQTT_SIMULATED_SENSORS: ${VPS_MQTT_SIMULATED_SENSORS:-VAZAO}

@@ -92,7 +92,8 @@ O Victor manda os dados dos sensores da bancada dele para a VPS desde a noite de
   - `allow_anonymous false`;
   - senha e ACL geradas na partida a partir das variáveis.
 - **ACL:**
-  - o usuário do dispositivo (`hortifruti_01`, igual ao `dispositivo_id` do firmware) só **escreve** em `richards/comercio/telemetria` e `richards/comercio/telemetria/hortifruti_01`;
+  - o usuário do dispositivo (`hortifruti_01`, igual ao `dispositivo_id` do firmware) só **escreve** no próprio tópico, `richards/comercio/telemetria/hortifruti_01`;
+  - a ponte roda com `MQTT_REQUIRE_DEVICE_TOPIC=true` e confere que o `dispositivo_id` do JSON é o do tópico: um equipamento não fala em nome de outro (achado da revisão de segurança automática);
   - a ponte só **lê**;
   - anônimo e senha errada são recusados.
 - **`richards-ponte`:** o mesmo build do site rodando `pnpm mqtt`, que grava pelos casos de uso do HTTP, com fila, retentativa e carta morta no volume `richards_vps_mqtt`.
@@ -111,7 +112,7 @@ O Victor manda os dados dos sensores da bancada dele para a VPS desde a noite de
 | Broker | `187.77.229.205`, porta `1883` (sem TLS) |
 | Usuário | `hortifruti_01` |
 | Senha | a de `VPS_MQTT_DEVICE_PASSWORD` (privada) |
-| Tópico | `richards/comercio/telemetria`, ou o próprio `richards/comercio/telemetria/hortifruti_01` |
+| Tópico | **`richards/comercio/telemetria/hortifruti_01`** (só esse: o compartilhado é recusado pelo broker) |
 | Payload | `{"dispositivo_id":"hortifruti_01","VAZAO":2.4,"TEMP":26.1,"UMIDADE":60,"PESO":0.0}` |
 | Publicação | QoS 0 ou 1, **sem `retain`** (mensagem retida é ignorada pela ponte) |
 
@@ -124,8 +125,8 @@ Mitigações: a senha é própria e aleatória, a ACL é por usuário e não há
 **Testes de aceite** (`teste-acl-broker.mjs`, sem gravar dado):
 - anônimo recusado;
 - senha errada recusada;
-- dispositivo publica no tópico compartilhado e no próprio;
-- não publica em nome de outro sensor;
+- dispositivo publica só no próprio tópico;
+- não publica no compartilhado nem em nome de outro sensor;
 - não lê;
 - a ponte não escreve.
 
