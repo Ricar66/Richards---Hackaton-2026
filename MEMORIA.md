@@ -182,10 +182,14 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 
 | Verificação | Resultado | Data |
 |---|---|---|
-| typecheck, lint e build de produção | PASSOU | 06/11/2026 (tempo real e palco) |
-| `pnpm test` (unitários) | PASSOU 107/107 | 06/11/2026 (efeitos e 3D) |
-| `pnpm test:integration` (Postgres real, banco richards_test) | PASSOU 69/69 (T41 ancorado na hora: falhava nos 6 primeiros min de cada hora) | 06/11/2026 |
-| `pnpm test:e2e --with-db-outage` | PASSOU 34/34 (A0: leitura → pílula em 109 ms; A5b: 202 → aviso em 8 ms; S1: Sala ao vivo; E1b: sinal volta sozinho com o banco) | 06/11/2026 |
+| typecheck, lint e build de produção | PASSOU | 06/11/2026 (auditoria final, noite) |
+| `pnpm test` (unitários) | PASSOU 112/112 | 06/11/2026 (auditoria final, noite) |
+| `pnpm test:integration` (Postgres real, banco de teste) | PASSOU 98/98 na bateria final; depois, 30/30 em MQTT, tempo real e bancada com as correções da revisão de segurança (M3 12/12) | 06/11/2026 |
+| `pnpm test:e2e --with-db-outage` (queda só num Postgres ISOLADO) | PASSOU 42/42 (inclui A2b: KPI nunca fora do intervalo; E1c: Sala diz que os números estão congelados) | 06/11/2026 |
+| Ensaio do hackathon (12 passos do palco + duplicata, queda do banco isolado, SSE, retentativa) | PASSOU 14/14 com o código final | 06/11/2026 |
+| `pnpm test:mqtt-broker` (Mosquitto real) | PASSOU 6/6 (B5: keepalive de 2 s, banco fora 9 s, 0 queda, 4/4 gravadas com a hora de chegada; B6: retida ignorada) | 06/11/2026 |
+| Broker da VPS pela internet (auth + ACL) | PASSOU 7/7 (anônimo e senha errada recusados; dispositivo só no próprio tópico; ponte só lê; caminho broker → ponte confirmado sem gravar dado) | 06/11/2026 |
+| Só dados reais (notebook e VPS) | PASSOU: backup, limpeza auditada, 0 SIMULATED depois, reinício não recria (notebook 170+3+3; VPS 168+4+3) | 06/11/2026 |
 | `pnpm test:e2e` (sem queda de banco) | PASSOU 36/36. Inclui A2b (KPI nunca fora do intervalo), A2c (filtro mantém o foco), N1 (clique logo depois de navegar vale), S2–S5 (gêmeo SVG/3D, teclas 3 e P) | 06/11/2026 |
 | Ensaio dos efeitos da Sala (`next start` + bancada + Chrome 1920×1080) | PASSOU 11/11. Água a 60 fps (p95 16,8 ms); hachura e contorno simulados; alarme pulse → steady ao assumir; P para o alarme piscando; reduzir movimento; 21 textos do número grande, todos de leituras reais; 4 pulsos em 8 s com a bancada; 0 erros | 06/11/2026 |
 | Ensaio do gêmeo 3D (GPU Intel real, ANGLE D3D11) | PASSOU 16/16. three fora dos scripts iniciais das 7 rotas (pedaço sob demanda de 137,9 KB gzip); 60 fps (p95 16,8 ms, 15 draw calls); perda de contexto → loading em 8 ms → 3D num canvas novo em 369 ms; 2ª perda fica no SVG; religar passa por loading; maior tarefa longa ao religar 123 ms; reduzir movimento, sem WebGL e GPU desligada caem no SVG; 0 pedidos externos; 0 erros | 06/11/2026 |
