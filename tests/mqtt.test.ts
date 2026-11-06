@@ -22,10 +22,10 @@ test("configuração da ponte: padrões honestos, apelidos explícitos e valor i
   const cfg = loadMqttConfig({});
   assert.equal(cfg.topic, "richards/comercio/telemetria");
   assert.deepEqual([...cfg.simulated], ["VAZAO"], "potenciômetro da bancada é SIMULATED por padrão");
-  assert.deepEqual(cfg.aliases, {});
+  assert.deepEqual({ ...cfg.aliases }, {}); // mapa sem protótipo: "__proto__" nunca acha nada
   assert.equal(cfg.username, undefined);
   assert.deepEqual([...loadMqttConfig({ MQTT_SIMULATED_SENSORS: "" }).simulated], [], "sensor real ligado: nada simulado");
-  assert.deepEqual(loadMqttConfig({ MQTT_DEVICE_ALIASES: "hortifruti_01=RICHARDS-FLOW-001, b = C" }).aliases, { hortifruti_01: "RICHARDS-FLOW-001", b: "C" });
+  assert.deepEqual({ ...loadMqttConfig({ MQTT_DEVICE_ALIASES: "hortifruti_01=RICHARDS-FLOW-001, b = C" }).aliases }, { hortifruti_01: "RICHARDS-FLOW-001", b: "C" });
   assert.throws(() => loadMqttConfig({ MQTT_DEVICE_ALIASES: "sem-igual" }), /MQTT_DEVICE_ALIASES/);
   assert.throws(() => loadMqttConfig({ MQTT_SIMULATED_SENSORS: "UMIDADE" }), /MQTT_SIMULATED_SENSORS/);
   assert.throws(() => loadMqttConfig({ MQTT_TEMP_LIMIT_C: "quente" }), /MQTT_TEMP_LIMIT_C/);

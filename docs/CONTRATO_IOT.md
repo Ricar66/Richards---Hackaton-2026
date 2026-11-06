@@ -103,24 +103,33 @@ Payload que o firmware publica (exemplo de formato, não medição real):
 - **Idempotência:** sem `bootId`/`sequence` no payload, a ponte numera as leituras na própria sessão (`bootId = mqtt-xxxxxxxx`). Com o QoS 0 do ESP32 não há reenvio, mas uma mensagem repetida pelo broker contaria duas vezes. Para idempotência igual à do HTTP, o firmware pode mandar `"bootId"` e `"sequence"` (os dois juntos): a repetição volta como duplicata e não soma volume. O prefixo `mqtt-` no `bootId` é reservado à ponte e é recusado.
 - **Balança:** o peso do lote é a **menor** leitura do trecho estável, arredondada para baixo em 0,1 kg, para nunca superestimar. Depois de criar um lote, a balança só gera outro quando é esvaziada (peso abaixo da metade do mínimo). Cada balança mantém no máximo **um** lote aguardando verificação. O autor fica na auditoria (`dispositivo:<código>`, `deviceCode`).
 - **Conectividade:** a ponte só atualiza `lastSeenAt`. Não grava `ONLINE`, e `MAINTENANCE` continua sendo decisão humana.
-- **Banco fora (auditoria final, 06/11):** a ponte confirma ao broker (PUBACK) **só depois de gravar**.
-  - Com o banco recusando, ela insiste dentro do processo com espera crescente (0,5 s até 15 s) e mantém a ordem de chegada: as mensagens seguintes esperam.
-  - A retentativa grava a MESMA leitura: mesma hora de chegada e mesma sequência. Ela nunca "atualiza" a hora para o momento em que o banco voltou.
-  - Passado o prazo (`MQTT_RETRY_BUDGET_SECONDS`, padrão 120 s), a mensagem vai para a **carta morta** (`MQTT_DEAD_LETTER`, padrão `.mqtt-dead-letter.ndjson`), com hora de chegada, tópico, conteúdo e erro. A ponte avisa no log e no telão e segue. Nada se perde em silêncio; reprocessar é decisão humana.
-  - Testes: `tests/integration/mqtt-confiabilidade.test.ts` (M3.1–M3.6) e `pnpm test:mqtt-broker` (Mosquitto real em porta isolada, B1–B4).
+- **Banco fora (auditoria final e revisão adversarial, 06/11).** O MQTT.js confirma ao broker (PUBACK) **na chegada**, e a ponte grava por uma **fila própria em memória**, uma mensagem por vez, na ordem de chegada.
+  - **Por que não confirmar só depois de gravar?** Essa foi a 1ª versão. Ela segurava o laço de pacotes do MQTT.js, e com ele a resposta ao ping. Com o banco fora por 30 a 90 s, o keepalive derrubava a conexão, e o que estava represado se perdia sem aviso. A versão atual foi testada com broker real (B5): keepalive de 2 s, banco fora por 9 s, 4 mensagens, 0 queda, 4 gravadas.
+  - **Hora de chegada.** A hora da leitura é a da **chegada** na ponte, carimbada antes da fila. A retentativa grava a MESMA leitura: mesma hora e mesma sequência. A hora nunca é "atualizada" para o momento em que o banco voltou, nem quando o banco já estava fora na chegada. O volume usa o intervalo real entre chegadas.
+  - **Retentativa.** Com o banco recusando, a ponte insiste com espera crescente (0,5 s até 15 s). O prazo é de relógio (`MQTT_RETRY_BUDGET_SECONDS`, padrão 120 s), e cada tentativa tem teto de 30 s, então uma consulta pendurada não prende a fila.
+  - **Carta morta** (`MQTT_DEAD_LETTER`, padrão `.mqtt-dead-letter.ndjson`). Recebe a mensagem nestes casos:
+    - prazo esgotado;
+    - erro permanente (valor fora de faixa, chave violada, consulta malformada): vai na hora, sem esperar o prazo;
+    - fila cheia (`MQTT_QUEUE_MAX`, padrão 2000);
+    - ponte encerrada com mensagens esperando.
+
+    Cada linha traz hora de chegada, tópico, conteúdo, motivo, erro e `partial`, isto é, o que já foi gravado: vazão com `bootId`/`sequence`, contato, temperatura e lote. "PARCIALMENTE gravada" no log quer dizer que só o resto falta. Reprocessar é decisão humana.
+  - **Mensagem retida** no broker (`retain`) é **ignorada**: é uma leitura velha, reentregue a cada assinatura.
+  - **Curinga** em `MQTT_TOPIC` (`+`/`#`) é aceito como filtro compartilhado. Não combina com `MQTT_REQUIRE_DEVICE_TOPIC=true`, e a ponte recusa subir assim.
+  - Testes: `tests/integration/mqtt-confiabilidade.test.ts` (M3.1–M3.11) e `pnpm test:mqtt-broker` (Mosquitto real em porta isolada, B1–B6).
 
 ### Garantias e riscos residuais da ponte
 
 | Situação | O que acontece |
 |---|---|
-| Banco cai com a ponte de pé | Insiste até o prazo; grava com a hora da chegada ou guarda na carta morta. Sem perda silenciosa |
-| Mensagem repetida pelo broker durante o processamento (mesmo id de pacote e conteúdo) | Processada uma vez |
+| Banco cai com a ponte de pé | A conexão com o broker continua; as mensagens esperam na fila com a hora de chegada e são gravadas quando o banco volta, ou vão para a carta morta passado o prazo. Cada uma termina gravada, recusada (com log) ou na carta morta |
+| Erro permanente, fila cheia ou ponte encerrada (Ctrl+C) | Carta morta, com o motivo e o que já foi gravado (`partial`) |
 | Firmware manda `bootId` + `sequence` | Idempotente como no HTTP: repetição é duplicata, não soma volume |
-| Firmware **sem** `bootId`/`sequence` (o atual) | A ponte numera na sessão. Sem reentrega não há duplicata; não há como deduplicar entre sessões |
-| Ponte desligada ou reiniciando | **Sessão limpa de propósito.** O JSON não traz horário (a hora é a da chegada na ponte), então mensagens represadas no broker chegariam juntas, minutos depois, carimbadas como "agora". Publicado com a ponte fora não é gravado: sem amostra, sem linha |
-| Processo da ponte morre no meio de uma retentativa | Aquela mensagem se perde (o log mostra as tentativas) |
+| Firmware **sem** `bootId`/`sequence` (o atual) | A ponte numera na sessão. Uma reentrega do broker (QoS 1 com PUBACK perdido) contaria duas vezes; não há como deduplicar sem o par do firmware |
+| Ponte desligada ou reiniciando | **Sessão limpa de propósito.** O JSON não traz horário (a hora é a da chegada na ponte), então mensagens represadas no broker chegariam juntas, minutos depois, carimbadas como "agora". Publicado com a ponte fora não é gravado: sem amostra, sem linha. Mensagem retida é ignorada pelo mesmo motivo |
+| **Processo da ponte morre** (kill -9, queda de energia) com mensagens na fila | **Elas se perdem**: já foram confirmadas ao broker e a fila vive na memória. É o risco residual aceito; o log mostra as tentativas e o tamanho da fila ao cair a conexão |
 | ESP32 → broker em QoS 0 (PubSubClient) | Sem reenvio no Wi-Fi: perda possível antes de chegar ao broker |
-| **Não prometido** | Entrega exatamente uma vez de ponta a ponta |
+| **Não prometido** | Entrega exatamente uma vez, ou pelo menos uma vez, de ponta a ponta |
 
 **Para chegar a "pelo menos uma vez" de ponta a ponta (P1, depois do evento):**
 - o firmware manda `bootId`, `sequence` e o horário NTP da leitura;

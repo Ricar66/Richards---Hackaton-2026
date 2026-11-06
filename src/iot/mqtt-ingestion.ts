@@ -54,6 +54,8 @@ export class MqttIngestion {
     return m;
   }
   private source(sensor: MqttSensor): "DEVICE" | "SIMULATED" { return this.cfg.simulated.has(sensor) ? "SIMULATED" : "DEVICE"; }
+  /** Apelido → código; só chave própria do mapa ("__proto__" e afins nunca acham nada). */
+  private alias(id: string): string { return Object.hasOwn(this.cfg.aliases, id) ? this.cfg.aliases[id] : id; }
   private actor(sensor: MqttSensor, code: string) { return `${this.source(sensor) === "SIMULATED" ? "simulador" : "dispositivo"}:${code}`; }
 
   /** Avisa o telão que uma mensagem foi descartada (motivo curto, sem conteúdo da mensagem), limitado por motivo. */
@@ -68,9 +70,10 @@ export class MqttIngestion {
   /**
    * Mensagem inteira, de uma vez (bancada virtual e testes). A ponte com broker usa `prepare` uma vez e repete `apply`
    * enquanto o banco estiver fora (ver mqtt-connection.ts).
-   * `receivedAt`: quando a mensagem chegou do broker (antes da fila), para o carimbo de tempo do evento ao vivo.
+   * `receivedAt`: quando a mensagem chegou do broker (antes da fila). Sem ele (bancada virtual, testes), vale o relógio
+   * injetado.
    */
-  async handle(raw: unknown, receivedAt = new Date(), topicDeviceId?: string): Promise<MqttOutcome> {
+  async handle(raw: unknown, receivedAt?: Date, topicDeviceId?: string): Promise<MqttOutcome> {
     const prepared = await this.prepare(raw, receivedAt, topicDeviceId);
     if (prepared.status === "rejected") return prepared;
     try { return await this.apply(prepared.message); }
@@ -84,16 +87,16 @@ export class MqttIngestion {
    * "atualiza" a hora para o momento em que o banco voltou.
    * `topicDeviceId`: o `<id>` de `<topic>/<id>` quando a mensagem chegou pelo tópico do próprio dispositivo.
    */
-  async prepare(raw: unknown, receivedAt = new Date(), topicDeviceId?: string): Promise<{ status: "rejected"; reason: string } | { status: "ready"; message: MqttMessage }> {
+  async prepare(raw: unknown, arrivedAt?: Date, topicDeviceId?: string): Promise<{ status: "rejected"; reason: string } | { status: "ready"; message: MqttMessage }> {
     const parsed = mqttPayloadSchema.safeParse(raw);
     if (!parsed.success) {
       await this.reportRejected("payload inválido");
       return { status: "rejected", reason: `payload inválido (${parsed.error.issues.map(i => `${i.path.join(".") || "payload"}: ${i.message}`).join("; ")})` };
     }
     const p = parsed.data;
-    const code = this.cfg.aliases[p.dispositivo_id] ?? p.dispositivo_id;
+    const code = this.alias(p.dispositivo_id);
     // Tópico por dispositivo: o JSON não pode falar em nome de outro (a ACL do broker garante quem publica no tópico).
-    if (topicDeviceId !== undefined && (this.cfg.aliases[topicDeviceId] ?? topicDeviceId) !== code) {
+    if (topicDeviceId !== undefined && this.alias(topicDeviceId) !== code) {
       await this.reportRejected("dispositivo diferente do tópico");
       return { status: "rejected", reason: `dispositivo_id "${p.dispositivo_id}" publicado no tópico de "${topicDeviceId}": recusado` };
     }
@@ -105,7 +108,10 @@ export class MqttIngestion {
       return { status: "rejected", reason: `dispositivo "${p.dispositivo_id}"${code !== p.dispositivo_id ? ` (apelido de ${code})` : ""} não cadastrado: cadastre o Device ou mapeie em MQTT_DEVICE_ALIASES` };
     }
     // Daqui para baixo nada lê o banco: a memória da ponte muda uma vez só por mensagem.
-    const at = this.now();
+    // A hora da leitura é a da CHEGADA na ponte (o JSON não traz horário), nunca a do processamento: com o banco fora,
+    // a mensagem espera na fila e é gravada depois com a hora em que chegou.
+    const at = arrivedAt ?? this.now();
+    const receivedAt = arrivedAt ?? new Date(); // bancada virtual: hora do cenário na leitura, relógio real na "viagem"
     const mem = this.remember(device.id);
     const msg: MqttMessage = { device, at, receivedAt, done: {} };
 

@@ -37,10 +37,14 @@ export type MqttBridgeConfig = {
    * compartilhado (`<topic>`); `false` (padrão, compatível com o firmware atual) aceita os dois.
    */
   requireDeviceTopic: boolean;
-  /** Quanto tempo a ponte insiste em gravar uma mensagem (banco fora) antes de guardá-la na "carta morta" e seguir. */
+  /** Quanto tempo (relógio) a ponte insiste em gravar uma mensagem (banco fora) antes de guardá-la na "carta morta". */
   retryBudgetMs: number;
-  /** Arquivo NDJSON com as mensagens que não foram gravadas depois do prazo (nada se perde em silêncio). */
+  /** Arquivo NDJSON com as mensagens não gravadas: prazo esgotado, erro permanente, fila cheia ou ponte encerrada. */
   deadLetterPath: string;
+  /** Keepalive da conexão com o broker. A fila não segura o laço do MQTT.js, então o ping segue mesmo com o banco fora. */
+  keepaliveSeconds: number;
+  /** Mensagens esperando o banco; acima disso, cada nova vai direto para a carta morta (nunca é descartada em silêncio). */
+  queueMax: number;
 };
 
 /** Só as variáveis lidas; aceita `process.env` ou um objeto parcial (testes). */
@@ -55,7 +59,8 @@ function number(env: Env, name: string, fallback: number, min: number, max: numb
 
 /** Lê a configuração da ponte. Valor inválido derruba a ponte na partida: nunca roda com regra adivinhada. */
 export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
-  const aliases: Record<string, string> = {};
+  // Sem protótipo: um dispositivo_id "__proto__" ou "constructor" não pode achar nada que não foi cadastrado.
+  const aliases: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const pair of (env.MQTT_DEVICE_ALIASES ?? "").split(",").map(s => s.trim()).filter(Boolean)) {
     const [from, to, extra] = pair.split("=").map(s => s.trim());
     if (!from || !to || extra !== undefined) throw new Error(`MQTT_DEVICE_ALIASES: "${pair}" inválido, use id_do_firmware=CODIGO-DO-DEVICE`);
@@ -67,9 +72,12 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
     if (!(MQTT_SENSORS as readonly string[]).includes(s)) throw new Error(`MQTT_SIMULATED_SENSORS: "${s}" inválido, use ${MQTT_SENSORS.join(", ")}`);
     simulated.add(s as MqttSensor);
   }
+  const topic = env.MQTT_TOPIC?.trim() || "richards/comercio/telemetria";
+  const requireDeviceTopic = env.MQTT_REQUIRE_DEVICE_TOPIC?.trim().toLowerCase() === "true";
+  if (requireDeviceTopic && hasWildcard(topic)) throw new Error(`MQTT_REQUIRE_DEVICE_TOPIC=true exige MQTT_TOPIC sem curinga (+ ou #): "${topic}"`);
   return {
     brokerUrl: env.MQTT_BROKER_URL?.trim() || "mqtt://localhost:1883",
-    topic: env.MQTT_TOPIC?.trim() || "richards/comercio/telemetria",
+    topic,
     username: env.MQTT_USERNAME?.trim() || undefined,
     password: env.MQTT_PASSWORD || undefined,
     aliases, simulated,
@@ -78,10 +86,24 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
     tempSeconds: number(env, "MQTT_TEMP_SECONDS", 30, 1, 3600),
     scaleMinKg: number(env, "MQTT_SCALE_MIN_KG", 5, 0.1, 500),
     scaleStableSeconds: number(env, "MQTT_SCALE_STABLE_SECONDS", 6, 1, 600),
-    requireDeviceTopic: env.MQTT_REQUIRE_DEVICE_TOPIC?.trim().toLowerCase() === "true",
+    requireDeviceTopic,
     retryBudgetMs: number(env, "MQTT_RETRY_BUDGET_SECONDS", 120, 1, 3600) * 1000,
     deadLetterPath: env.MQTT_DEAD_LETTER?.trim() || ".mqtt-dead-letter.ndjson",
+    keepaliveSeconds: number(env, "MQTT_KEEPALIVE_SECONDS", 60, 1, 1200),
+    queueMax: number(env, "MQTT_QUEUE_MAX", 2000, 1, 100_000),
   };
+}
+
+/** Filtro de tópico com curinga do MQTT (`+` = um nível, `#` = o resto). */
+export const hasWildcard = (topic: string) => /(^|\/)[+#](\/|$)/.test(topic);
+export function topicMatches(filter: string, topic: string): boolean {
+  const f = filter.split("/"), t = topic.split("/");
+  for (let i = 0; i < f.length; i++) {
+    if (f[i] === "#") return true;
+    if (i >= t.length) return false;
+    if (f[i] !== "+" && f[i] !== t[i]) return false;
+  }
+  return f.length === t.length;
 }
 
 /**
