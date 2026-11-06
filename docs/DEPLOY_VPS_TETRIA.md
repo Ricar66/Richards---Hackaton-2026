@@ -4,6 +4,62 @@
 > Decisão do Ricardo no mesmo dia: "não vamos usar subdomínio, iremos fazer por IP mesmo".
 > O primeiro roteiro (Cloudflare Tunnel + Access em `richards.tetriabrasil.com.br`) ficou como alternativa no fim deste arquivo.
 
+## Auditoria de segurança (06/11, tarde) e plano de HTTPS — AGUARDA AUTORIZAÇÃO
+
+Nada abaixo foi aplicado na VPS, no Coolify, no DNS ou na Cloudflare. O levantamento foi só de leitura.
+
+### Achados
+
+| # | Gravidade | Achado | Evidência |
+|---|---|---|---|
+| S1 | **P0** | Basic Auth em **http**: a senha do operador trafega legível na rede (Wi-Fi do evento) | `http://187.77.229.205:8090`, sem TLS |
+| S2 | P1 | A porta 8090 publicada pelo Docker fica aberta para a internet inteira (passa por cima do `ufw`) | `ss -ltnp`; teste externo |
+| S3 | P1 | O "Simular alerta" (`/api/admin/simulate`, `DEMO_MODE=true`) fica acessível a quem tiver a senha | Atrás do Basic Auth; os registros saem carimbados SIMULATED |
+| S4 | P2 | O Coolify entrega o `.env` do recurso a todos os serviços: o banco também recebe a senha do operador | Verificação independente (S5/P3) |
+| S5 | P2 | O web roda como root no contêiner | Falta `USER node` no Dockerfile |
+| OK | — | PostgreSQL sem porta no host, `scram-sha-256`, só na rede do recurso; segredos fora do git, dos logs e dos bundles; vizinhos intactos | Verificação independente 12/12 |
+
+**Por que não sslip.io:** o proxy do Coolify já tem Let's Encrypt (desafio HTTP na porta 80), mas `sslip.io`, `nip.io` e `traefik.me` não estão na Public Suffix List (conferido em 06/11). O limite de 50 certificados por semana fica dividido com o mundo todo e falha com frequência. Não serve para dia de evento.
+
+### Opção A (recomendada): Cloudflare Tunnel + Access em `richards.tetriabrasil.com.br`
+
+- **TLS:** de ponta a ponta até a Cloudflare.
+- **Login por e-mail (One-time PIN)** antes de chegar ao app.
+- **8090 fechada para a internet.**
+- **Precisa do Haroldo**, uns 15 min:
+  1. **Access:** aplicação self-hosted para o hostname, política **Allow** com os e-mails da equipe e da banca, sessão de 24 h, sem Bypass.
+  2. **Túnel `tetriabrasil`:** rota pública `richards.tetriabrasil.com.br` → `http://127.0.0.1:8090`, sem `httpHostHeader` e **sem tocar na regra final** (Elora). O CNAME fica proxied.
+- **Depois (Ricardo ou eu, com autorização):** no recurso `richards-demo`, `VPS_BIND_ADDR=127.0.0.1` + **Redeploy**. A 8090 passa a ouvir só no loopback.
+
+### Opção B (sem o Haroldo): quick tunnel da Cloudflare
+
+- **O que dá:** HTTPS com URL `https://<aleatória>.trycloudflare.com`. Não usa conta, DNS nem o túnel da Elora. O controle de acesso continua sendo o Basic Auth, agora **dentro do TLS**.
+- **Limites:** a URL muda a cada reinício, não há garantia de disponibilidade (é para teste) e não há login por e-mail.
+- **Passos na VPS** (o `cloudflared` 2026.8.3 já está lá):
+
+```bash
+systemd-run --unit=richards-quick-tunnel /usr/local/bin/cloudflared --no-autoupdate tunnel --url http://127.0.0.1:8090
+journalctl -u richards-quick-tunnel -n 50 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com'
+```
+
+- **Depois:** `VPS_BIND_ADDR=127.0.0.1` + Redeploy, como na opção A.
+
+### Testes de aceite (antes de anunciar a URL)
+
+| Teste | Esperado |
+|---|---|
+| `curl -sI https://<host>/api/health` | 200, `"database":"up"` (opção A: 302 para o Access) |
+| `curl -sI https://<host>/` sem senha | 401 (opção B) / 302 para o Access (opção A) |
+| Navegador com a senha da VPS | BI ao vivo; `/ao-vivo` em "Ao vivo" (o SSE atravessa o túnel) |
+| De fora: `curl -m 5 http://187.77.229.205:8090/` | Recusado ou timeout |
+| `https://elora.tetriabrasil.com.br/api/health` | 200 (vizinha intacta) |
+
+### Rollback (sem apagar dados)
+
+1. No recurso `richards-demo`, `VPS_BIND_ADDR=0.0.0.0` (ou apague a variável) + Redeploy: volta o acesso direto por IP.
+2. Opção B: `systemctl stop richards-quick-tunnel`. Opção A: Haroldo remove a rota e a aplicação do Access.
+3. O volume `richards_vps_pgdata` não é tocado em nenhum caminho.
+
 ## Como está no ar
 
 | Item | Valor |

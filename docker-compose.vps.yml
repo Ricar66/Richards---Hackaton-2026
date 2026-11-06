@@ -43,6 +43,8 @@ services:
       retries: 4
       start_period: 120s
     ports:
-      - "0.0.0.0:8090:3000"
+      # VPS_BIND_ADDR: 0.0.0.0 (padrão, acesso direto por IP em http) ou 127.0.0.1 (só o túnel/proxy local alcança).
+      # Trocar = mudar a variável no Coolify e fazer Redeploy; voltar = o mesmo, ao contrário. Ver docs/DEPLOY_VPS_TETRIA.md.
+      - "${VPS_BIND_ADDR:-0.0.0.0}:8090:3000"
 volumes:
   richards_vps_pgdata:
