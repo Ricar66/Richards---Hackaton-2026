@@ -41,7 +41,7 @@ pnpm instituicao:cadastrar --nome "Nome da instituição" --cidade "Ribeirão Pr
 pnpm instituicao:cadastrar --listar
 ```
 
-**Na VPS:** o mesmo, com os comandos dentro do contêiner `web` do recurso `richards-demo` (`docker exec <contêiner> pnpm dados:limpar-simulados ...`). O backup vai para `/root/.richards-deploy/backups/` (modo 600). O código novo entra pela branch `deploy/vps-hackathon` e pelo Redeploy, como em `docs/DEPLOY_VPS_TETRIA.md`.
+**Na VPS:** o mesmo, com os comandos dentro do contêiner `web` do recurso `richards-demo` (`docker exec <contêiner> pnpm dados:limpar-simulados ...`). O backup vai para `/root/.richards-deploy/backups/` (modo 600). O código novo entra pelo `main` e pelo Redeploy, como em `docs/DEPLOY_VPS_TETRIA.md`.
 
 ## Depois da limpeza
 

@@ -38,6 +38,7 @@ Protótipo do **Hackathon Senac Ribeirão Preto**, 6 e 7 de novembro de 2026
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Documentação](#documentação)
 - [Segurança e limites conhecidos](#segurança-e-limites-conhecidos)
+- [Branches e contribuição](#branches-e-contribuição)
 - [Equipe e créditos](#equipe-e-créditos)
 
 ## O problema e a proposta
@@ -271,6 +272,15 @@ presentation/          kit de pitch (slides, fala, roteiro de palco)
   - Uma ACL por dispositivo está documentada em `docs/CONTRATO_IOT.md`.
 - **Ponte MQTT.** A fila vive na memória. Se o processo morrer com mensagens esperando o banco, elas se perdem, e esse é um risco aceito e documentado. Entrega "exatamente uma vez" **não** é prometida.
 - **Instituição.** Ela não tem login próprio: quem confirma a entrega é o operador.
+
+## Branches e contribuição
+
+| Branch | Papel |
+|---|---|
+| `develop` | Integração. Todo trabalho e todo pull request entram aqui |
+| `main` | Estável. Só recebe a `develop` já testada; é a versão publicada na demonstração |
+
+Antes de abrir um PR para a `develop`, rode `pnpm typecheck`, `pnpm lint` e `pnpm test`. Se a mudança tocar banco, IoT ou telas, rode também os testes de integração e o E2E. Não versione segredos: `.env`, `secrets.h` e credenciais ficam fora do git. As branches antigas do kit de pitch estão guardadas nas tags `arquivo/feat-pitch-*`.
 
 ## Equipe e créditos
 

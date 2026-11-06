@@ -66,7 +66,7 @@ journalctl -u richards-quick-tunnel -n 50 | grep -o 'https://[a-z0-9-]*\.tryclou
 |---|---|
 | Endereço | `http://187.77.229.205:8090` (BI em `/`, Sala ao vivo em `/ao-vivo`, saúde em `/api/health`) |
 | Coolify | projeto **RICHARDS** (`vejbym56yieujkya75vn36in`) · ambiente **demo** (`zummmht1qmzi6sv4eiblwywj`) · recurso **richards-demo** (`hgqhwyshnq0r3fqwrevyae4l`) |
-| Código | repositório público `Ricar66/Richards---Hackaton-2026`, branch congelada **`deploy/vps-hackathon`**, compose `/docker-compose.vps.yml` |
+| Código | repositório público `Ricar66/Richards---Hackaton-2026`, branch **`main`** (desde 06/11 à noite; antes `deploy/vps-hackathon`, removida ao consolidar o repositório em `develop` e `main`), compose `/docker-compose.vps.yml` |
 | Deploy automático | **Desligado.** A VPS não segue o `main`; publicar de novo é Redeploy manual no Coolify |
 | Outras opções do recurso | "Inject Build Args to Dockerfile" e "Connect to Predefined Network" desligados; valores das variáveis ocultos nos logs; nenhum domínio no proxy |
 | Banco | `richards-db` (Postgres 16) só na rede do compose, volume `richards_vps_pgdata`. **Só dados reais desde 06/11** (`docs/DADOS_REAIS.md`); backup antes da limpeza em `/root/.richards-deploy/backups/` |
@@ -147,7 +147,7 @@ Os segredos vão para dentro do contêiner num arquivo temporário com permissã
 
 ## Operação
 
-- **Publicar uma versão nova:** atualize a branch `deploy/vps-hackathon` (`git branch -f deploy/vps-hackathon main` e push, sem forçar) e clique em **Redeploy** no recurso. O banco e os dados continuam no volume.
+- **Publicar uma versão nova:** leve a `develop` ao `main` (merge sem forçar) e clique em **Redeploy** no recurso. O auto deploy segue desligado: push no `main` não publica sozinho. O banco e os dados continuam no volume.
 - **Só dados reais:**
   - depois do Redeploy, `ETAPA=limpar` do `8-dados-reais.sh` roda `pnpm dados:limpar-simulados --apagar --confirmar` no contêiner `web`, com backup antes (`ETAPA=antes`);
   - a instituição real: `docker exec <web> pnpm instituicao:cadastrar --nome "..." --cidade "..."`.
@@ -186,7 +186,7 @@ Registrar cada item como PASSOU, FALHOU ou NÃO EXECUTADO.
 **Pendências para depois do evento (P3):**
 - O Coolify entrega o `.env` do recurso a todos os serviços, então o banco também recebe a senha do operador e a chave do sensor.
 - O web roda como root no contêiner: falta `USER node` no Dockerfile.
-- O recurso segue o topo da branch `deploy/vps-hackathon`: confira o commit antes de cada Redeploy.
+- O recurso segue o topo do `main`: confira o commit antes de cada Redeploy.
 
 ## Desmontagem (até 08/11)
 

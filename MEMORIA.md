@@ -39,7 +39,7 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 | Bancada virtual (contingência de palco) | `pnpm bancada` / `pnpm palco:checar`; contrato em `docs/CONTRATO_IOT.md`, seção "Bancada virtual" |
 | Canal ao vivo (SSE) | `docs/CONTRATO_IOT.md`, seção "Canal ao vivo (SSE) para as telas" |
 | Broker MQTT na VPS (bancada do Victor) | `187.77.229.205:1883`, usuário `hortifruti_01`, senha só em `.env.vps.local`/VPS (mandar ao Victor no privado). Senha + ACL, sem anônimo, sem TLS até 08/11 (risco aceito pelo Ricardo). Ver `docs/DEPLOY_VPS_TETRIA.md`, "Broker MQTT da bancada" |
-| Demo na VPS da Tétria | **No ar desde 06/11 por IP: http://187.77.229.205:8090** (decisão do Ricardo: sem subdomínio nem Cloudflare). Coolify: projeto RICHARDS, ambiente `demo`, recurso `richards-demo`, branch congelada `deploy/vps-hackathon`, auto deploy desligado. Credenciais da VPS em `.env.vps.local` (fora do git). Roteiro e checklist em `docs/DEPLOY_VPS_TETRIA.md` |
+| Demo na VPS da Tétria | **No ar desde 06/11 por IP: http://187.77.229.205:8090** (decisão do Ricardo: sem subdomínio nem Cloudflare). Coolify: projeto RICHARDS, ambiente `demo`, recurso `richards-demo`, branch `main` (desde 06/11 à noite; a `deploy/vps-hackathon` foi removida), auto deploy desligado. Credenciais da VPS em `.env.vps.local` (fora do git). Roteiro e checklist em `docs/DEPLOY_VPS_TETRIA.md` |
 
 ## 3. Regras invioláveis (do prompt mestre)
 
@@ -62,7 +62,8 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 - O responsável deu **autorização ampla** para avançar sem perguntar a cada passo. Isso **não** vale para apagar dados ou expor segredos.
 - Trabalhar e revisar direto, **sem subagentes** (pedido explícito).
 - Cada entrega termina com: arquivos alterados e por quê, testes classificados, riscos e próximos passos (P0/P1/P2).
-- Commits pequenos no `main`, mensagem em português descrevendo o porquê. O push para o GitHub usa a conta dona do repositório (Ricar66).
+- **Duas branches desde 06/11:** `develop` (integração: todo trabalho e todo PR entram aqui) e `main` (estável: é o que a VPS publica e o que o GitHub mostra). O `main` só recebe a `develop` já testada. As branches antigas de pitch viraram as tags `arquivo/feat-pitch-*`; a `deploy/vps-hackathon` foi removida, e o Coolify lê o `main`.
+- Commits pequenos na `develop`, mensagem em português descrevendo o porquê. O push para o GitHub usa a conta dona do repositório (Ricar66).
 - Mais de uma pessoa ou ferramenta envia para o GitHub (o kit de pitch chegou assim). **Sempre fazer `git fetch` antes de enviar** e pôr o trabalho local por cima, com rebase ou merge. **Nunca forçar o push.**
 
 ## 5. Stack
@@ -233,7 +234,7 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
   - `richards-mqtt` + `richards-ponte` no `docker-compose.vps.yml`;
   - perfil `iot` no `docker-compose.yml` local (`docker compose --profile iot up -d`, porta no loopback por padrão);
   - crédito ao Victor no commit.
-- **Fechar ou comentar o PR #4 é decisão do Ricardo.**
+- **Verificação do PR #4 (06/11, noite):** continua com 1 commit (`cb71160`), mira o `main` e **conflita** com ele no `docker-compose.yml`. O conteúdo seguro já está no `main` (`f39c917`, com o Victor como coautor). Fechar ou comentar o PR é decisão do Ricardo. Uma contribuição nova do Victor deve vir como PR para a `develop`.
 - **Grafana fica de fora:** leria o banco sem o carimbo de origem (regra 1) e seria mais uma porta exposta.
 
 **Regras de dados**
@@ -369,7 +370,7 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
   - o Basic Auth trafega em http, sem TLS;
   - a porta publicada pelo Docker passa por cima do `ufw`.
   - A senha é própria da VPS. **Desmontar até 08/11** (Stop no Coolify) e trocar a senha.
-  - Publicar versão nova: mover a branch `deploy/vps-hackathon` e clicar em Redeploy.
+  - Publicar versão nova: levar a `develop` ao `main` (sem forçar) e clicar em Redeploy.
   - Não ligar o ESP32 na VPS: o firmware HTTP não tem TLS.
   - A 18082 do primeiro roteiro é do woodpecker-server.
 - A linha do tempo das gavetas do BI mostra o autor completo (`operador:<usuário>`). Se o BI for projetado, considere usar um usuário de laboratório neutro.
