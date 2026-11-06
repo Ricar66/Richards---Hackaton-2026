@@ -1,0 +1,46 @@
+# Publicação na VPS da Tétria (Coolify + Cloudflare Tunnel), no mesmo padrão da Elora.
+# Roteiro completo: docs/DEPLOY_VPS_TETRIA.md. NÃO usar no notebook: lá o plano B é o docker-compose.yml.
+# - A web publica SÓ no loopback (127.0.0.1:18082); quem entrega para fora é o cloudflared do host, atrás do Cloudflare Access.
+#   Nunca escrever "18082:3000" sem o 127.0.0.1: o Docker passa por cima do firewall e expõe no IP público.
+# - O banco não tem porta no host.
+# - Segredos vêm das variáveis do recurso no Coolify; ":?" derruba o deploy se faltar (nunca sobe com senha de laboratório).
+services:
+  richards-db:                      # nome único: não colide com o alias "db" de outras stacks da VPS
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: richards
+      POSTGRES_PASSWORD: ${VPS_POSTGRES_PASSWORD:?defina VPS_POSTGRES_PASSWORD}
+      POSTGRES_DB: richards
+    volumes:
+      - richards_vps_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U richards -d richards"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      richards-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://richards:${VPS_POSTGRES_PASSWORD:?defina VPS_POSTGRES_PASSWORD}@richards-db:5432/richards?schema=public
+      # Demonstração de hackathon: todo o seed é SIMULATED. O host só é alcançável pelo Cloudflare Access (sem Bypass).
+      DEMO_MODE: "true"
+      AUTH_MODE: basic
+      RICHARDS_OPERATOR_USER: ${VPS_OPERATOR_USER:?defina VPS_OPERATOR_USER}
+      RICHARDS_OPERATOR_PASSWORD: ${VPS_OPERATOR_PASSWORD:?defina VPS_OPERATOR_PASSWORD}
+      IOT_DEMO_DEVICE_KEY: ${VPS_IOT_DEVICE_KEY:?defina VPS_IOT_DEVICE_KEY}
+    healthcheck:
+      # 127.0.0.1 e não localhost: no alpine "localhost" pode resolver para ::1. A imagem tem wget (busybox), não curl.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 120s
+    ports:
+      - "127.0.0.1:18082:3000"
+volumes:
+  richards_vps_pgdata:
