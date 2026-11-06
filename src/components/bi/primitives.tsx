@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Info, TrendingDown, TrendingUp } from "lucide-react";
 import type { DashboardDTO, Provenance } from "@/modules/analytics/domain/dashboard";
 import { dateBR, numBR } from "@/lib/format";
@@ -29,25 +29,34 @@ export function Panel({ eyebrow, title, caption, actions, children, className = 
   </section>;
 }
 
-/** Número que transita do valor anterior ao novo (300 ms). Sem animação em loop; respeita "reduzir movimento". */
+/**
+ * Número que transita do valor na tela até o novo (320 ms). Sem animação em loop; respeita "reduzir movimento".
+ * Um só escritor do texto: o React escreve só o valor da montagem e, daí em diante, só o efeito escreve. Com os dois
+ * escrevendo, a tela mostrava o valor novo, voltava a um ponto de partida velho e chegava a exibir um número fora do
+ * intervalo (6.466,4 L entre 6.236,7 e 868,3, verificação de 06/11). A transição parte do número que está DE FATO na
+ * tela, então nunca sai do intervalo entre valores reais. Contagem inteira troca direto: 1,4 ocorrência não existe.
+ */
 export function AnimatedNumber({ value, digits = 1 }: { value: number; digits?: number }) {
   const el = useRef<HTMLSpanElement>(null);
-  const shown = useRef(value);
+  const [initial] = useState(() => numBR(value, digits));
+  const onScreen = useRef(value);
   const reduced = usePrefersReducedMotion();
   useEffect(() => {
-    const from = shown.current, to = value;
-    if (from === to || reduced || !el.current) { shown.current = to; if (el.current) el.current.textContent = numBR(to, digits); return; }
+    const node = el.current;
+    if (!node) return;
+    const from = onScreen.current, to = value;
+    const paint = (v: number) => { onScreen.current = v; node.textContent = numBR(v, digits); };
+    if (from === to || reduced || digits === 0) { paint(to); return; }
     let raf = 0; const start = performance.now();
     const step = (now: number) => {
-      const k = Math.min(1, (now - start) / 320), eased = 1 - (1 - k) ** 3;
-      const v = from + (to - from) * eased;
-      if (el.current) el.current.textContent = numBR(v, digits);
-      if (k < 1) raf = requestAnimationFrame(step); else shown.current = to;
+      const k = Math.min(1, (now - start) / 320);
+      paint(k < 1 ? from + (to - from) * (1 - (1 - k) ** 3) : to);
+      if (k < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
-    return () => { cancelAnimationFrame(raf); shown.current = to; };
+    return () => cancelAnimationFrame(raf);
   }, [value, digits, reduced]);
-  return <span ref={el}>{numBR(value, digits)}</span>;
+  return <span ref={el}>{initial}</span>;
 }
 
 /** Variação contra o período anterior — só quando o backend tem base de comparação com cobertura parecida. Texto, não pílula. */

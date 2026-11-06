@@ -54,9 +54,29 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     check("A1 Centro de controle carrega com carimbo de dados simulados", homeOk, homeOk ? "" : t.slice(0, 160).replace(/\s+/g, " "));
     check("A1 KPI de ocorrências ativas vem do banco (seed: 2)", (await kpi("Ocorrências ativas")) === "2", await kpi("Ocorrências ativas"));
 
+    // A2b: cada texto que o KPI de volume mostra na troca de filtro (MutationObserver no body: sobrevive a remontagem).
+    // Regra "nada de número inventado": nenhum valor fora do intervalo entre o antigo e o novo, e sem ir e voltar
+    // (o valor novo aparecer e a tela regredir ao antigo). Achado da verificação de 06/11: 6.466,4 L entre 6.236,7 e 868,3.
+    await page.evaluate(() => {
+      const read = () => [...document.querySelectorAll(".kpi")].find(k => k.innerText.includes("Volume observado"))?.querySelector(".kpi-value span")?.textContent ?? null;
+      const seen = window.__kpiSeen = [read()];
+      window.__kpiObs = new MutationObserver(() => { const v = read(); if (v !== seen[seen.length - 1]) seen.push(v); });
+      window.__kpiObs.observe(document.body, { childList: true, characterData: true, subtree: true });
+    });
     await page.click("[aria-label=Período] button:nth-child(1)");
     await page.waitForFunction(() => location.search.includes("range=24h"), { timeout: 15000 });
     check("A2 filtro 24 h vai para a URL e recalcula (intervalos de 15 min)", await waitText("a cada 15 min"));
+    await wait(900);
+    const kpiTrail = await page.evaluate(() => { window.__kpiObs.disconnect(); return window.__kpiSeen; });
+    const nums = kpiTrail.map(s => s && /\d/.test(s) ? Number(s.replace(/\./g, "").replace(",", ".")) : null).filter(n => n !== null && Number.isFinite(n));
+    const [first, last] = [nums[0], nums[nums.length - 1]];
+    const lo = Math.min(first, last), hi = Math.max(first, last);
+    const inRange = nums.every(n => n >= lo - 0.05 && n <= hi + 0.05);
+    const monotone = nums.every((n, i) => i === 0 || (last >= first ? n >= nums[i - 1] - 0.05 : n <= nums[i - 1] + 0.05));
+    // Precondição: o seed dá volumes diferentes em 7 dias e em 24 h. Se o KPI não mudar, não há transição para medir.
+    check("A2b KPI na troca de filtro: só valores entre o antigo e o novo, sem ir e voltar", nums.length >= 2 && inRange && monotone,
+      nums.length < 2 ? `KPI não mudou (${kpiTrail.join(" → ")}): precondição do seed falhou, nada foi medido`
+        : `${nums.length} textos · ${kpiTrail.slice(0, 4).join(" → ")}${kpiTrail.length > 4 ? ` … ${kpiTrail[kpiTrail.length - 1]}` : ""}`);
     await page.evaluate(() => [...document.querySelectorAll("[aria-label='Origem dos dados'] button")].find(b => b.innerText === "Sensor").click());
     await page.waitForFunction(() => location.search.includes("source=DEVICE"), { timeout: 15000 });
     await waitText("SEM LEITURAS");
