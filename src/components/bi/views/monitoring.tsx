@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { LiveSensorTiles } from "../live-sensors";
 import { Activity, Droplets, Gauge, MoonStar } from "lucide-react";
 import type { DashboardDTO } from "@/modules/analytics/domain/dashboard";
 import { dateBR, numBR } from "@/lib/format";
@@ -42,6 +43,7 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
     <GlobalFilters data={data} />
     <StaleBanner since={stale} />
     <ProvenanceBanner p={data.provenance} />
+    <LiveSensorTiles />
     <div className="kpi-grid">
       <KpiTile label="Volume observado" icon={<Droplets size={15} />} value={k.observedLiters} unit=" L" foot="soma das leituras do recorte">
         <Delta current={k.observedLiters} previous={k.previousLiters} previousSamples={k.previousSamples} samples={data.provenance.samples} label="período anterior" />

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { LiveSensorTiles } from "../live-sensors";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Clock3, Cpu, Download, Droplets, HeartHandshake, TriangleAlert, Zap } from "lucide-react";
 import type { DashboardDTO, DashboardOccurrence } from "@/modules/analytics/domain/dashboard";
@@ -152,6 +153,7 @@ export function ControlCenter({ initial }: { initial: DashboardDTO }) {
         foot={<>{k.deliveredCount} entrega(s) confirmada(s) · {numBR(k.availableKg)} kg a caminho</>} />
     </div>
 
+    <LiveSensorTiles />
     <div className="grid-main">
       <Panel id="p-volume" title="Volume observado por intervalo" className={`dim-${data.filter.bucket}`}
         caption="Clique num ponto para abrir as leituras daquele intervalo."
