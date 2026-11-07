@@ -75,3 +75,8 @@ test("plateia pública é whitelist exata de leitura, sem liberar o painel e a A
   assert.ok(passed(proxy(req("/qr-plateia.svg", { method: "HEAD" }))));
   for (const path of ["/icon.png", "/icon.svg/x", "/apple-icon.png"]) assert.equal(proxy(req(path)).status, 401, `${path} continua fechado`);
 });
+
+test("assistente e vinculação Telegram continuam protegidos; nunca são parte da plateia pública",()=>{
+ for(const path of ["/assistente","/api/assistant/telegram","/api/assistant/chat"])
+  assert.equal(proxy(req(path)).status,401);
+});
