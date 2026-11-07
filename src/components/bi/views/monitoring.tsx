@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { LiveSensorTiles } from "../live-sensors";
 import { Activity, Droplets, Gauge, MoonStar } from "lucide-react";
+import { estimateContinuousFlow } from "@/modules/monitoring/domain/water-loss-estimate";
 import type { DashboardDTO } from "@/modules/analytics/domain/dashboard";
 import { dateBR, numBR } from "@/lib/format";
 import { useDashboard } from "../hooks";
@@ -33,6 +34,15 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
   const { data, stale } = useDashboard(initial);
   const { openInterval, openOccurrence } = useShell();
   const [table, setTable] = useState(false);
+  // Cenário educativo: não representa economia ou vazamento medido.
+  const [assumedFlow, setAssumedFlow] = useState("1");
+  const [hoursPerDay, setHoursPerDay] = useState("24");
+  const [days, setDays] = useState("30");
+  const [tariff, setTariff] = useState("10");
+  const exposure = estimateContinuousFlow({
+    flowLpm: Number(assumedFlow), hoursPerDay: Number(hoursPerDay),
+    days: Number(days), effectiveRateBRLPerM3: Number(tariff),
+  });
   const k = data.kpis;
   const withData = data.series.filter(p => p.samples > 0).length;
   const nightShare = k.observedLiters && k.nightLiters !== null ? (k.nightLiters / k.observedLiters) * 100 : null;
@@ -55,6 +65,29 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
       <KpiTile label="Cobertura de leituras" icon={<Activity size={15} />} value={data.series.length ? (withData / data.series.length) * 100 : null} digits={0} unit="%"
         foot={`${withData} de ${data.series.length} intervalos com leitura · lacuna não vira zero`} />
     </div>
+
+    <Panel id="p-school" title="Escolas e negócios · custo de uma descarga com fluxo contínuo" caption="Cenário hipotético independente das leituras. Não equivale a vazamento confirmado nem a economia realizada.">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 12 }}>
+        {([
+          ["Vazão (L/min)", assumedFlow, setAssumedFlow, "0.01", "0.01", "50"],
+          ["Horas por dia", hoursPerDay, setHoursPerDay, "0.5", "0.5", "24"],
+          ["Dias", days, setDays, "1", "1", "31"],
+          ["Tarifa de exemplo (R$/m³)", tariff, setTariff, "0.01", "0", "1000"],
+        ] as const).map(([title, value, change, step, min, max]) =>
+          <label key={title} className="field-label">{title}
+            <input type="number" inputMode="decimal" value={value} min={min} max={max} step={step}
+              onChange={e => change(e.target.value)} aria-label={title} style={{ display: "block", width: "100%", marginTop: 6 }} />
+          </label>)}
+      </div>
+      <div className="kpi-grid" style={{ marginTop: 16 }}>
+        <KpiTile label="Volume do cenário" icon={<Droplets size={15} />} value={exposure?.liters ?? null} digits={0} unit=" L"
+          foot={exposure ? `${numBR(exposure.cubicMeters, 2)} m³ no período assumido` : "Informe valores válidos"} />
+        <KpiTile label="Custo hipotético" icon={<Gauge size={15} />} value={exposure?.estimatedCostBRL ?? null} digits={2} unit=" R$"
+          foot="Cálculo linear com tarifa informada · não é fatura nem economia comprovada" />
+      </div>
+      <p className="info-note">Exemplo inicial: 1 L/min continuamente por 24 h, durante 30 dias = 43,2 m³. R$ 10/m³ é apenas tarifa ilustrativa; substitua pela tarifa efetiva de água e esgoto da fatura. A cobrança real pode ter faixas e componentes adicionais. Só inspeção confirma defeito.</p>
+      <p className="muted-text small"><b>Vaso entupido:</b> medidor de vazão não detecta obstrução com segurança. Exige inspeção e, para alerta automático de transbordamento, sensor adicional de nível/presença de água.</p>
+    </Panel>
 
     <Panel id="p-sync" title="Volume e vazão no mesmo período" caption="Gráficos separados (grandezas diferentes) e sincronizados. Faixas no gráfico de vazão são janelas de evidência de ocorrências."
       actions={<TableToggle on={table} onChange={setTable} />}>
