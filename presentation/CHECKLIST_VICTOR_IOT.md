@@ -25,7 +25,7 @@ A ponte `pnpm mqtt` aceita o JSON que o firmware já publica (`dispositivo_id`, 
 - **`dispositivo_id`:** precisa ser `RICHARDS-FLOW-001` ou estar mapeado em `MQTT_DEVICE_ALIASES="hortifruti_01=RICHARDS-FLOW-001"`. Id desconhecido é descartado (não cai mais no primeiro sensor do banco).
 - **Vazão:** alerta pela regra do dispositivo (≥ 1,5 L/min por 30 s), não por 8 L/min numa leitura só. Com potenciômetro, a leitura sai **SIMULATED** (`MQTT_SIMULATED_SENSORS="VAZAO"`). Com o YF-S201 ligado, use `""`.
 - **Temperatura:** alerta quando fica acima de 28 °C por 30 s seguidos (pico isolado não alerta).
-- **Balança:** a partir de 5 kg estáveis por 6 s cria lote **aguardando verificação** (não mais "disponível"). Só cria outro depois de esvaziar a balança, e há no máximo um lote pendente por balança.
+- **Balança:** a partir de 1,5 kg estáveis por 6 s (célula física nominal 5 kg; aferir tara e calibração) cria lote **aguardando verificação** (não mais "disponível"). Só cria outro depois de esvaziar a balança, e há no máximo um lote pendente por balança.
 - **Missões** não são criadas por enquanto: não há tela para elas (P2).
 - **Opcional, recomendado:** mandar `"bootId"` (aleatório a cada boot) e `"sequence"` (contador) no JSON deixa a retransmissão idempotente como no HTTP.
 - **Falta no repositório:** o `.ino` do firmware MQTT. Suba em `iot/esp32_richards_mqtt/`, com um `secrets.h.example` e sem senha.
@@ -36,7 +36,7 @@ Teste de bancada MQTT:
 - [ ] Log mostra `vazão seq N gravada` a cada mensagem, e o BI mostra o sinal ao vivo.
 - [ ] Vazão acima de 1,5 L/min por 30 s abre UMA ocorrência; zerar a vazão não abre.
 - [ ] Aquecer o DHT11 acima de 28 °C por 30 s abre UMA ocorrência de temperatura.
-- [ ] 5 kg na balança criam UM lote "aguardando verificação"; tirar e pôr de novo, com o lote ainda pendente, não cria outro.
+- [ ] 1,5 kg medidos na balança criam UM lote "aguardando verificação"; tirar e pôr de novo, com o lote ainda pendente, não cria outro.
 
 ## Checklist de ensaio conjunto
 
@@ -61,3 +61,6 @@ O Compose principal publica a web apenas em `127.0.0.1:3000`. Na LAN isolada, us
 **Critério de aceite final:** sensor real → API → banco → ocorrência → ação no BI, com captura de tela, log do 202 e calibração documentados. Sem esse ensaio, comunicar a demo como simulada.
 
 **Referência:** `docs/CONTRATO_IOT.md` e `docs/plano/06_IOT_ESP32_INTEGRACAO.md`.
+- [ ] Abrir `/plateia` em celular via QR projetado em `/convite` (somente leitura e sem autenticação).
+- [ ] Conferir no BI (`/`, `/monitoramento`, `/dispositivos`) os cards DHT11 e HX711 no mesmo momento da leitura MQTT.
+- [ ] Rodar carga de 70 conexões SSE com `scripts/plateia-carga.mjs` na VPS SOMENTE após autorização da equipe; evidenciar HTTP 200 + evento e atualização real. Referência: `docs/entrega/PLATEIA_QR_HANDOFF.md`.

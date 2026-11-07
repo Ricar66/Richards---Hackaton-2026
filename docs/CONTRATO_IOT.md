@@ -88,7 +88,7 @@ A bancada do Victor publica as leituras num broker MQTT (Mosquitto, por exemplo)
 |---|---|---|
 | `VAZAO` (L/min) | Grava `TelemetryReading` e avalia a `FlowAlertPolicy` do dispositivo | `minFlowLpm` e `continuousSeconds` do Device (regra 3); uma ocorrência ativa por dispositivo, tipo e origem (regra 5) |
 | `TEMP` / `UMIDADE` (DHT11) | Abre `TEMPERATURE_EXCURSION` (MEDIUM) quando a temperatura fica **acima** do limite de forma sustentada | Limite e tempo em `MQTT_TEMP_LIMIT_C` (28 °C) e `MQTT_TEMP_SECONDS` (30 s); pico isolado não alerta; regra 5 |
-| `PESO` (HX711) | Cria lote de doação **`PENDING_REVIEW`** quando o peso fica estável no mínimo | `MQTT_SCALE_MIN_KG` (5 kg) por `MQTT_SCALE_STABLE_SECONDS` (6 s); só fica disponível com verificação humana (regra 6) |
+| `PESO` (HX711) | Cria lote de doação **`PENDING_REVIEW`** quando o peso fica estável no mínimo | `MQTT_SCALE_MIN_KG` (1,5 kg) por `MQTT_SCALE_STABLE_SECONDS` (6 s); só fica disponível com verificação humana (regra 6) |
 
 Payload que o firmware publica (exemplo de formato, não medição real):
 
@@ -177,7 +177,7 @@ A ponte também só alimenta dispositivos da organização da bancada. Use só e
 
 ## Bancada virtual (contingência de palco)
 
-Se a bancada física falhar (placa, Wi-Fi, broker ou sensor), `pnpm bancada` move **vazão, temperatura/umidade e peso** sem placa e sem broker. Ela monta o mesmo JSON do firmware MQTT e o entrega, no próprio processo, à **mesma ingestão da ponte** (`MqttIngestion`). As regras são as reais: vazão pelo Device (1,5 L/min por 30 s), temperatura acima de 28 °C por 30 s, balança com 5 kg estáveis por 6 s, uma ocorrência ativa por tipo (regra 5) e lote só `PENDING_REVIEW` (regra 6). **Nenhuma regra é encurtada para caber na fala.**
+Se a bancada física falhar (placa, Wi-Fi, broker ou sensor), `pnpm bancada` move **vazão, temperatura/umidade e peso** sem placa e sem broker. Ela monta o mesmo JSON do firmware MQTT e o entrega, no próprio processo, à **mesma ingestão da ponte** (`MqttIngestion`). As regras são as reais: vazão pelo Device (1,5 L/min por 30 s), temperatura acima de 28 °C por 30 s, balança com mínimo configurado de 1,5 kg durante 6 s, uma ocorrência ativa por tipo (regra 5) e lote só `PENDING_REVIEW` (regra 6). **Nenhuma regra é encurtada para caber na fala.**
 
 **Honestidade, garantida no código:**
 
@@ -328,3 +328,8 @@ Toda gravação que muda o que as telas mostram avisa o navegador sem consulta p
 - Com o stream ao vivo, ainda há uma busca de segurança: 30 s para o sinal e 60 s para os painéis.
 - A Sala ao vivo (`/ao-vivo`) consulta o snapshot (`GET /api/live/snapshot`) a cada 5 s.
 - Atrás de um proxy (Cloudflare Tunnel, Traefik), confira se o proxy não guarda a resposta em buffer. O heartbeat de 15 s mantém a conexão viva.
+
+
+## Iteração de 07/11 — leitura pela plateia (QR)
+
+A página pública `/plateia` é somente de leitura. O operador projeta o QR em `/convite`, protegido por Basic Auth; ele abre o stream GET `/api/plateia/stream`, que passa apenas dados sanitizados por `src/modules/audience/public-feed.ts` e não pode mostrar eventos brutos do BI. A ponte MQTT continua com a mesma semântica dos eventos `sensor.live` (DHT11/HX711 efêmeros, não série histórica). O documento completo de implantação/segurança/testes é [`docs/entrega/PLATEIA_QR_HANDOFF.md`](entrega/PLATEIA_QR_HANDOFF.md). A balança física de 5 kg requer tara, calibração, gatilho operacional 1,5 kg e carga total abaixo da capacidade nominal.
