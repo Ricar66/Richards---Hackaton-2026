@@ -1,5 +1,22 @@
 import { DEFAULT_MAX_GAP_SECONDS } from "./flow-alert-policy";
-import { trailingRun, type SignalSample } from "./sustained-run";
+import { trailingRun, type SignalSample, type SustainedRun } from "./sustained-run";
+/**
+ * "Estável" = acima do gatilho E com as leituras a até max(0,15 kg; 5%) da mais recente. Com o gatilho de 1,5 kg (07/11,
+ * HX711 de 5 kg), as leituras parciais enquanto o objeto é colocado passavam do gatilho e entravam na janela: a caixa
+ * de 6 kg virava lote de 3,1 kg (a menor leitura). Um salto acima da tolerância reinicia a contagem.
+ */
+export const SCALE_TOLERANCE_KG = 0.15;
+export const SCALE_TOLERANCE_PCT = 0.05;
+function settled(run: SustainedRun): SustainedRun {
+  const s = run.samples;
+  if (s.length < 2) return run;
+  const last = s[s.length - 1].value;
+  const tolerance = Math.max(SCALE_TOLERANCE_KG, Math.abs(last) * SCALE_TOLERANCE_PCT);
+  let first = s.length - 1;
+  while (first > 0 && Math.abs(s[first - 1].value - last) <= tolerance) first--;
+  const kept = s.slice(first);
+  return { samples: kept, seconds: (kept[kept.length - 1].at.getTime() - kept[0].at.getTime()) / 1000 };
+}
 export type ScaleDecision =
   | { trigger: false }
   | { trigger: true; weightKg: number; observedSeconds: number; samples: SignalSample[] };
@@ -18,7 +35,7 @@ export type ScaleProgressState = {
 /** Arredonda PARA BAIXO em 0,1 kg (sem erro de ponto flutuante: 2,3 continua 2,3). */
 const floorTenth = (kg: number) => Math.floor(Math.round(kg * 1000) / 100) / 10;
 /**
- * Balança (HX711): registra UM excedente quando o peso fica estável no mínimo configurado e só
+ * Balança (HX711): registra UM excedente quando o peso fica estável (sem saltos além da tolerância) no mínimo configurado e só
  * volta a armar depois que a balança é esvaziada (peso abaixo da metade do mínimo).
  * O peso do lote é a MENOR leitura do trecho estável, arredondada para baixo: nunca superestima kg.
  * Guarda estado em memória (uma instância por dispositivo); domínio puro.
@@ -40,7 +57,7 @@ export class ScaleSurplusDetector {
     if (sample.value < this.minKg / 2) { this.armed = true; this.blockedBy = null; this.window = []; this.last = { phase: "idle", stableSeconds: 0 }; return { trigger: false }; }
     const horizon = sample.at.getTime() - (this.stableSeconds + this.maxGapSeconds) * 1000;
     this.window = [...this.window.filter(s => s.at.getTime() >= horizon), sample];
-    const run = trailingRun(this.window, v => v >= this.minKg, this.maxGapSeconds);
+    const run = settled(trailingRun(this.window, v => v >= this.minKg, this.maxGapSeconds));
     if (!this.armed) { this.last = { phase: this.blockedBy !== null ? "blocked" : "disarmed", stableSeconds: run.seconds }; return { trigger: false }; }
     if (!run.samples.length) { this.last = { phase: "idle", stableSeconds: 0 }; return { trigger: false }; }
     if (run.samples.length < 2 || run.seconds < this.stableSeconds) { this.last = { phase: "stabilizing", stableSeconds: run.seconds }; return { trigger: false }; }

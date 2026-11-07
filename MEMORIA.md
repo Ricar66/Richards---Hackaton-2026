@@ -259,6 +259,7 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **Id desconhecido é descartado.** O PR caía no primeiro Device do banco; agora vale o mapa explícito `MQTT_DEVICE_ALIASES`.
 - **Temperatura alerta só sustentada** (acima de 28 °C por 30 s, configurável), com no máximo uma ativa por dispositivo. As leituras ficam na auditoria; o BI ainda não grafa temperatura e não usa vazão como evidência dela.
 - **Balança cria lote `PENDING_REVIEW`**, nunca `AVAILABLE`. O peso é a menor leitura estável, arredondada para baixo. Há um lote pendente por balança, e ela só rearma depois de esvaziada.
+- **Gatilho da balança em 1,5 kg (07/11, HX711 de 5 kg) com tolerância de estabilidade.** "Estável" passou a exigir também leituras a até max(0,15 kg; 5%) da mais recente. Sem isso, a leitura parcial enquanto o objeto é colocado entrava na janela e o lote saía com o peso parcial (a caixa de 6 kg do palco virava 3,1 kg). Testes em `tests/scale-detector.test.ts`, com mutação. `REGRAS_PADRAO` da bancada acompanha o padrão de 1,5 kg.
 - **Missões não são criadas** pela ponte, porque não têm tela (P2).
 - **Fila em memória com PUBACK na chegada (revisão adversarial, 06/11).**
   - A 1ª versão da auditoria confirmava ao broker só depois de gravar. Isso segurava o laço de pacotes do MQTT.js, inclusive o ping: com o banco fora por 30 a 90 s, o keepalive derrubava a conexão e o represado se perdia sem aviso.

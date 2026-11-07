@@ -180,7 +180,7 @@ test("MQTT: balança mostra o progresso do detector e o lote PENDING_REVIEW vem 
   const live = only(events, "sensor.live");
   assert.deepEqual(live.map(e => e.scale?.progress.phase), ["idle", "stabilizing", "stabilizing", "stabilizing", "triggered", "disarmed"]);
   assert.deepEqual(live.map(e => e.scale?.progress.stableSeconds), [0, 0, 2, 4, 6, 8]);
-  assert.ok(live.every(e => e.scale?.source === "SIMULATED" && e.scale.progress.minKg === 5 && e.scale.progress.requiredSeconds === 6));
+  assert.ok(live.every(e => e.scale?.source === "SIMULATED" && e.scale.progress.minKg === 1.5 && e.scale.progress.requiredSeconds === 6));
   const [created] = only(events, "donation.created");
   assert.deepEqual([created.origin, created.source, created.deviceCode, created.status, created.kg], ["scale", "SIMULATED", DEVICE_CODE, "PENDING_REVIEW", 5.4]);
   assert.ok(events.indexOf(created) < events.indexOf(live[4]));

@@ -155,7 +155,9 @@ export function* instantes(c: Cenario, ate = Infinity) {
 
 /** Regras que decidem os horários: do Device (vazão) e da configuração da ponte (temperatura e balança). */
 export type Regras = { minFlowLpm: number; continuousSeconds: number; tempLimitC: number; tempSeconds: number; scaleMinKg: number; scaleStableSeconds: number };
-export const REGRAS_PADRAO: Regras = { minFlowLpm: 1.5, continuousSeconds: 30, tempLimitC: 28, tempSeconds: 30, scaleMinKg: 5, scaleStableSeconds: 6 };
+// Mesmos padrões do loadMqttConfig (a balança caiu para 1,5 kg em 07/11, HX711 de 5 kg): o ensaio impresso e a bancada
+// usam a mesma regra quando ninguém configura nada.
+export const REGRAS_PADRAO: Regras = { minFlowLpm: 1.5, continuousSeconds: 30, tempLimitC: 28, tempSeconds: 30, scaleMinKg: 1.5, scaleStableSeconds: 6 };
 export type Disparo = { t: number; tipo: "UNUSUAL_FLOW" | "TEMPERATURE_EXCURSION" | "LOTE"; sensor: MqttSensor; kg?: number };
 
 /**
