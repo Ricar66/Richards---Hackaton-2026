@@ -298,3 +298,9 @@ Antes de abrir um PR para a `develop`, rode `pnpm typecheck`, `pnpm lint` e `pnp
 - O BI principal agora mostra DHT11 e HX711 em Centro de Controle, Monitoramento e Dispositivos, com sinais efêmeros. Sem pacote novo, não apresenta valores como atuais; histórico continua só para vazão.
 - Gatilho padrão da ponte MQTT da balança física: 1,5 kg por 6s, após tara/calibração; não confundir com o limite nominal de 5 kg da célula do Victor. Bancada virtual mantém cenário independente.
 - 70 espectadores é ALVO de teste, não benchmark já executado. Use scripts/plateia-carga.mjs; instruções, riscos e handoff para Claude em docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md. A main só deve receber essa entrega após aceites reais.
+
+## RICHARDS Assist e Telegram (opcional)
+
+O assistente privado em `/assistente` consulta o BI e ajuda a entender as ocorrências. O worker de Telegram acompanha eventos persistidos, mantém fila de entregas/retentativas e funciona independentemente do navegador e da IA. Tudo fica desativado por padrão.
+
+Ativação, configuração e limites: [`docs/assistente/README.md`](docs/assistente/README.md). Revisão e testes pendentes para Claude: [`docs/assistente/HANDOFF_CLAUDE.md`](docs/assistente/HANDOFF_CLAUDE.md). Não colocar chaves em código nem expor as rotas do assistente à plateia pública.
