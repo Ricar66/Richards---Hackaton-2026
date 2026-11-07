@@ -138,6 +138,13 @@ def generate(args: argparse.Namespace) -> Path:
                 add(files, dest, data)
             if info.filename == "presentation/CHECKLIST_VICTOR_IOT.md":
                 add(files, "01_APRESENTACAO/CHECKLIST_VICTOR_IOT.md", source.read(info))
+            iot_copies = {
+                "docs/CONTRATO_IOT.md": "03_IOT_E_TESTES/CONTRATO_IOT.md",
+                "docs/entrega/REGISTRO_TESTE_FISICO.md": "03_IOT_E_TESTES/REGISTRO_TESTE_FISICO.md",
+                "iot/evidencias/README.md": "03_IOT_E_TESTES/GUIA_DE_EVIDENCIAS.md",
+            }
+            if info.filename in iot_copies:
+                add(files, iot_copies[info.filename], source.read(info))
             # Preserva os caminhos relativos usados pelo README e pelos roteiros.
             # Somente documentação versionada; arquivos operacionais da VPS ficam fora.
             if allowed_name(info.filename) and (
@@ -151,7 +158,8 @@ def generate(args: argparse.Namespace) -> Path:
                 if copy not in files:
                     add(files, copy, source.read(info))
 
-    for opt, filename in ((args.pdf, "RICHARDS_PITCH_FINAL.pdf"), (args.pptx, "RICHARDS_PITCH_FINAL.pptx")):
+    pitch_kind = "FINAL" if args.final else "PARA_REVISAO"
+    for opt, filename in ((args.pdf, f"RICHARDS_PITCH_{pitch_kind}.pdf"), (args.pptx, f"RICHARDS_PITCH_{pitch_kind}.pptx")):
         if opt:
             p = Path(opt).expanduser().resolve()
             if not p.is_file() or p.suffix.lower() != Path(filename).suffix:
