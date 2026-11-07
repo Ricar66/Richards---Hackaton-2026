@@ -26,7 +26,8 @@
     "palco:checar": "tsx src/iot/run-bancada-virtual.ts --checar",
     "dados:limpar-simulados": "tsx src/admin/run-dados-reais.ts limpar",
     "instituicao:cadastrar": "tsx src/admin/run-dados-reais.ts instituicao",
-    "test:mqtt-broker": "tsx scripts/mqtt-fumaca.mts"
+    "test:mqtt-broker": "tsx scripts/mqtt-fumaca.mts",
+    "assistente": "tsx src/assistant/run-assistant.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
