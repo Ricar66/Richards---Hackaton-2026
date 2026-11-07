@@ -4,7 +4,7 @@ Complementa `docs/plano/13_PITCH_JORNADA_DEMO.md` (tese, falas de abertura, slid
 
 ## Na véspera (30 min)
 1. `docker compose up -d --build` e depois conferir `http://localhost:3000/api/health`. Precisa responder `"database":"up"`.
-2. `pnpm build && pnpm test:e2e`. As 34 verificações precisam passar. Entre elas:
+2. `pnpm build && pnpm test:e2e`. As verificações do executor precisam passar; registrar a contagem da execução atual. Entre elas:
    - A0/A5b: o atraso medido em ms;
    - A2b: o KPI nunca mostra número fora do intervalo;
    - S1 a S5: Sala ao vivo, gêmeo SVG/3D, teclas 3 e P.
@@ -42,13 +42,13 @@ Complementa `docs/plano/13_PITCH_JORNADA_DEMO.md` (tese, falas de abertura, slid
 | Tempo | Clique | Fala-guia |
 |---|---|---|
 | 0:00 | **Centro de controle**, filtro **24 h** | "Tudo aqui vem do banco e do sensor. Sem leitura, o painel diz 'sem dados', nunca zero. A plataforma nunca esconde a origem: se algo for simulado, ganha o carimbo roxo." |
-| 0:10 | Passar o cursor no gráfico; mostrar o **mapa de calor** e a faixa da madrugada | "Vazão na madrugada é onde o desperdício contínuo aparece primeiro." |
+| 0:10 | Passar o cursor no gráfico; mostrar o **mapa de calor** e a faixa da madrugada | "Com histórico suficiente, este mapa ajuda a investigar horários fora da rotina. Sem leituras, mostramos sem dados." |
 | 0:20 | Filtro **24 h** + origem **Sensor** | "Agora só o que o sensor mediu, sem simulação." |
 | 0:25 | IoT abre a torneira da bancada (fluxo ≥ 1,5 L/min por 30 s) | "A regra não dispara com um pico: espera fluxo contínuo." |
 | ~0:55 | Aparece o aviso **"Nova ocorrência · Investigar"**; clicar em **Investigar** | "Assim que a ocorrência é gravada, a operação fica sabendo: o aviso chega pelo stream ao vivo." Só cite um tempo ("em menos de N s") se o E2E mediu no ensaio: checks A0 e A5b do `pnpm test:e2e` imprimem os ms. Se a pílula mostrar "Consulta a cada 5 s", diga "em até 5 segundos". |
 | 1:00 | Na gaveta: gráfico da evidência acima do limiar; **Assumir investigação** | "Suspeita não é vazamento comprovado. Alguém assume e verifica." |
 | 1:10 | IoT fecha a torneira; escrever a nota "Registro fechado; vazão zerou" → **Resolver** | "A resolução exige descrever a verificação. Fica na trilha, com autor." |
-| 1:20 | **Doações & impacto** → lote "Hortaliças" em *Reservado* → **Confirmar entrega**, com o nome de quem recebeu | "Só conta como impacto o que a instituição confirmou ter recebido." |
+| 1:20 | **Doações & impacto** → mostrar um lote e sua trilha. Confirmar apenas recebimento real efetivamente ocorrido; para encenar o fluxo, usar lote SIMULATED no ambiente de teste | "O operador registra quem recebeu. Só entregas confirmadas contam; a instituição ainda não tem login próprio." |
 | 1:40 | Mostrar o KPI **Kg entregues** subindo | |
 | 1:45 | **Relatórios** → **Gerar PDF deste recorte**; abrir o arquivo | "Mesmos números do painel, mesmo filtro, origem carimbada." |
 

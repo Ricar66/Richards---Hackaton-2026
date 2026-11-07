@@ -16,24 +16,16 @@
 
 ## Minutagem para 5:40
 
-| Tempo | Slides/ação | Responsável sugerido | Frase-chave |
-|---|---|---|---|
-| 00:00–00:35 | 01–02, pergunta de abertura | Apresentação / Ricardo | “Quanto custa perceber tarde demais?” |
-| 00:35–01:05 | 03–04, dado global e história do nome | Apresentação | “Richards enxergou água, alimento e ambiente como uma questão científica.” |
-| 01:05–01:40 | 05–06, fluxo e tecnologia | Ricardo + Victor | “Do mundo físico ao registro verificável.” |
-| 01:40–03:40 | 07–09 + demonstração real ou simulação declarada | Victor ativa bancada; Ricardo opera o BI | “A leitura vira ocorrência, ação e evidência.” |
-| 03:40–04:20 | 10–11, diferencial e evolução com IA | Ricardo | “IA preditiva só depois de dados e validação.” |
-| 04:20–05:00 | 12–13, impacto e piloto | Equipe | “Impacto se comprova; não se inventa.” |
-| 05:00–05:40 | 14, conclusão e convite ao piloto | Equipe | “Perceber antes. Agir melhor. Comprovar resultados.” |
+A referência única é [FALA_5MIN40.md](FALA_5MIN40.md), com **10 imagens oficiais**, quatro papéis e demonstração de 01:40 a 03:40. Os 14 SVGs são históricos. A duração é uma meta, ainda depende de ensaio humano.
 
 ## Roteiro de demo — com cliques
 
 0. **Telão:** `/ao-vivo` (Sala ao vivo) em tela cheia (tecla F). O anel da regra, a temperatura, a balança e a viagem do pacote mudam a cada leitura gravada, pelo stream. Antes do palco: `pnpm palco:checar` (e, se acusar bloqueio, `pnpm bancada --preparar`).
-1. Abrir `/` e mostrar filtro por origem. Lembrar: dados do seed = **SIMULATED**.
+1. Abrir `/` e mostrar filtro por origem. O seed padrão não cria histórico. Sem leitura, mostrar “sem dados”. Simulação só na contingência identificada.
 2. Abrir `/monitoramento?range=24h`; filtrar origem **DEVICE** quando o ESP32 estiver enviando.
 3. **Victor:** ativar o circuito de bancada. Em regra de demonstração, vazão ≥ 1,5 L/min por 30 s pode gerar uma ocorrência — confirmar configuração antes do palco. Não chamar de vazamento confirmado.
 4. **Ricardo:** abrir a ocorrência, verificar amostra, assumir investigação, fechar a torneira e resolver com nota. A ação fica registrada.
-5. Em `/doacoes`, mostrar um lote com validação humana e confirmar a entrega ao receptor no fluxo correto. Só entram nos indicadores de impacto os quilos `DELIVERED`.
+5. Em `/doacoes`, mostrar um lote com validação humana. O operador registra a confirmação do receptor; não existe login próprio da instituição. Só confirmar entrega real efetivamente realizada, ou usar lote SIMULATED em ambiente de teste. Só entram nos indicadores de impacto os quilos `DELIVERED`.
 6. Em `/relatorios`, exportar PDF com os filtros e fonte identificada.
 
 ### Plano de contingência
@@ -45,7 +37,7 @@
   - mostrar o selo **SIMULADO** na Sala e afirmar que é simulação;
   - último recurso: `pnpm simulate --scenario leak --samples 14 --interval 4`.
 - Há ocorrência ativa: encerrar a anterior antes de demonstrar. Uma ocorrência ativa do mesmo dispositivo impede nova abertura.
-- Histórico não aparece em 24h: usar 30 dias para seed e 24h para leituras novas.
+- Histórico vazio em 24h: confirmar leitura recente e origem. Não mudar para um período antigo para sugerir telemetria atual.
 - Banco indisponível: não fingir dados em tempo real; mostrar estado de erro e utilizar vídeo/capturas preparadas como plano B.
 
 ## Perguntas da banca — respostas honestas

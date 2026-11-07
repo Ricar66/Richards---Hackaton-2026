@@ -30,6 +30,10 @@ A apresentação conecta **problema → inspiração do nome → solução → s
 
 > **Integridade dos resultados:** os números inseridos pela geração de imagens nos quadros e telas são apenas ilustrativos. Não representam água economizada, alimentos entregues ou resultados de pilotos. A versão atual detecta fluxo suspeito por regra configurável, sem modelo preditivo treinado. Não apresentar como IA preditiva validada.
 
+## Exportação para a banca
+
+O PDF e PowerPoint preparados nesta revisão mantêm as 10 imagens, com aviso visível de arte conceitual e números ilustrativos. As notas do PowerPoint incluem a sequência e os papéis do roteiro. São slides baseados em imagens; o texto interno das artes não é editável. Conferir estes arquivos antes de usar `--pdf` e `--pptx` no gerador do ZIP. Não usar `render_slides.py`, que exporta a sequência histórica.
+
 ## Material anterior (arquivo histórico)
 
 A antiga sequência de 14 [peças vetoriais SVG](slides/) foi preservada como referência histórica, mas **não é mais a apresentação principal**. O script [render_slides.py](render_slides.py) pertence à versão anterior. A atual é acessada pelas imagens acima.

@@ -19,7 +19,7 @@ Colocar uma bancada com sensor ESP32 e circuito de água seguro à frente da ban
 | P2 | Futuro ML | registrar hipótese e métricas; não afirmar que está em produção |
 
 ## Riscos de palco
-- Histórico de seed 27/10–03/11: no dia 06/11, **24h ficará vazio** se não houver telemetria recente. Usar 30 dias para o passado e 24h para o sensor ao vivo.
+- O seed padrão cria somente cadastro-base. Sem telemetria, 24h fica sem dados; isso é esperado. Contingência simulada exige identificação visível.
 - Ocorrência existente do mesmo sensor impede abertura de nova ocorrência; encerrar a anterior no ensaio.
 - API com HTTP Basic é apenas para laboratório; não expor em internet pública.
 - Regra de vazão sinaliza **suspeita**, não diagnóstico nem medição de água economizada.
