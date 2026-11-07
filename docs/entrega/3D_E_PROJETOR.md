@@ -10,6 +10,10 @@
 - A água para sem leitura recente, e sua velocidade vem da vazão recebida. Uma leitura simulada recebe selo e tratamento visual de simulação.
 - Sem WebGL2, GPU inadequada, preferência por movimento reduzido, perda de contexto ou problema de orçamento de quadros: deve haver retorno ao SVG, sem inventar dados.
 
+## Controles visíveis
+
+A Sala tem botões de pausa, solicitação de 3D e diagnóstico mesmo com `?atalhos=0`. O selo junto ao desenho mostra o modo efetivo e explica a volta ao SVG. Solicitar 3D não significa que ele foi ativado: a cadeia de desempenho continua decidindo. Movimento reduzido mantém SVG. Os novos controles precisam de ensaio interativo e no projetor.
+
 ## Ensaio obrigatório no projetor
 1. Abrir a Sala no notebook em 1920×1080 com a fonte real prevista para o palco.
 2. Verificar que o selo indica a origem correta: DEVICE ou SIMULATED.

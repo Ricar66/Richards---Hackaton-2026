@@ -52,7 +52,7 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
   const togglePause = () => {
     const next = !paused;
     setPaused(next);
-    setPauseMsg(next ? "Movimento pausado. Números, feed e relógio seguem ao vivo. Tecla P retoma." : "Movimento retomado.");
+    setPauseMsg(next ? "Movimento pausado. Números, feed e relógio seguem atualizando. Use Retomar movimento para continuar." : "Movimento retomado.");
   };
   useStageKeys({ onPause: togglePause, onToggle3d: toggle3d, onDiag: () => setDiag(d => !d) }, shortcuts);
   // Movimento parado (reduzir movimento do sistema ou tecla P): só o desenho para; o dado continua chegando.
@@ -172,7 +172,7 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
         <b>RICHARDS</b><span>Sala ao vivo</span>
       </div>
       <span className="unit">{unit}</span>
-      {paused && <span className="paused-pill" aria-hidden="true">⏸ MOVIMENTO PAUSADO · P retoma · números seguem ao vivo</span>}
+      {paused && <span className="paused-pill" aria-hidden="true">MOVIMENTO PAUSADO · números seguem atualizando</span>}
       <span className="sr-only" role="status">{pauseMsg}</span>
       <time className="clock num" aria-label="Hora de São Paulo">{now !== null ? clockBR(now) : "--:--:--"}</time>
       <span className={`conn ${conn}`} role="status"><i key={model.pulse} className={model.pulse ? "beat" : ""} aria-hidden="true" />{CONN_LABEL[conn]}{conn === "down" ? " · consulta a cada 5 s" : ""}</span>
@@ -241,6 +241,12 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
 
       <PacketTrip trip={model.trip} view={trip} reduced={still} />
     </div>
-    {shortcuts && <p className="stage-keys">Teclas: F tela cheia · P pausa o movimento · 3 gêmeo 3D · D diagnóstico · Esc sai</p>}
+    <footer className="stage-controls" aria-label="Controles da visualização">
+      <span className="stage-control-caption">{reduced ? "Movimento reduzido pelo sistema · SVG 2D" : "Visualização esquemática · movimento acompanha as leituras"}</span>
+      <button type="button" aria-pressed={paused} onClick={togglePause}>{paused ? "Retomar movimento" : "Pausar movimento"}</button>
+      <button type="button" aria-pressed={want3d} disabled={reduced} onClick={toggle3d} title={reduced ? "O sistema solicita movimento reduzido; o SVG 2D permanece ativo." : "Solicitar 3D; o modo efetivo aparece junto ao desenho."}>{want3d ? "Usar SVG 2D" : "Solicitar 3D"}</button>
+      <button type="button" aria-pressed={diag} onClick={() => setDiag(d => !d)}>Diagnóstico</button>
+      {shortcuts && <span className="stage-control-shortcuts">F tela cheia · P pausa · 3 alterna · D diagnóstico</span>}
+    </footer>
   </main>;
 }

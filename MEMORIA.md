@@ -30,7 +30,7 @@ Tese do pitch: *"o dado revela o desvio; a inteligência está em descobrir o qu
 | Plano e prompt mestre | `docs/plano/` (`16_PROMPT_MESTRE.md` traz as regras invioláveis) |
 | Registro de cada fase | `docs/FASE_0_BASELINE.md` … `docs/FASE_5_PDF_QA_DEMO.md` |
 | Roteiro de palco (cliques e falas) | `docs/ROTEIRO_DEMO.md` |
-| Kit de pitch | `presentation/`: 14 slides SVG 1920×1080, fala de 5min40 (`FALA_5MIN40.md`), roteiro (`ROTEIRO_PALCO.md`), checklist de IoT do Victor e `PLANO_FINAL.md`. PNG e PPTX saem com `python presentation/render_slides.py` em `presentation/export/`, que não vai para o git |
+| Kit de pitch | `presentation/imagens/`: 10 imagens oficiais 1920×1080. Fala de 5min40 e roteiro alinhados às 10 imagens e a quatro integrantes. Os 14 SVGs e `render_slides.py` são históricos, não usar para gerar o pitch oficial |
 | Dicionário de dados, MER e DER | `docs/dados/`, explicado em `docs/dados/README.md` |
 | Contrato do ESP32 | `docs/CONTRATO_IOT.md` |
 | Firmware | `iot/esp32_richards/esp32_richards.ino` + `secrets.h.example` (HTTP). O firmware MQTT do Victor **ainda não está no repositório** |
@@ -419,3 +419,8 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **`git checkout -- arquivo` não restaura arquivo novo (fora do git).** Em teste de mutação, copie o arquivo antes e restaure da cópia.
 - **Mapa sem protótipo (`Object.create(null)`) não é `deepEqual` a `{}`.** Compare `{ ...mapa }`.
 - **`python -` e heredoc de `node -` travam o terminal da IA.** Escreva o script num arquivo.
+
+
+## Revisão incremental da entrega (06/11/2026)
+
+Auditoria e limitações em `docs/entrega/AUDITORIA_2026-11-06.md`. Gerador com validação de PPTX de 10 slides, evidências obrigatórias no modo final, hash externo e verificador de extração. Pitch alinhado às 10 imagens e quatro participantes. Sala com controles visíveis e modo 2D/3D efetivo. Testes novos em `tests/test_entrega.py` e `tests/stage-controls.test.ts`. Firmware/diagrama/evidências físicos seguem pendentes. main e VPS preservadas; pacote desta revisão é PREVIA.

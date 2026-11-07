@@ -68,6 +68,7 @@ export function TwinSlot({ flowLpm, tone, simulated, live, pulseKey, still, redu
       <PipeTwin3D speed={waterSpeed(flowLpm)} tone={tone} simulated={simulated} live={live} still={still} pulseKey={pulseKey} visible={mode === "3d"}
         onReady={i => dispatch({ type: "ready", ...i })} onFail={onFail} onStats={diag ? setStats : undefined} />
     </TwinBoundary>}
+    <span className="twin-mode-label" role="status">{mode === "3d" ? "3D ATIVO" : mode === "loading" ? "SVG 2D · preparando 3D" : want3d && reason ? `SVG 2D · ${REASON_LABEL[reason]}` : "SVG 2D"}</span>
     {diag && <pre className="twin-diag" aria-hidden="true">{[
       `modo ${mode}${reason ? ` · ${REASON_LABEL[reason]}` : ""}`,
       // "ANGLE (Intel, Intel(R) Graphics (0x…) Direct3D11 vs_5_0 ps_5_0, D3D11)" → "Intel(R) Graphics · Direct3D11"
