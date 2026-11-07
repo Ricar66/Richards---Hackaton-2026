@@ -1,0 +1,1 @@
+Adicione aqui evidências reais: fotos, vídeos, entrevistas, registros de demonstração, comprovantes de destinação e documentos de parceiros. Identifique data, contexto e o que cada evidência comprova.
