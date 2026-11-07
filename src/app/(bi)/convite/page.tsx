@@ -14,7 +14,7 @@ export default function Page() {
     <p style={{ fontSize: 16, color: "#bad0cc", maxWidth: 670 }}>Projete este QR Code: o visitante acompanha cada leitura no celular, sem senha e sem acessar o BI administrativo.</p>
     <div style={{ display: "flex", gap: 28, flexWrap: "wrap", alignItems: "center", background: "linear-gradient(125deg,#10312a,#111f25)", border: "1px solid #31564f", borderRadius: 20, padding: 24, marginTop: 28 }}>
       <div style={{ background: "#fff", padding: 14, borderRadius: 15, flexShrink: 0, width: 274, height: 274 }}>
-        <Image src="/qr-plateia.png" alt="QR Code para acessar a plateia ao vivo" width={246} height={246} priority unoptimized style={{ width: "100%", height: "100%" }} />
+        <Image src="/qr-plateia.svg" alt="QR Code para acessar a plateia ao vivo" width={246} height={246} priority unoptimized style={{ width: "100%", height: "100%" }} />
       </div>
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>
         <p style={{ color: "#95e6c2", fontSize: 11, letterSpacing: ".14em" }}>APONTE A CÂMERA DO CELULAR</p>

@@ -63,7 +63,7 @@ test("stream ao vivo (/api/live/stream) exige a senha do operador como o resto d
 
 
 test("plateia pública é whitelist exata de leitura, sem liberar o painel e a API do operador", () => {
-  for (const path of ["/plateia", "/api/plateia/stream", "/qr-plateia.png"]) {
+  for (const path of ["/plateia", "/api/plateia/stream", "/qr-plateia.svg"]) {
     const r = proxy(req(path));
     assert.ok(passed(r));
     assert.equal(forwardedActor(r), null);

@@ -30,7 +30,7 @@ export function proxy(req:NextRequest){
  const path=req.nextUrl.pathname;
  if(path.startsWith('/api/iot/telemetry')||path==='/api/health')return forward(req,null);
  // Somente dois caminhos públicos GET/HEAD; o BI e a rota privada /api/live/stream exigem operador.
- if ((path === '/plateia' || path === '/api/plateia/stream' || path === '/qr-plateia.png')
+ if ((path === '/plateia' || path === '/api/plateia/stream' || path === '/qr-plateia.svg')
    && (req.method === 'GET' || req.method === 'HEAD')) return forward(req,null);
  const blocked=rejectCrossSiteWrite(req);if(blocked)return blocked;
  // Fail-closed: só AUTH_MODE="none" explícito desliga a senha (variável ausente ou com erro de digitação mantém a proteção).
