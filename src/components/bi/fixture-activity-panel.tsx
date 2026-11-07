@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { notifyDataChanged } from "./hooks";
 import { Activity, CalendarDays, Droplets, ShieldAlert, WifiOff } from "lucide-react";
 import type { FixtureActivityItem, FixtureActivityResponse } from "@/modules/monitoring/application/get-fixture-activity";
 import { dateBR, numBR } from "@/lib/format";
@@ -51,8 +53,11 @@ export function FixtureActivityPanel({ siteId, deviceId }: { siteId: string | nu
   const [selectedId, setSelectedId] = useState("");
   const [dedicated, setDedicated] = useState(false);
   const [expectedUse, setExpectedUse] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [inspectionError, setInspectionError] = useState("");
+  const [inspectionId, setInspectionId] = useState("");
   useEffect(() => {
-    setSelectedId(""); setDedicated(false); setExpectedUse(false);
+    setSelectedId(""); setDedicated(false); setExpectedUse(false); setInspectionError(""); setInspectionId("");
     let active = true;
     const ctrl = new AbortController();
     const params = new URLSearchParams();
@@ -77,6 +82,21 @@ export function FixtureActivityPanel({ siteId, deviceId }: { siteId: string | nu
   }, [siteId, deviceId]);
 
   const chosen = items.find(item => item.deviceId === selectedId) ?? null;
+  const canRequest = Boolean(chosen && dedicated && expectedUse && chosen.state === "NO_FLOW_OBSERVED");
+  async function requestInspection() {
+    if (!chosen || !canRequest || requesting) return;
+    setRequesting(true); setInspectionError(""); setInspectionId("");
+    try {
+      const response = await fetch("/api/monitoring/fixture-inspections", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: chosen.deviceId, dedicated: true, expectedUse: true }),
+      });
+      const result = await response.json() as { id?: string; error?: string };
+      if (!response.ok || !result.id) throw new Error(result.error || "Falha ao registrar vistoria");
+      setInspectionId(result.id); notifyDataChanged();
+    } catch (e) { setInspectionError(e instanceof Error ? e.message : "Não foi possível registrar a inspeção"); }
+    finally { setRequesting(false); }
+  }
   return <Panel id="p-fixture-activity" className="fixture-panel"
     eyebrow="Escolas, instituições e pequenos negócios"
     title="Descargas e pontos hidráulicos · 72 horas de observação"
@@ -92,7 +112,7 @@ export function FixtureActivityPanel({ siteId, deviceId }: { siteId: string | nu
     {state === "ready" && items.length > 0 && <>
       <div className="fixture-controls">
         <label className="fixture-select">Ponto a verificar
-          <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setDedicated(false); setExpectedUse(false); }}>
+          <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setDedicated(false); setExpectedUse(false); setInspectionError(""); setInspectionId(""); }}>
             <option value="">Selecione um sensor de vazão</option>
             {items.map(item => <option key={item.deviceId} value={item.deviceId}>{item.deviceLabel} · {item.siteName}</option>)}
           </select>
@@ -104,7 +124,17 @@ export function FixtureActivityPanel({ siteId, deviceId }: { siteId: string | nu
             Havia uso esperado nas últimas 72 horas (não eram férias ou fechamento)</label>
         </div>
       </div>
-      {chosen ? <Observation item={chosen} dedicated={dedicated} expectedUse={expectedUse} /> :
+      {chosen ? <>
+        <Observation item={chosen} dedicated={dedicated} expectedUse={expectedUse} />
+        {canRequest && <div className="fixture-actions">
+          <button type="button" className="btn primary" disabled={requesting || Boolean(inspectionId)}
+            onClick={() => void requestInspection()}>
+            <ShieldAlert size={15} /> {requesting ? "Registrando…" : inspectionId ? "Vistoria registrada" : "Registrar pedido de vistoria"}
+          </button>
+          {inspectionId && <Link href="/ocorrencias" className="link">Ver ocorrência aberta</Link>}
+        </div>}
+        {inspectionError && <p className="form-error" role="alert">{inspectionError}</p>}
+      </> :
         <p className="fixture-hint">Selecione o sensor para examinar cobertura, último fluxo e consumo fora de horários usuais. A conclusão exige confirmar fisicamente o ponto monitorado.</p>}
     </>}
     <div className="fixture-method"><Activity size={15} />
