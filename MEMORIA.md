@@ -364,6 +364,20 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
   - Ocorrência SIMULATED de fluxo do potenciômetro encerrada pela preparação de palco (`preparacao:root`).
   - `palco:checar` na VPS: só falta um lote RESERVED para confirmar a entrega ao vivo (pesagem na balança → verificar → reservar, pela tela).
 - **RICHARDS Assist (PR #6) na VPS (07/11):** IA de explicação no BI (`/assistente`) e alertas/conversa no Telegram (`@Richardshack_bot`), por HTTP com limite de 100 perguntas/dia (risco aceito). Chave OpenAI do projeto Prospector/Iris. Ver `docs/DEPLOY_VPS_TETRIA.md`, "RICHARDS Assist na VPS". Depois do evento: trocar o token do bot (vazou num chat) e conferir o gasto na OpenAI.
+- **Produção em 07/11, 12:56 (autorizada pelo Ricardo: "pode subir tudo para a main"):** `main` = `develop` = `6e658bc`, publicado na VPS. Coolify compilou esse commit, deploy `9hvx1izs5jxx5tcrc4oooce5`.
+  - **O que entrou:** conversa natural do Assist, robô do Assist no BI e o PR #7 (3D industrial com início automático e celular), que o GitHub marcou como MERGED.
+  - **Backup antes:** `/root/.richards-deploy/backups/richards-vps-antes-3d-robo-20261107T155432Z.dump` (880 leituras, 2 ocorrências, 1 assinatura do Telegram).
+  - **Bateria no commit publicado:** typecheck, lint e build PASSOU; unitários 149/149; integração 116/116; E2E 36/36.
+  - **Verificação pós-deploy:** 10/10.
+    - O P3 deu 415 num POST sem JSON: o proxy recusa antes de pedir a senha. Com JSON e sem senha, 401.
+    - "Bom dia" é respondido sem fonte e sem número, em 1,8 s. Pergunta de operação cita "Ocorrências ativas".
+    - O robô anda no BI. A Sala liga o 3D sozinha; `?3d=0` volta ao SVG.
+    - A plateia no celular conecta. 0 erros de JS.
+  - **Carga de 70 conexões na plateia:**
+    - Do host da VPS: 70/70 em 3 rodadas, conexão em até 37 ms.
+    - Do notebook da Tracbel: 66 a 70 de 70. As falhas são `UND_ERR_CONNECT_TIMEOUT` na rede do notebook. No contêiner, ListenOverflows/ListenDrops = 0, então o servidor nunca descartou conexão.
+  - **NÃO EXECUTADO:** 70 celulares reais, rede do Senac, 3D no projetor do evento e ESP32 físico.
+  - **Rollback do 3D:** `/ao-vivo?3d=0` ou a tecla 3.
 - **Ligar o ESP32 do Victor antes do pitch:** desde 07:21 de 07/11 não chega leitura; sem ele, Sala, BI e `/plateia` mostram "sem leitura".
 - **Revisar a fala e os slides** (`presentation/`): eles ainda citam o histórico SIMULATED do seed ("carimbo roxo no histórico"). Desde 06/11 o histórico é só do sensor.
 - Ensaiar uma vez a contingência `pnpm bancada --cenario palco --inicio-em 5` com o BI e a Sala abertos. Não use `--sensores VAZAO` com a ponte `pnpm mqtt` ligada.
