@@ -358,7 +358,12 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - Fazer a preparação da seção 11 antes de subir no palco. Inclui:
   - `pnpm palco:checar` sem FALHA;
   - abrir a `/ao-vivo` no projetor.
-- **Cadastrar a instituição real** que recebe as doações, no notebook e na VPS: `pnpm instituicao:cadastrar`. Na VPS, `docker exec <web> pnpm instituicao:cadastrar ...`.
+- **Produção em 07/11 (manhã):** `main` = `765733b` publicado na VPS (backup antes em `/root/.richards-deploy/backups/richards-vps-antes-deploy-20261107T133327Z.dump`).
+  - Instituição **Tétria · Ribeirão Preto** cadastrada no notebook e na VPS (autorizada pelo Ricardo; a cidade foi presumida).
+  - Alerta REAL de temperatura das 06:53 (DHT11 da bancada do Victor, fora do evento) descartado pela API com nota (`operador:equipe`), para o alerta ao vivo poder abrir.
+  - Ocorrência SIMULATED de fluxo do potenciômetro encerrada pela preparação de palco (`preparacao:root`).
+  - `palco:checar` na VPS: só falta um lote RESERVED para confirmar a entrega ao vivo (pesagem na balança → verificar → reservar, pela tela).
+- **Ligar o ESP32 do Victor antes do pitch:** desde 07:21 de 07/11 não chega leitura; sem ele, Sala, BI e `/plateia` mostram "sem leitura".
 - **Revisar a fala e os slides** (`presentation/`): eles ainda citam o histórico SIMULATED do seed ("carimbo roxo no histórico"). Desde 06/11 o histórico é só do sensor.
 - Ensaiar uma vez a contingência `pnpm bancada --cenario palco --inicio-em 5` com o BI e a Sala abertos. Não use `--sensores VAZAO` com a ponte `pnpm mqtt` ligada.
 - Montar o backup de palco: simulação identificada, prints, vídeo offline e cabo HDMI.
