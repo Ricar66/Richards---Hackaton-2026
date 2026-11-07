@@ -1,4 +1,4 @@
-import { isWaterEvent, type LiveEvent, type LiveSource } from "@/modules/realtime/domain/live-event";
+import type { LiveEvent, LiveSource } from "@/modules/realtime/domain/live-event";
 import type { StageOccurrence, StageReading, StageSnapshot } from "@/modules/analytics/application/get-stage-snapshot";
 import {
   BUFFER_MS, OFFLINE_MS, lineFromAudit, lineFromEvent, mergeFeed, offlineLine, ruleTransition, scaleLotKey,
@@ -96,18 +96,21 @@ function applySnapshot(m: StageModel, s: StageSnapshot, requestedAt: number | nu
       rules[id] = { ...r, occurrenceId: undefined };
   }
   const overrides = Object.fromEntries(Object.entries(m.overrides).filter(([, o]) => keep(o.at)));
-  const scaleLots:Record<string,ScaleLot>={};
+  const scaleLots: Record<string, ScaleLot> = Object.fromEntries(Object.entries(m.scaleLots).filter(([, l]) => keep(l.at)));
+  for (const l of s.pendingScaleLots) {
+    const key = scaleLotKey(l.deviceCode, l.source);
+    if (!scaleLots[key]) scaleLots[key] = { id: l.id, kg: l.kg, deviceCode: l.deviceCode, source: l.source, at: ms(l.createdAt) };
+  }
 
   // Ajuste de relógio pelo ponto médio da ida e volta (o `hello` refina). Snapshot do primeiro render não serve: chegou sem medida.
   const offset = requestedAt !== null && receivedAt !== null && !m.offsetKnown ? { offsetMs: serverNow - (requestedAt + receivedAt) / 2, offsetKnown: true } : {};
   return {
     ...m, ...offset, snapshot: s, anchorMs: m.anchorMs ?? serverNow, readings, rules, marks, lastSeen, online, overrides, scaleLots,
-    feed: mergeFeed(m.feed, s.audit.filter(a=>a.entity==="Occurrence").map(lineFromAudit)),
+    feed: mergeFeed(m.feed, s.audit.map(lineFromAudit)),
   };
 }
 
 function applyEvent(m: StageModel, e: LiveEvent, arrivalMs: number): StageModel {
-  if(!isWaterEvent(e))return m;
   const serverArrival = arrivalMs + m.offsetMs;
   const anchorMs = m.anchorMs ?? serverArrival;
   const line = lineFromEvent(e);

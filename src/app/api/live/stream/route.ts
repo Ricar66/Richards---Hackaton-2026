@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { DEMO_ORG_ID } from "@/lib/constants";
 import { apiError } from "@/lib/http";
-import { encodeLiveEvent, isWaterEvent, type LiveHeartbeat, type LiveHello } from "@/modules/realtime/domain/live-event";
+import { encodeLiveEvent, type LiveHeartbeat, type LiveHello } from "@/modules/realtime/domain/live-event";
 import { getLiveHub } from "@/modules/realtime/infrastructure/event-hub";
 // Stream infinito: nunca pré-renderizar (o build travaria esperando o fim do corpo).
 export const runtime = "nodejs";
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       let helloTimer: NodeJS.Timeout | undefined;
       const hello = () => { clearTimeout(helloTimer); helloTimer = undefined; send(frame("hello", JSON.stringify(status()))); };
       const off = hub.subscribe({
-        event: event => { if (event.orgId === DEMO_ORG_ID && isWaterEvent(event)) send(frame("live", encodeLiveEvent(event))); },
+        event: event => { if (event.orgId === DEMO_ORG_ID) send(frame("live", encodeLiveEvent(event))); },
         // Voltou a escutar: novo `hello` (o que caiu no intervalo vem pelo snapshot). Caiu: avisa já, sem esperar o heartbeat.
         listening: on => { if (on) hello(); else send(frame("heartbeat", JSON.stringify(status()))); },
       });

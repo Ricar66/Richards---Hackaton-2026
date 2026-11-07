@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
 import { getDb } from "../src/lib/db";
-import { DEMO_ORG_ID, DEMO_SITE_ID, DEMO_DEVICE_ID } from "../src/lib/constants";
+import { DEMO_ORG_ID, DEMO_SITE_ID, DEMO_DEVICE_ID, DEMO_RECIPIENT_IDS } from "../src/lib/constants";
 const db = getDb();
 /**
  * Roda a cada start do contêiner. Por padrão grava SÓ o cadastro-base (empresa, unidade, sensor com o hash da chave e
@@ -13,7 +13,7 @@ async function main() {
   const secret = process.env.IOT_DEMO_DEVICE_KEY;
   if (!secret) throw new Error("IOT_DEMO_DEVICE_KEY obrigatória para preparar a demonstração");
   const demo = process.env.SEED_DEMO_DATA === "true";
-  await db.organization.upsert({ where: { id: DEMO_ORG_ID }, update: {}, create: { id: DEMO_ORG_ID, name: "RICHARDS · Instalação Centro", sector: "Monitoramento hidráulico", city: "Ribeirão Preto", isDemo: true } });
+  await db.organization.upsert({ where: { id: DEMO_ORG_ID }, update: {}, create: { id: DEMO_ORG_ID, name: "Mercado Aurora · Unidade Centro", sector: "Varejo alimentar", city: "Ribeirão Preto", isDemo: true } });
   await db.site.upsert({ where: { id: DEMO_SITE_ID }, update: {}, create: { id: DEMO_SITE_ID, organizationId: DEMO_ORG_ID, name: "Unidade Centro", description: "Bancada demonstrativa" } });
   await db.device.upsert({ where: { id: DEMO_DEVICE_ID }, update: { apiKeyHash: createHash("sha256").update(secret).digest("hex") }, create: {
     id: DEMO_DEVICE_ID, organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, code: "RICHARDS-FLOW-001",
@@ -26,6 +26,10 @@ async function main() {
     console.log("RICHARDS seed pronta: só o cadastro-base (empresa, unidade, sensor e operador). Nenhum dado fictício; o histórico vem do sensor.");
     return;
   }
+  const [recipientA, recipientB] = DEMO_RECIPIENT_IDS;
+  await db.recipientOrganization.upsert({ where: { id: recipientA }, update: {}, create: { id: recipientA, name: "Instituição Parceira · Demonstração", city: "Ribeirão Preto" } });
+  // Segunda instituição fictícia para a demonstração da escolha de destino (nome deixa claro que é demonstração).
+  await db.recipientOrganization.upsert({ where: { id: recipientB }, update: {}, create: { id: recipientB, name: "Cozinha Comunitária · Demonstração", city: "Ribeirão Preto" } });
   const existing = await db.telemetryReading.count({ where: { deviceId: DEMO_DEVICE_ID } });
   if (existing === 0) {
     const base = new Date(); base.setMinutes(0, 0, 0); base.setDate(base.getDate() - 7);
@@ -43,6 +47,13 @@ async function main() {
       { id: "richards-oc-01", organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, deviceId: DEMO_DEVICE_ID, kind: "UNUSUAL_FLOW", severity: "HIGH", status: "OPEN", source: "SIMULATED", title: "Fluxo contínuo fora de horário", description: "Cenário simulado: vazão contínua durante fechamento. Verificação necessária.", suspectedLiters: 12.4, openedAt: new Date(Date.now() - 16*60_000) },
       { id: "richards-oc-02", organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, deviceId: DEMO_DEVICE_ID, kind: "UNUSUAL_FLOW", severity: "MEDIUM", status: "RESOLVED", source: "SIMULATED", title: "Consumo acima da faixa configurada", description: "Cenário demonstrativo resolvido.", suspectedLiters: 8.2, openedAt: new Date(Date.now() - 2*86400_000), resolvedAt: new Date(Date.now()-2*86400_000 + 19*60_000), verificationNote: "Fluxo de demonstração encerrado." },
       { id: "richards-oc-03", organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, deviceId: DEMO_DEVICE_ID, kind: "DEVICE_OFFLINE", severity: "LOW", status: "ACKNOWLEDGED", source: "SIMULATED", title: "Conectividade oscilante", description: "Cenário simulado: perda temporária de comunicação.", openedAt: new Date(Date.now() - 53*60_000), acknowledgedAt: new Date(Date.now()-25*60_000) },
+    ] });
+  }
+  if ((await db.donationBatch.count({ where: { organizationId: DEMO_ORG_ID } })) === 0) {
+    await db.donationBatch.createMany({ data: [
+      { id: "richards-don-01", organizationId: DEMO_ORG_ID, recipientId: recipientA, description: "Frutas selecionadas · caixa mista", weightKg: 8.5, status: "DELIVERED", source: "SIMULATED", safetyVerifiedBy: "Responsável do cenário", safetyVerifiedAt: new Date(Date.now()-3*86400_000), receivedAt: new Date(Date.now()-2*86400_000), receivedBy: "Recebedor do cenário", createdAt: new Date(Date.now()-3*86400_000) },
+      { id: "richards-don-02", organizationId: DEMO_ORG_ID, recipientId: recipientA, description: "Hortaliças · lote de demonstração", weightKg: 6, status: "RESERVED", source: "SIMULATED", safetyVerifiedBy: "Responsável do cenário", safetyVerifiedAt: new Date(Date.now()-5*3600_000), createdAt: new Date(Date.now()-6*3600_000) },
+      { id: "richards-don-03", organizationId: DEMO_ORG_ID, description: "Bananas · lote em avaliação", weightKg: 4.2, status: "PENDING_REVIEW", source: "SIMULATED", createdAt: new Date(Date.now()-3600_000) },
     ] });
   }
   console.log("RICHARDS seed pronta com o cenário de DEMONSTRAÇÃO: todos os dados criados são SIMULADOS (só para teste e E2E).");

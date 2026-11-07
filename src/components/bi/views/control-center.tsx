@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
+import { LiveSensorTiles } from "../live-sensors";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Cpu, Download, Droplets, MapPinned, ShieldAlert, TriangleAlert, Zap } from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Cpu, Download, Droplets, HeartHandshake, ShieldAlert, TriangleAlert, Zap } from "lucide-react";
 import type { DashboardDTO, DashboardOccurrence } from "@/modules/analytics/domain/dashboard";
 import { agoBR, dateBR, durationBR, hourBR, numBR } from "@/lib/format";
 import { notifyDataChanged, useDashboard, useNow } from "../hooks";
@@ -11,7 +12,7 @@ import { GlobalFilters } from "../filters";
 import { Heatmap, LiveSpark, SeriesTable, StatusBreakdown, TableToggle, VolumeChart } from "../charts";
 import { Delta, EmptyState, Footnote, KpiTile, PageHeader, Panel, ProvenanceBanner, Seal, StaleBanner, Tag } from "../primitives";
 import { activeOrigin, TwinFigure, type TwinState } from "../digital-twin";
-import { CONNECTIVITY_LABEL, CONNECTIVITY_TONE, SEVERITY_COLOR, SEVERITY_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "../labels";
+import { CONNECTIVITY_LABEL, CONNECTIVITY_TONE, DONATION_LABEL, SEVERITY_COLOR, SEVERITY_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "../labels";
 
 const SEV_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 const RANGE_TEXT = { "24h": "últimas 24 h", "7d": "últimos 7 dias", "30d": "últimos 30 dias", custom: "período escolhido" } as const;
@@ -51,6 +52,16 @@ export function AttentionQueue({ items, onOpen }: { items: DashboardOccurrence[]
   </ul>;
 }
 
+export function DonationFlow({ data }: { data: DashboardDTO }) {
+  const steps = data.donations.pipeline.filter(p => p.status !== "CANCELLED");
+  return <ol className="flow-steps">
+    {steps.map((s, i) => <li key={s.status} className={s.status === "DELIVERED" ? "done" : ""}>
+      <span className="step-n">{i + 1}</span>
+      <span className="step-label">{DONATION_LABEL[s.status]}</span>
+      <b>{s.count}</b><small>{numBR(s.kg)} kg</small>
+    </li>)}
+  </ol>;
+}
 
 /** Legenda do painel ao vivo: diz como o número chega AGORA (stream, consulta de reserva ou parado). */
 const LIVE_CAPTION: Record<LiveView, string> = {
@@ -124,7 +135,7 @@ export function ControlCenter({ initial }: { initial: DashboardDTO }) {
     <PageHeader kicker={`${data.organization.name} · ${data.organization.city}`} title="Centro de controle" actions={<>
       <a className="btn" href={`/api/reports/summary${data.filter.query ? `?${data.filter.query}` : ""}`}><Download size={15} /> Exportar PDF</a>
       <button className="btn sim" onClick={() => void simulate()} disabled={busy}><Zap size={15} /> Simular alerta</button>
-    </>}>Do sinal do sensor à decisão registrada: água observada, pontos mapeados e investigação documentada.</PageHeader>
+    </>}>Do sinal do sensor à decisão registrada: água observada, ocorrências e alimentos entregues no mesmo recorte.</PageHeader>
     <GlobalFilters data={data} />
     <StaleBanner since={stale} />
     <ProvenanceBanner p={data.provenance} />
@@ -138,17 +149,19 @@ export function ControlCenter({ initial }: { initial: DashboardDTO }) {
         foot={<>{k.openOccurrences} aberta(s) · {k.acknowledgedOccurrences} em análise · exigem verificação humana</>} />
       <KpiTile label="Tempo até resolução" icon={<Clock3 size={15} />} value={k.avgResolutionMin} digits={0} unit=" min" empty="nenhuma resolvida"
         foot={<>média de {k.resolvedInPeriod} resolvida(s){k.avgAckMin !== null ? ` · assumida em ${durationBR(k.avgAckMin)}` : ""} · {range}</>} />
-      <KpiTile label="Sensores comunicando" icon={<Cpu size={15} />} value={k.devicesOnline} digits={0} foot={<>{k.devices} sensores de vazão cadastrados</>} />
+      <KpiTile label="Alimentos entregues" icon={<HeartHandshake size={15} />} value={k.deliveredKg} unit=" kg"
+        foot={<>{k.deliveredCount} entrega(s) confirmada(s) · {numBR(k.availableKg)} kg a caminho</>} />
     </div>
 
-    <Panel id="p-social-facilities" eyebrow="Casas, comércios e edifícios em construção"
-      title="Cada ponto de água tem um lugar no mapa"
-      caption="Visualize a rede hidráulica, vincule medidores aos pontos e investigue o sinal no local correto."
+    <LiveSensorTiles />
+    <Panel id="p-social-facilities" eyebrow="Aplicação em escolas, restaurantes e pequenos negócios"
+      title="Do desperdício invisível à manutenção e ao impacto social"
+      caption="Água monitorada, vistoria documentada e alimentos com destinação segura: um sistema, decisões verificáveis."
       actions={<Link href="/monitoramento?source=DEVICE" className="link">Auditar uso e custo da água <ArrowRight size={15} /></Link>}>
       <div className="fixture-intro">
         <span><Droplets size={17} /> <b>Fluxo contínuo:</b> investigar desperdício e custo potencial</span>
         <span><CalendarDays size={17} /> <b>72h sem fluxo:</b> avaliar uso esperado e abrir vistoria manual</span>
-        <span><MapPinned size={17} /> <b>Mapa hidráulico:</b> ambientes, ramais e pontos instrumentados</span>
+        <span><HeartHandshake size={17} /> <b>Excedentes:</b> triagem humana antes da doação</span>
       </div>
       <p className="muted-text small"><ShieldAlert size={14} style={{ verticalAlign: "middle" }} /> Sem fluxo não comprova entupimento; sem comunicação não comprova ausência de uso. Os números de economia dependem de inspeção e comparação real antes/depois.</p>
     </Panel>
@@ -176,11 +189,13 @@ export function ControlCenter({ initial }: { initial: DashboardDTO }) {
           <StatusBreakdown items={data.statusBreakdown} />
         </div>
       </Panel>
-      <Panel id="p-map" title="Localize o ponto antes de agir" caption="Uma leitura pertence ao medidor vinculado, sem distribuir valores por cômodos não instrumentados."><p>Use uma planta esquemática de casa, comércio ou obra. Pontos sem medidor permanecem sem leitura.</p><Link className="btn primary" href="/mapa"><MapPinned size={16} /> Abrir mapa hidráulico</Link></Panel>
+      <Panel id="p-food" title="Do excedente à entrega" caption="Lotes ativos e entregas confirmadas no período · verificação sanitária é humana" actions={<Link href="/doacoes" className="link">Doações <ArrowRight size={14} /></Link>}>
+        <DonationFlow data={data} />
+      </Panel>
     </div>
 
     <div className="grid-main">
-      <Panel id="p-heat" title="Volume registrado por hora e dia da semana" caption={<>Horário de Brasília. Fluxo na madrugada (0h–5h) é o primeiro lugar para procurar desperdício contínuo: <b>{k.nightLiters === null ? "—" : `${numBR(k.nightLiters)} L`}</b> nessa faixa.</>}>
+      <Panel id="p-heat" title="Consumo médio por hora e dia da semana" caption={<>Horário de Brasília. Fluxo na madrugada (0h–5h) é o primeiro lugar para procurar desperdício contínuo: <b>{k.nightLiters === null ? "—" : `${numBR(k.nightLiters)} L`}</b> nessa faixa.</>}>
         <Heatmap cells={data.heatmap} />
       </Panel>
       <Panel id="p-recent" title="Últimas ocorrências" actions={<Link href="/ocorrencias" className="link">Todas <ArrowRight size={14} /></Link>}>

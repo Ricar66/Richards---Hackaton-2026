@@ -26,7 +26,7 @@ const toReading = (r: { capturedAt: Date; flowLpm: unknown; deltaLiters: unknown
 
 export async function getOccurrenceDetail(id: string): Promise<OccurrenceDetailDTO> {
   const db = getDb();
-  const o = await db.occurrence.findFirst({ where: { id, organizationId: DEMO_ORG_ID, kind:{not:"TEMPERATURE_EXCURSION"} }, include: { device: true, events: { orderBy: { at: "asc" } } } });
+  const o = await db.occurrence.findFirst({ where: { id, organizationId: DEMO_ORG_ID }, include: { device: true, events: { orderBy: { at: "asc" } } } });
   if (!o) throw new Error("NOT_FOUND");
   const created = await db.auditEvent.findFirst({ where: { organizationId: o.organizationId, entity: "Occurrence", entityId: o.id, action: "CREATED" }, orderBy: { at: "asc" } });
   const meta = (created?.metadata ?? null) as Record<string, unknown> | null;

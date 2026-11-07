@@ -8,12 +8,12 @@ const RECENT_WINDOW_MS = 30 * 60_000;
 export async function getLive(now = new Date()): Promise<LiveDTO> {
   try {
     const db = getDb();
-    const devices = { device: { organizationId: DEMO_ORG_ID, kind:"FLOW" as const } };
+    const devices = { device: { organizationId: DEMO_ORG_ID } };
     const [last, recent, active, activeCount] = await Promise.all([
       db.telemetryReading.findFirst({ where: { ...devices, capturedAt: { lte: now } }, orderBy: { capturedAt: "desc" }, include: { device: true } }),
       db.telemetryReading.findMany({ where: { ...devices, capturedAt: { gte: new Date(now.getTime() - RECENT_WINDOW_MS), lte: now } }, orderBy: { capturedAt: "desc" }, take: 120, select: { capturedAt: true, flowLpm: true } }),
-      db.occurrence.findMany({ where: { organizationId: DEMO_ORG_ID, kind: {not:"TEMPERATURE_EXCURSION"}, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, orderBy: { openedAt: "desc" }, take: 5 }),
-      db.occurrence.count({ where: { organizationId: DEMO_ORG_ID, kind: {not:"TEMPERATURE_EXCURSION"}, status: { in: ["OPEN", "ACKNOWLEDGED"] } } }),
+      db.occurrence.findMany({ where: { organizationId: DEMO_ORG_ID, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, orderBy: { openedAt: "desc" }, take: 5 }),
+      db.occurrence.count({ where: { organizationId: DEMO_ORG_ID, status: { in: ["OPEN", "ACKNOWLEDGED"] } } }),
     ]);
     return {
       generatedAt: now.toISOString(),

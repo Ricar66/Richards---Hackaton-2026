@@ -4,7 +4,7 @@ import { DEMO_ORG_ID } from "@/lib/constants";
 import { TIME_ZONE } from "@/lib/format";
 import { deviceConnectivity } from "@/modules/monitoring/domain/device-connectivity";
 import { BUCKET_SECONDS, filterToQuery, type AnalyticsFilter } from "../domain/analytics-filter";
-import type { DashboardDTO, OccurrenceStatus, Provenance, SeriesPoint, Severity, SourceKey } from "../domain/dashboard";
+import type { DashboardDTO, DonationStatus, OccurrenceStatus, Provenance, SeriesPoint, Severity, SourceKey } from "../domain/dashboard";
 import { OverviewNotSeededError } from "./get-overview";
 
 const ACTIVE: OccurrenceStatus[] = ["OPEN", "ACKNOWLEDGED"];
@@ -16,20 +16,20 @@ type HeatRow = { dow: number; hour: number; liters: number; days: number };
 /** Recorte de leituras do filtro (unidade, sensor, origem). O período é aplicado por cada consulta. */
 function readingScope(f: AnalyticsFilter) {
   return {
-    device: { organizationId: DEMO_ORG_ID, kind:"FLOW", ...(f.siteId ? { siteId: f.siteId } : {}) },
+    device: { organizationId: DEMO_ORG_ID, ...(f.siteId ? { siteId: f.siteId } : {}) },
     ...(f.deviceId ? { deviceId: f.deviceId } : {}),
     ...(f.source !== "ALL" ? { source: f.source } : {}),
   } satisfies Prisma.TelemetryReadingWhereInput;
 }
 function readingSql(f: AnalyticsFilter) {
-  return Prisma.sql`d."organizationId" = ${DEMO_ORG_ID} AND d.kind='FLOW'
+  return Prisma.sql`d."organizationId" = ${DEMO_ORG_ID}
     ${f.siteId ? Prisma.sql`AND d."siteId" = ${f.siteId}` : Prisma.empty}
     ${f.deviceId ? Prisma.sql`AND tr."deviceId" = ${f.deviceId}` : Prisma.empty}
     ${f.source !== "ALL" ? Prisma.sql`AND tr.source::text = ${f.source}` : Prisma.empty}`;
 }
 function occurrenceScope(f: AnalyticsFilter) {
   return {
-    organizationId: DEMO_ORG_ID, kind:{not:"TEMPERATURE_EXCURSION"},
+    organizationId: DEMO_ORG_ID,
     ...(f.siteId ? { siteId: f.siteId } : {}),
     ...(f.deviceId ? { deviceId: f.deviceId } : {}),
     ...(f.source !== "ALL" ? { source: f.source } : {}),
@@ -52,10 +52,11 @@ export async function getDashboard(f: AnalyticsFilter, now = new Date()): Promis
     const period = { gte: f.from, lte: f.to };
     const scope = readingScope(f);
     const occScope = occurrenceScope(f);
+    const donationSource = f.source !== "ALL" ? { source: f.source } : {};
 
-    const [sites, devices, seriesRows, prevAgg, sourceGroups, heatRows, deviceGroups, peakAgg, occurrences, activeGroups, closedInPeriod, openedInPeriod] = await Promise.all([
+    const [sites, devices, seriesRows, prevAgg, sourceGroups, heatRows, deviceGroups, peakAgg, occurrences, activeGroups, closedInPeriod, openedInPeriod, donations, deliveredAgg] = await Promise.all([
       db.site.findMany({ where: { organizationId: org.id }, orderBy: { name: "asc" } }),
-      db.device.findMany({ where: { organizationId: org.id, kind:"FLOW" }, include: { site: true }, orderBy: { code: "asc" } }),
+      db.device.findMany({ where: { organizationId: org.id }, include: { site: true }, orderBy: { code: "asc" } }),
       db.$queryRaw<SeriesRow[]>`
         SELECT floor((extract(epoch FROM tr."capturedAt") - ${fromSec}::float8) / ${bucketSec}::float8)::int AS idx,
                COALESCE(SUM(tr."deltaLiters"), 0)::float8 AS liters, AVG(tr."flowLpm")::float8 AS avg_flow,
@@ -82,7 +83,11 @@ export async function getDashboard(f: AnalyticsFilter, now = new Date()): Promis
       db.occurrence.groupBy({ by: ["status"], where: { ...occScope, status: { in: ACTIVE } }, _count: { _all: true } }),
       db.occurrence.findMany({ where: { ...occScope, resolvedAt: period, status: { in: ["RESOLVED", "DISMISSED"] } }, select: { status: true, openedAt: true, acknowledgedAt: true, resolvedAt: true } }),
       db.occurrence.findMany({ where: { ...occScope, openedAt: period }, select: { id: true, status: true, severity: true, openedAt: true, acknowledgedAt: true } }),
-
+      db.donationBatch.findMany({
+        where: { organizationId: org.id, ...donationSource, OR: [{ status: { in: ["PENDING_REVIEW", "AVAILABLE", "RESERVED"] } }, { receivedAt: period }, { createdAt: period }] },
+        include: { recipient: true }, orderBy: { createdAt: "desc" }, take: 200,
+      }),
+      db.donationBatch.aggregate({ where: { organizationId: org.id, ...donationSource, status: "DELIVERED", receivedAt: period }, _sum: { weightKg: true }, _count: { _all: true } }),
     ]);
 
     // Janela de evidência de cada ocorrência aberta no período (marcadores do gráfico investigativo).
@@ -131,6 +136,13 @@ export async function getDashboard(f: AnalyticsFilter, now = new Date()): Promis
 
     const STATUSES: OccurrenceStatus[] = ["OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"];
     const SEVERITIES: Severity[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+    const PIPELINE: DonationStatus[] = ["PENDING_REVIEW", "AVAILABLE", "RESERVED", "DELIVERED", "CANCELLED"];
+    const donationItems = donations.map(d => ({
+      id: d.id, description: d.description, kg: Number(d.weightKg), status: d.status, source: d.source as SourceKey,
+      recipientId: d.recipientId, recipient: d.recipient?.name ?? null, createdAt: d.createdAt.toISOString(),
+      verifiedBy: d.safetyVerifiedBy, verifiedAt: d.safetyVerifiedAt?.toISOString() ?? null, receivedAt: d.receivedAt?.toISOString() ?? null, receivedBy: d.receivedBy,
+    }));
+    const inPipeline = (s: DonationStatus) => donationItems.filter(d => d.status === s && (s !== "DELIVERED" || (d.receivedAt && new Date(d.receivedAt) >= f.from)));
 
     return {
       generatedAt: now.toISOString(),
@@ -153,7 +165,9 @@ export async function getDashboard(f: AnalyticsFilter, now = new Date()): Promis
         dismissedInPeriod: closedInPeriod.filter(o => o.status === "DISMISSED").length,
         avgResolutionMin: avg(closedInPeriod.filter(o => o.status === "RESOLVED").map(o => minutes(o.openedAt, o.resolvedAt!))),
         avgAckMin: avg(openedInPeriod.filter(o => o.acknowledgedAt).map(o => minutes(o.openedAt, o.acknowledgedAt!))),
-        deliveredKg:0,deliveredCount:0,availableKg:0,pendingReview:0,
+        deliveredKg: round(Number(deliveredAgg._sum.weightKg ?? 0)), deliveredCount: deliveredAgg._count._all,
+        availableKg: round(donationItems.filter(d => d.status === "AVAILABLE" || d.status === "RESERVED").reduce((n, d) => n + d.kg, 0)),
+        pendingReview: donationItems.filter(d => d.status === "PENDING_REVIEW").length,
         devices: scopedDevices.length, devicesOnline: deviceDtos.filter(d => scopedDevices.some(s => s.id === d.id) && d.connectivity === "ONLINE").length,
       },
       series,
@@ -172,7 +186,7 @@ export async function getDashboard(f: AnalyticsFilter, now = new Date()): Promis
         suspectedLiters: o.suspectedLiters === null ? null : Number(o.suspectedLiters),
         resolutionMin: o.resolvedAt ? Math.round(minutes(o.openedAt, o.resolvedAt)) : null,
       })),
-      donations:{items:[],pipeline:[]},
+      donations: { items: donationItems, pipeline: PIPELINE.map(s => { const xs = inPipeline(s); return { status: s, count: xs.length, kg: round(xs.reduce((n, d) => n + d.kg, 0)) }; }) },
       devices: deviceDtos,
     };
   } catch (err) {

@@ -2,10 +2,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Bot, Activity, Bell, ChevronRight, Cpu, Droplets, ExternalLink, FileChartColumn, MapPinned, LayoutDashboard, Menu, MonitorPlay, TriangleAlert, X } from "lucide-react";
+import { Bot, Activity, Bell, ChevronRight, Cpu, Droplets, ExternalLink, FileChartColumn, HeartHandshake, LayoutDashboard, MapPinned, Menu, MonitorPlay, TriangleAlert, X } from "lucide-react";
 import { agoBR, hourBR, numBR } from "@/lib/format";
 import { notifyDataChanged, PREVIEW_OUTDATED, PREVIEW_REFRESH, useNow, usePrefersReducedMotion } from "./hooks";
-import { useLiveStream, useNewOccurrence, type LiveView } from "./live-stream";
+import { useLiveEvent, useLiveStream, useNewOccurrence, type LiveView } from "./live-stream";
 import { SEVERITY_COLOR, SOURCE_LABEL, STATUS_LABEL } from "./labels";
 import { OccurrenceDrawer } from "./occurrence-drawer";
 import { IntervalDrawer, type IntervalRequest } from "./interval-drawer";
@@ -14,8 +14,9 @@ import { AssistRobot, RobotToggle } from "./assist-robot";
 const NAV = [
   { href: "/", label: "Centro de controle", Icon: LayoutDashboard },
   { href: "/monitoramento", label: "Monitoramento hídrico", Icon: Activity },
-  { href: "/ocorrencias", label: "Ocorrências", Icon: TriangleAlert },
   { href: "/mapa", label: "Mapa hidráulico", Icon: MapPinned },
+  { href: "/ocorrencias", label: "Ocorrências", Icon: TriangleAlert },
+  { href: "/doacoes", label: "Doações & impacto", Icon: HeartHandshake },
   { href: "/relatorios", label: "Relatórios", Icon: FileChartColumn },
   { href: "/dispositivos", label: "Dispositivos IoT", Icon: Cpu },
   { href: "/assistente", label: "RICHARDS Assist", Icon: Bot },
@@ -190,6 +191,11 @@ export function BiShell({ children }: { children: React.ReactNode }) {
     toast({ tone: "warn", title: `Nova ocorrência · ${o.title}`, body: `${SOURCE_LABEL[o.source]} · aberta às ${hourBR(o.openedAt)}`, action: { label: "Investigar", run: () => openOccurrence(o.id) } });
     // Com o stream fora, as telas não receberam o evento: avisa para buscarem de novo.
     if (o.via === "snapshot") notifyDataChanged();
+  });
+  useLiveEvent("donation.created", e => {
+    if (e.origin !== "scale") return;
+    toast({ tone: "info", title: `Lote ${numBR(e.kg, 1)} kg aguardando verificação`, body: `Balança${e.deviceCode ? ` ${e.deviceCode}` : ""} · ${SOURCE_LABEL[e.source]} · só fica disponível depois da verificação humana`,
+      action: { label: "Ver doações", run: () => router.push(filterQuery ? `/doacoes?${filterQuery}` : "/doacoes") } });
   });
   useEffect(() => {
     const onOutdated = () => toast({ tone: "info", title: "Há dados novos desde a prévia", body: "A prévia não muda sozinha, para continuar igual ao PDF.", action: { label: "Atualizar prévia", run: () => window.dispatchEvent(new Event(PREVIEW_REFRESH)) } });

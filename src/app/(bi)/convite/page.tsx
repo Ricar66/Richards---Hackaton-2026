@@ -19,7 +19,7 @@ export default function Page() {
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>
         <p style={{ color: "#95e6c2", fontSize: 11, letterSpacing: ".14em" }}>APONTE A CÂMERA DO CELULAR</p>
         <h2 style={{ fontSize: 30, lineHeight: 1.15, margin: "8px 0 12px" }}>Veja os sensores em tempo real.</h2>
-        <p>Vazão de água em tempo real. Dados físicos e simulados sempre identificados.</p>
+        <p>Vazão, temperatura, umidade e peso. Dados físicos e simulados sempre identificados.</p>
         <a href={PUBLIC_URL} target="_blank" rel="noopener noreferrer" style={{ color: "#8aecc4", overflowWrap: "anywhere" }}>{PUBLIC_URL}</a>
         <p style={{ marginTop: 16 }}><Link href="/plateia" style={{ color: "#a5cdff" }}>Abrir prévia neste servidor</Link></p>
       </div>

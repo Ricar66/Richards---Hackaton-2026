@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  clockBR, lineFromAudit, lineFromEvent, mergeFeed, occurrenceSeal, originSeal, pickFocus, pipeTone, publicActor, ringView, ruleTransition, scaleView, sensorSeal,
+  clockBR, lineFromAudit, lineFromEvent, mergeFeed, occurrenceSeal, originSeal, pickFocus, pipeTone, publicActor, ringView, ruleTransition, scaleLotKey, scaleView, sensorSeal,
   settleRefresh, stripSegments, temperatureView, tripView, type RingOccurrence, type RuleTrack, type StripPoint,
 } from "../src/components/stage/stage-logic";
 import { activeOccurrences, flowOccurrenceFor, focusSource, initModel, reduceStage, type StageModel } from "../src/components/stage/stage-model";
@@ -389,7 +389,18 @@ test("redutor: 'Simular alerta' com o sensor real contando NÃO bloqueia o senso
   assert.equal(flowOccurrenceFor(m, "d1", activeOccurrences(m), "SIMULATED")?.id, "SIM-1");
 });
 
-test("redutor ignora evento legado de jornada retirada",()=>{const m=initModel(snapshot());const next=run(m,[{v:1,type:"donation.status",orgId:"o",emittedAt:iso(10),id:"retired",kg:6,from:"RESERVED",status:"DELIVERED"}as LiveEvent]);assert.equal(next.feed.length,0);});
+test("redutor: mudança de estado sem origem (evento antigo) é carimbada quando a auditoria do snapshot chega", () => {
+  const legacy = { v: 1, type: "donation.status", orgId: "o", emittedAt: iso(10), id: "richards-don-02", kg: 6, from: "RESERVED", status: "DELIVERED", recipientName: "Cozinha Comunitária" } as LiveEvent;
+  let m = initModel(snapshot());
+  m = run(m, [legacy]);
+  assert.equal(m.feed[0].source, null);
+  m = reduceStage(m, { type: "snapshot", snapshot: snapshot({ serverTime: iso(11), audit: [
+    { id: "a", at: iso(10), entity: "DonationBatch", entityId: "richards-don-02", action: "DELIVERED", actor: "operador", title: "Hortaliças", source: "SIMULATED", kg: 6, institution: "Cozinha Comunitária", severity: null, deviceCode: null },
+  ] }), requestedAt: at(10.3), receivedAt: at(10.5) });
+  assert.equal(m.feed.length, 1, "o mesmo fato não duplica");
+  assert.equal(m.feed[0].source, "SIMULATED", "o selo SIMULADO volta (antes ficava sem selo pelo resto da sessão)");
+  assert.equal(m.feed[0].title, "Lote entregue · 6 kg", "a linha guardada só ganha a origem");
+});
 
 test("redutor: dispositivo calado vira linha uma vez, só se esteve online na sessão", () => {
   let m = initModel(snapshot({ devices: [
@@ -456,4 +467,15 @@ test("regra 5 por origem: a origem em foco é a da leitura MAIS NOVA (uma decis�
   assert.match(ringView({ rule: null, broken: null, occurrence: null, nowMs: at(1), minFlowLpm: 1.5, continuousSeconds: 30 }).rule, /1 ativa por sensor e origem \(regra 5\)/, "espaço inseguível: '(regra' e '5)' nunca ficam em linhas separadas");
 });
 
-test("snapshot legado não reinsere lotes na Sala hídrica",()=>{const m=initModel(snapshot({pendingScaleLots:[{id:"old",deviceCode:"BAL",kg:5,source:"DEVICE",createdAt:iso(-20)}]}));assert.deepEqual(m.scaleLots,{});});
+test("balança: lote pendente REAL e SIMULADO do mesmo dispositivo convivem; cada pesagem vê o lote da sua origem", () => {
+  const lots = [
+    { id: "real-l", deviceCode: "BAL", kg: 5.4, source: "DEVICE" as const, createdAt: iso(-60) },
+    { id: "sim-l", deviceCode: "BAL", kg: 6.0, source: "SIMULATED" as const, createdAt: iso(-30) },
+  ];
+  let m = initModel(snapshot({ pendingScaleLots: lots }));
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "DEVICE")]?.id, "real-l");
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "SIMULATED")]?.id, "sim-l", "antes a chave era só o código: o segundo lote sumia");
+  m = reduceStage(m, { type: "event", event: { v: 1, type: "donation.created", orgId: "o", emittedAt: iso(1), id: "sim-2", kg: 6.2, status: "PENDING_REVIEW", source: "SIMULATED", origin: "scale", deviceCode: "BAL", description: "x" }, arrivalMs: at(1) });
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "SIMULATED")]?.id, "sim-2");
+  assert.equal(m.scaleLots[scaleLotKey("BAL", "DEVICE")]?.id, "real-l", "o lote real não é sobrescrito pelo simulado");
+});

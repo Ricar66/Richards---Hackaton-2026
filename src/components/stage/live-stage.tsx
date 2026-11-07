@@ -4,21 +4,22 @@ import { connectLive, type LiveConnState } from "@/lib/live-client";
 import type { LiveEventType } from "@/modules/realtime/domain/live-event";
 import type { StageSnapshot } from "@/modules/analytics/application/get-stage-snapshot";
 import {
-  RULE_STALE_MS, STRIP_WINDOW_MS, alarmMode, twinSimulated, clockBR, fixedBR, hourMinBR, originSeal, pickFocus, pipeTone, ringView, secondsSince, sensorSeal,
-  settleRefresh, tripView, type RefreshGate, type StripPoint,
+  RULE_STALE_MS, STRIP_WINDOW_MS, alarmMode, twinSimulated, clockBR, fixedBR, hourMinBR, kgNumBR, originSeal, pickFocus, pipeTone, ringView, scaleLotKey, scaleView, secondsSince, sensorSeal,
+  settleRefresh, temperatureView, tripView, type RefreshGate, type StripPoint,
 } from "./stage-logic";
 import { Digits } from "./digits";
-import { activeOccurrences, flowOccurrenceFor, focusSource, initModel, lastReadingByDevice, packets, reduceStage, serverNow } from "./stage-model";
+import { activeOccurrences, flowOccurrenceFor, focusSource, initModel, lastReadingByDevice, latestLive, packets, reduceStage, serverNow } from "./stage-model";
 import { useIdleCursor, useReducedMotion, useStageKeys, useTwinFlag } from "./hooks";
 import { CounterSeal, GlobalSeal, Seal, SourceSeal } from "./seal";
 import { FlowStrip } from "./flow-strip";
 import { TwinSlot } from "./twin-slot";
 import { RuleRing } from "./rule-ring";
+import { ScalePanel, TemperaturePanel } from "./sensors";
 import { EventFeed } from "./event-feed";
 import { PacketTrip } from "./packet-trip";
 
 /** Eventos que mudam agregados ou listas do servidor: a tela refaz o snapshot (nunca soma no navegador). */
-const REFRESH_ON = new Set<LiveEventType>(["occurrence.opened", "occurrence.status", "resync"]);
+const REFRESH_ON = new Set<LiveEventType>(["occurrence.opened", "occurrence.status", "donation.created", "donation.status", "resync"]);
 const CONN_LABEL: Record<LiveConnState, string> = { connecting: "Conectando", live: "Ao vivo", reconnecting: "Reconectando", down: "Sem stream" };
 const SEVERITY: Record<string, string> = { LOW: "baixa", MEDIUM: "média", HIGH: "alta", CRITICAL: "crítica" };
 const STATUS: Record<string, string> = { OPEN: "aberta", ACKNOWLEDGED: "assumida" };
@@ -152,6 +153,12 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
   // A legenda do pulso só aparece quando ele pode disparar: sem movimento ou sem stream, a falta de pulso não diz nada.
   const pulseOn = !still && conn === "live";
 
+  const temp = latestLive(model.temperature, nextFocus);
+  const tempView = temp ? temperatureView(temp, refNow) : null;
+  const tempOcc = temp ? active.find(o => o.kind === "TEMPERATURE_EXCURSION" && o.deviceId === temp.deviceId && o.source === temp.source) ?? null : null;
+  const scale = latestLive(model.scale, nextFocus);
+  const scaleV = scale ? scaleView(scale, model.scaleLots[scaleLotKey(scale.deviceCode, scale.source)] ?? null, refNow) : null;
+
   const seal = originSeal(packets(model), refNow);
   const trip = model.trip ? tripView(model.trip, model.offsetMs, model.offsetKnown) : null;
   const lost = conn === "reconnecting" || conn === "down";
@@ -213,12 +220,14 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
 
       <RuleRing view={ring} deviceCode={focus?.code ?? null} alarm={alarm} />
 
+      <TemperaturePanel t={temp} view={tempView} occurrence={tempOcc} nowMs={now} want3d={want3d} reduced={reduced} diag={diag} />
+      <ScalePanel s={scale} view={scaleV} nowMs={now} want3d={want3d} reduced={reduced} diag={diag} />
 
       <section className="inst today" aria-labelledby="stg-today-title">
-        <header className="inst-head"><h2 id="stg-today-title">Operação hídrica</h2>{snap && <span className="inst-code">estado atual</span>}</header>
+        <header className="inst-head"><h2 id="stg-today-title">Hoje</h2>{snap && <span className="inst-code">desde 00:00</span>}</header>
         {!snap ? <p className="waiting">sem dados do servidor</p> : <>
-
-          <p className="waiting"><a href="/mapa">Abrir mapa hidráulico da instalação →</a></p>
+          <div className="count"><b className="num"><Digits text={kgNumBR(snap.today.deliveredKg.value)} /><small> kg</small></b><span>entregues hoje (recebimento) <CounterSeal provenance={snap.today.deliveredKg.provenance} /></span></div>
+          <div className="count"><b className="num"><Digits text={String(snap.today.pendingReview.value)} /></b><span>{snap.today.pendingReview.value === 1 ? "lote aguardando" : "lotes aguardando"} verificação humana <CounterSeal provenance={snap.today.pendingReview.provenance} /></span></div>
           <div className="count"><b className="num"><Digits text={String(snap.today.activeOccurrences.value)} /></b><span>{snap.today.activeOccurrences.value === 1 ? "ocorrência ativa" : "ocorrências ativas"} <CounterSeal provenance={snap.today.activeOccurrences.provenance} /></span></div>
           {active[0] && <p className={`occ-latest ${active[0].status === "OPEN" ? "open" : "ack"}`}>
             {/* Origem da ocorrência em destaque: com o contador MISTO, só o selo dela diz se ela é simulada. */}

@@ -16,6 +16,20 @@ export function publicReadings(e: LiveEvent): AudienceReading[] {
       ? [{ kind: "flow", deviceCode: e.deviceCode, at: e.capturedAt, source: e.source, flowLpm: e.flowLpm }]
       : [];
   }
+  if (e.type === "sensor.live") {
+    const out: AudienceReading[] = [];
+    const t = e.temperature;
+    if (t && isSensor(t.source) && Number.isFinite(t.c))
+      out.push({ kind: "environment", deviceCode: e.deviceCode, at: e.at, source: t.source, temperatureC: t.c,
+        humidityPct: t.humidityPct !== undefined && Number.isFinite(t.humidityPct) ? t.humidityPct : null, limitC: t.rule.limitC });
+    const s = e.scale;
+    if (s && isSensor(s.source) && Number.isFinite(s.kg))
+      out.push({ kind: "scale", deviceCode: e.deviceCode, at: e.at, source: s.source, kg: s.kg, minKg: s.progress.minKg,
+        phase: s.progress.phase, stableSeconds: s.progress.stableSeconds, requiredSeconds: s.progress.requiredSeconds });
+    return out;
+  }
+  if (e.type === "donation.created" && e.origin === "scale" && e.deviceCode && isSensor(e.source) && Number.isFinite(e.kg))
+    return [{ kind: "lot", deviceCode: e.deviceCode, at: e.emittedAt, source: e.source, kg: e.kg }];
   return [];
 }
-export const audienceKey=(r:AudienceReading):string=>r.kind+":"+r.deviceCode;
+export const audienceKey = (r: AudienceReading): string => r.kind + ":" + r.deviceCode;

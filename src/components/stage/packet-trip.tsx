@@ -4,7 +4,7 @@ import { CHANNEL_LABEL, type TripSample, type TripView } from "./stage-logic";
 
 const msText = (n: number, approx = false) => `${approx ? "≈ " : ""}${Math.round(n)} ms`;
 /** O que o pacote é. "sensor" sozinho seria lido como "sensor real" no telão. */
-const KIND_LABEL: Record<TripSample["kind"], string> = { leitura: "vazão gravada", sensor: "pacote fora do escopo atual" };
+const KIND_LABEL: Record<TripSample["kind"], string> = { leitura: "vazão gravada", sensor: "temperatura/peso · fora do histórico" };
 const NODE_AT = [0, 25, 50, 75, 100];
 
 /**

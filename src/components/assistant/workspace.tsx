@@ -7,7 +7,7 @@ import type { AssistantAnswer, ChatMessage } from "@/modules/assistant/domain/co
 import "./workspace.css";
 type Status={aiEnabled:boolean;telegramEnabled:boolean;model:string;dailyLimit:number;workerHeartbeat:string|null;pending:number;dead:number;subscriptions:{id:string;chatId:string;active:boolean;includeSimulated:boolean;dailySummary:boolean}[]};
 type Message=ChatMessage&{result?:AssistantAnswer};
-const SUGGESTIONS=["Quais ocorrências precisam de atenção?","Resuma as últimas 24 horas separando a origem dos dados.","Como investigar um alerta de fluxo?","Como vincular meu sensor a um ponto do mapa?"];
+const SUGGESTIONS=["Quais ocorrências precisam de atenção?","Resuma as últimas 24 horas separando a origem dos dados.","Como investigar um alerta de fluxo?","O que preciso conferir antes de doar um lote?"];
 export function AssistantWorkspace(){
  const [status,setStatus]=useState<Status|null>(null),[statusError,setStatusError]=useState("");
  const [messages,setMessages]=useState<Message[]>([]),[question,setQuestion]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");

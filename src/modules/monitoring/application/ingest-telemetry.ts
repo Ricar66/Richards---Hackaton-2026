@@ -98,7 +98,7 @@ export class IngestTelemetry {
     const device = await getDb().device.findUnique({ where: { code: command.deviceCode } });
     const stored = device ? Buffer.from(device.apiKeyHash, "hex") : null;
     // Hash malformado no banco não pode virar exceção (timingSafeEqual exige tamanhos iguais).
-    if (!device || device.kind!=="FLOW" || !stored || stored.length !== 32 || !deviceKey || !timingSafeEqual(hash(deviceKey), stored))
+    if (!device || !stored || stored.length !== 32 || !deviceKey || !timingSafeEqual(hash(deviceKey), stored))
       throw new Error("NOT_AUTHORIZED");
     const time = new Date(command.capturedAt);
     const skew = Math.abs(Date.now() - time.getTime());

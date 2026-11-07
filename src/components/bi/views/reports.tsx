@@ -7,7 +7,7 @@ import { reportFigures } from "@/modules/analytics/domain/report-figures";
 import { useDashboard } from "../hooks";
 import { GlobalFilters } from "../filters";
 import { PageHeader, Panel, ProvenanceBanner, StaleBanner, Tag } from "../primitives";
-import { CONNECTIVITY_LABEL, PROVENANCE_LABEL, SEVERITY_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "../labels";
+import { CONNECTIVITY_LABEL, DONATION_LABEL, PROVENANCE_LABEL, SEVERITY_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE } from "../labels";
 
 type Gen = { state: "idle" } | { state: "busy" } | { state: "done"; at: string; size: number; name: string } | { state: "error"; message: string };
 
@@ -15,6 +15,7 @@ export function Reports({ initial }: { initial: DashboardDTO }) {
   const { data, stale } = useDashboard(initial);
   const [gen, setGen] = useState<Gen>({ state: "idle" });
   const q = data.filter.query;
+  const delivered = data.donations.items.filter(d => d.status === "DELIVERED" && d.receivedAt && d.receivedAt >= data.filter.from);
 
   async function generate() {
     setGen({ state: "busy" });
@@ -43,7 +44,7 @@ export function Reports({ initial }: { initial: DashboardDTO }) {
     <div className="grid-main">
       <article className="paper" aria-label="Prévia do relatório">
         <header className="paper-head">
-          <span className="eyebrow">RICHARDS Intelligence · Relatório de monitoramento hidráulico</span>
+          <span className="eyebrow">RICHARDS Intelligence · Relatório de recursos e impacto</span>
           <h2>{data.organization.name}</h2>
           <p>{dateBR(data.filter.from)} → {dateBR(data.filter.to)} · horário de Brasília</p>
           <span className={`stamp ${data.provenance.label.toLowerCase()}`}>{PROVENANCE_LABEL[data.provenance.label]}</span>
@@ -57,12 +58,17 @@ export function Reports({ initial }: { initial: DashboardDTO }) {
           <thead><tr><th scope="col">Ocorrência</th><th scope="col">Severidade</th><th scope="col">Estado</th><th scope="col">Aberta</th><th scope="col" className="num">Resolução</th><th scope="col">Origem</th></tr></thead>
           <tbody>{data.occurrences.slice(0, 8).map(o => <tr key={o.id}><td>{o.title}<small className="cell-sub">{o.id}</small></td><td>{SEVERITY_LABEL[o.severity]}</td><td><Tag tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Tag></td><td>{dateBR(o.openedAt)}</td><td className="num">{durationBR(o.resolutionMin)}</td><td>{SOURCE_LABEL[o.source]}</td></tr>)}</tbody>
         </table></div> : <p className="muted-text">Sem ocorrências no recorte.</p>}
+        <h3>Entregas confirmadas</h3>
+        {delivered.length ? <div className="table-scroll"><table className="data-table compact">
+          <thead><tr><th scope="col">Lote</th><th scope="col">Instituição</th><th scope="col">Recebido por</th><th scope="col" className="num">Kg</th><th scope="col">Entrega</th></tr></thead>
+          <tbody>{delivered.map(d => <tr key={d.id}><td>{d.description}</td><td>{d.recipient ?? "—"}</td><td>{d.receivedBy ?? "não registrado"}</td><td className="num">{numBR(d.kg)}</td><td>{d.receivedAt ? dateBR(d.receivedAt) : "—"}</td></tr>)}</tbody>
+        </table></div> : <p className="muted-text">Nenhuma entrega confirmada no período ({DONATION_LABEL.DELIVERED.toLowerCase()} = recebimento registrado).</p>}
         <h3>Dispositivos e qualidade dos dados</h3>
         <div className="table-scroll"><table className="data-table compact">
           <thead><tr><th scope="col">Sensor</th><th scope="col">Comunicação</th><th scope="col">Último contato</th><th scope="col" className="num">Leituras</th></tr></thead>
           <tbody>{data.devices.map(d => <tr key={d.id}><td>{d.code}</td><td>{CONNECTIVITY_LABEL[d.connectivity]}</td><td>{d.lastSeen ? dateBR(d.lastSeen) : "nunca"}</td><td className="num">{d.samples}</td></tr>)}</tbody>
         </table></div>
-        <p className="paper-note">Sensor registra fluxo; não prova desperdício, vazamento ou economia. Pontos sem medidor permanecem não instrumentados. Dados simulados ficam carimbados.</p>
+        <p className="paper-note">Sensor registra fluxo; não prova desperdício, vazamento ou economia. Doações dependem de verificação humana e confirmação de recebimento. Dados simulados ficam carimbados.</p>
       </article>
       <div className="stack">
         <Panel id="p-check" title="BI × PDF" caption="Mesmo serviço (getDashboard) e mesmo filtro na URL.">

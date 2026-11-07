@@ -1,5 +1,6 @@
 "use client";
 import { Cpu, PlugZap, Wifi, WifiOff } from "lucide-react";
+import { LiveSensorTiles } from "../live-sensors";
 import { FixtureActivityPanel } from "../fixture-activity-panel";
 import type { DashboardDTO } from "@/modules/analytics/domain/dashboard";
 import { agoBR, dateBR, numBR } from "@/lib/format";
@@ -16,7 +17,7 @@ export function Devices({ initial }: { initial: DashboardDTO }) {
     <PageHeader kicker="Infraestrutura IoT" title="Dispositivos">Estado de comunicação calculado pelo último pacote recebido (mais de 120 s sem leitura = sem comunicação). Manutenção é decisão humana.</PageHeader>
     <GlobalFilters data={data} showDevice={false} />
     <StaleBanner since={stale} />
-
+    <LiveSensorTiles />
     <FixtureActivityPanel siteId={data.filter.siteId} deviceId={data.filter.deviceId} />
     <div className="grid-main">
     {data.devices.length ? <div className="device-cards">

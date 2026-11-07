@@ -4,10 +4,15 @@ import { Prisma } from "@/generated/prisma/client";
 import { MqttIngestion, type MqttMessage, type MqttProcessed } from "./mqtt-ingestion";
 import { assertBrokerAuth, hasWildcard, loadMqttConfig, topicMatches, type MqttBridgeConfig } from "./mqtt-payload";
 
+const kg = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 function describe(o: MqttProcessed) {
   const parts = [o.deviceCode];
   if (o.flow) parts.push(`vazão seq ${o.flow.sequence} ${o.flow.duplicate ? "repetida (ignorada)" : "gravada"}${o.flow.source === "SIMULATED" ? " [SIMULATED]" : ""}`);
   if (o.flow?.alerted) parts.push(`OCORRÊNCIA de fluxo aberta (${o.flow.occurrenceId})`);
+  if (o.temperature?.alerted) parts.push(`OCORRÊNCIA de temperatura aberta (${o.temperature.occurrenceId})`);
+  if (o.donation) parts.push(o.donation.created
+    ? `LOTE de ${kg(o.donation.weightKg)} kg criado (${o.donation.id}), aguarda verificação humana`
+    : `balança: o lote ${o.donation.id} ainda aguarda verificação, nada novo criado`);
   return parts.join(" · ");
 }
 
@@ -69,10 +74,10 @@ function doneSummary(msg: MqttMessage | null) {
   return {
     capturedAt: msg.at.toISOString(),
     flow: d.flow ? { bootId: msg.flow?.reading.bootId, sequence: msg.flow?.sequence, duplicate: d.flow.duplicate } : null,
-
+    contact: !!d.contact, temperature: d.temperature ?? null, donation: d.donation ? { id: d.donation.id, created: d.donation.created } : null,
   };
 }
-const anyDone = (s: ReturnType<typeof doneSummary>) => !!s && (!!s.flow);
+const anyDone = (s: ReturnType<typeof doneSummary>) => !!s && (!!s.flow || s.contact || !!s.temperature || !!s.donation);
 
 export type DeadLetterRecord = {
   deadLetterAt: string; receivedAt: string; topic: string; payload: string; attempts: number; reason: string; error: string;
