@@ -24,7 +24,7 @@ from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, BadZipFile
 
 ROOT_FILES = {
     "README.md", "AGENTS.md", "MEMORIA.md", "ENTREGA_SENAC_2026.md", ".env.example", ".dockerignore", "Dockerfile", "docker-compose.yml",
-    "compose.iot-lab.yml", "package.json", "pnpm-lock.yaml", "next.config.ts",
+    "compose.iot-lab.yml", "compose.assistant.yml", "package.json", "pnpm-lock.yaml", "next.config.ts",
     "next-env.d.ts", "prisma.config.ts", "tsconfig.json", "postcss.config.mjs",
     "eslint.config.mjs",
 }

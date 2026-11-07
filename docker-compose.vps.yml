@@ -35,6 +35,17 @@ services:
       RICHARDS_OPERATOR_USER: ${VPS_OPERATOR_USER:?defina VPS_OPERATOR_USER}
       RICHARDS_OPERATOR_PASSWORD: ${VPS_OPERATOR_PASSWORD:?defina VPS_OPERATOR_PASSWORD}
       IOT_DEMO_DEVICE_KEY: ${VPS_IOT_DEVICE_KEY:?defina VPS_IOT_DEVICE_KEY}
+      # RICHARDS Assist (PR #6): DESLIGADO por padrão; liga só com as variáveis VPS_* no Coolify (segredos nunca no git).
+      # O site precisa delas para a tela /assistente, a conversa e o código de vínculo do Telegram.
+      ASSISTANT_ENABLED: ${VPS_ASSISTANT_ENABLED:-false}
+      OPENAI_API_KEY: ${VPS_OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${VPS_OPENAI_MODEL:-gpt-4.1-mini}
+      ASSISTANT_DAILY_REQUEST_LIMIT: ${VPS_ASSISTANT_DAILY_REQUEST_LIMIT:-100}
+      ASSISTANT_MINUTE_REQUEST_LIMIT: ${VPS_ASSISTANT_MINUTE_REQUEST_LIMIT:-6}
+      TELEGRAM_ENABLED: ${VPS_TELEGRAM_ENABLED:-false}
+      TELEGRAM_BOT_TOKEN: ${VPS_TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${VPS_TELEGRAM_BOT_USERNAME:-}
+      ASSISTANT_BASE_URL: ${VPS_ASSISTANT_BASE_URL:-http://187.77.229.205:8090}
     healthcheck:
       # 127.0.0.1 e não localhost: no alpine "localhost" pode resolver para ::1. A imagem tem wget (busybox), não curl.
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
@@ -90,6 +101,35 @@ services:
       MQTT_DEAD_LETTER: /data/carta-morta.ndjson
     volumes:
       - richards_vps_mqtt:/data
+  # Worker do RICHARDS Assist: alertas e conversa do Telegram por polling (getUpdates): NÃO abre porta e não usa webhook.
+  # Um só por banco (advisory lock). on-failure: com o Telegram desligado ele sai com sucesso e fica parado (unless-stopped
+  # reiniciaria sem fim); se cair por erro, o Docker reinicia com espera crescente.
+  richards-assistente:
+    build: .
+    command: ["node", "--import", "tsx", "src/assistant/run-assistant.ts"]
+    restart: on-failure
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://richards:${VPS_POSTGRES_PASSWORD:?defina VPS_POSTGRES_PASSWORD}@richards-db:5432/richards?schema=public
+      ASSISTANT_ENABLED: ${VPS_ASSISTANT_ENABLED:-false}
+      OPENAI_API_KEY: ${VPS_OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${VPS_OPENAI_MODEL:-gpt-4.1-mini}
+      ASSISTANT_DAILY_REQUEST_LIMIT: ${VPS_ASSISTANT_DAILY_REQUEST_LIMIT:-100}
+      ASSISTANT_MINUTE_REQUEST_LIMIT: ${VPS_ASSISTANT_MINUTE_REQUEST_LIMIT:-6}
+      TELEGRAM_ENABLED: ${VPS_TELEGRAM_ENABLED:-false}
+      TELEGRAM_BOT_TOKEN: ${VPS_TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${VPS_TELEGRAM_BOT_USERNAME:-}
+      ASSISTANT_BASE_URL: ${VPS_ASSISTANT_BASE_URL:-http://187.77.229.205:8090}
+      ASSISTANT_ESCALATION_MINUTES: ${VPS_ASSISTANT_ESCALATION_MINUTES:-15}
+      ASSISTANT_SUMMARY_HOUR: ${VPS_ASSISTANT_SUMMARY_HOUR:-8}
+    healthcheck:
+      test: ["CMD", "node", "--import", "tsx", "src/assistant/health.ts"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
 volumes:
   richards_vps_pgdata:
   richards_vps_mqtt:

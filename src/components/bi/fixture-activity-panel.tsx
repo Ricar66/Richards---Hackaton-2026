@@ -56,8 +56,15 @@ export function FixtureActivityPanel({ siteId, deviceId }: { siteId: string | nu
   const [requesting, setRequesting] = useState(false);
   const [inspectionError, setInspectionError] = useState("");
   const [inspectionId, setInspectionId] = useState("");
+  // Filtro novo zera a seleção DURANTE a renderização (padrão do React para "ajustar estado quando a prop muda"),
+  // não dentro do efeito: setState síncrono no efeito provoca renderização em cascata (react-hooks/set-state-in-effect).
+  const filterKey = `${siteId ?? ""}|${deviceId ?? ""}`;
+  const [shownFilter, setShownFilter] = useState(filterKey);
+  if (shownFilter !== filterKey) {
+    setShownFilter(filterKey); setSelectedId(""); setDedicated(false); setExpectedUse(false);
+    setInspectionError(""); setInspectionId(""); setState("loading");
+  }
   useEffect(() => {
-    setSelectedId(""); setDedicated(false); setExpectedUse(false); setInspectionError(""); setInspectionId("");
     let active = true;
     const ctrl = new AbortController();
     const params = new URLSearchParams();
@@ -75,7 +82,6 @@ export function FixtureActivityPanel({ siteId, deviceId }: { siteId: string | nu
         if (active && !ctrl.signal.aborted) { setState("error"); setItems([]); }
       }
     }
-    setState("loading");
     void refresh();
     const timer = window.setInterval(() => { void refresh(); }, 60_000);
     return () => { active = false; ctrl.abort(); window.clearInterval(timer); };

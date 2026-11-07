@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Activity, Bell, ChevronRight, Cpu, Droplets, ExternalLink, FileChartColumn, HeartHandshake, LayoutDashboard, Menu, MonitorPlay, TriangleAlert, X } from "lucide-react";
+import { Bot, Activity, Bell, ChevronRight, Cpu, Droplets, ExternalLink, FileChartColumn, HeartHandshake, LayoutDashboard, Menu, MonitorPlay, TriangleAlert, X } from "lucide-react";
 import { agoBR, hourBR, numBR } from "@/lib/format";
 import { notifyDataChanged, PREVIEW_OUTDATED, PREVIEW_REFRESH, useNow, usePrefersReducedMotion } from "./hooks";
 import { useLiveEvent, useLiveStream, useNewOccurrence, type LiveView } from "./live-stream";
@@ -17,6 +17,7 @@ const NAV = [
   { href: "/doacoes", label: "Doações & impacto", Icon: HeartHandshake },
   { href: "/relatorios", label: "Relatórios", Icon: FileChartColumn },
   { href: "/dispositivos", label: "Dispositivos IoT", Icon: Cpu },
+  { href: "/assistente", label: "RICHARDS Assist", Icon: Bot },
 ] as const;
 /** Parâmetros que não são filtro (não viajam entre telas nem vão para a API). */
 const NON_FILTER = ["oc"];

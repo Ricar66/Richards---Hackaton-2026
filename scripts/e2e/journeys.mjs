@@ -179,11 +179,18 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     check("B1 lote novo entra como verificação pendente", await page.waitForFunction(() => document.querySelector(".board-col.pending_review")?.innerText.includes("Pães da padaria"), { timeout: 15000 }).then(() => true, () => false));
     await page.evaluate(() => [...document.querySelectorAll(".board-col.pending_review .batch button")].find(b => b.innerText.includes("Pães da padaria")).click());
     await page.waitForSelector("#don-who");
-    const blocked = await page.evaluate(() => [...document.querySelectorAll(".drawer button")].find(b => b.innerText.includes("Registrar verificação")).disabled);
+    const verifyDisabled = () => page.evaluate(() => [...document.querySelectorAll(".drawer button")].find(b => b.innerText.includes("Registrar verificação")).disabled);
+    const blocked = await verifyDisabled();
+    // Triagem estruturada (07/11): origem do alimento + responsável com cargo/habilitação + checklist completo.
     for (const cb of await page.$$(".checks input")) await cb.click();
-    await page.type("#don-who", "Paula Mendes, nutricionista");
+    await page.type("#don-who", "Paula Mendes");
+    await page.type("#don-role", "Nutricionista, CRN informado no registro");
+    await page.select("#don-origin", "PLATE_LEFTOVERS");
+    const unsafeBlocked = await verifyDisabled();
+    await page.select("#don-origin", "WHOLE_PRODUCE");
     await clickButton(".drawer", "Registrar verificação");
-    check("B2 verificação exige checklist + nome (botão bloqueado antes) e libera o lote", blocked && await waitText("Reservar para uma instituição"));
+    check("B2 triagem exige origem segura, responsável com cargo e checklist (bloqueado antes e com restos de prato) e libera o lote",
+      blocked && unsafeBlocked && await waitText("Reservar para uma instituição"), `antes=${blocked} restos de prato=${unsafeBlocked}`);
     await page.waitForFunction(() => document.querySelectorAll("#don-rec option").length > 1, { timeout: 10000 });
     const institutions = await page.$$eval("#don-rec option", os => os.length - 1);
     await page.select("#don-rec", await page.$$eval("#don-rec option", os => os[os.length - 1].value));

@@ -132,6 +132,27 @@ Mitigações: a senha é própria e aleatória, a ACL é por usuário e não há
 
 **Desligar só o broker, sem apagar dados:** `VPS_MQTT_BIND_ADDR=127.0.0.1` no Coolify e Redeploy (a 1883 sai da internet). Para tirar de vez, volte o compose ao commit anterior na branch de deploy e faça Redeploy.
 
+## RICHARDS Assist na VPS (07/11; autorizado pelo Ricardo: HTTP com limite)
+
+O assistente (PR #6, `docs/assistente/`) roda no site e no serviço `richards-assistente` (worker do Telegram por polling, sem porta exposta). Desligado por padrão: só liga com as variáveis do Coolify.
+
+| Variável (Coolify) | Valor |
+|---|---|
+| `VPS_ASSISTANT_ENABLED`, `VPS_TELEGRAM_ENABLED` | `true` |
+| `VPS_OPENAI_API_KEY` | chave do projeto Prospector/Iris (decisão do Ricardo); o custo cai nesse projeto |
+| `VPS_OPENAI_MODEL` | `gpt-4.1-mini` |
+| `VPS_ASSISTANT_DAILY_REQUEST_LIMIT` / `..._MINUTE_...` | `100` / `6` |
+| `VPS_TELEGRAM_BOT_TOKEN`, `VPS_TELEGRAM_BOT_USERNAME` | bot `@Richardshack_bot` |
+| `VPS_ASSISTANT_BASE_URL` | `http://187.77.229.205:8090` |
+
+Segredos só em `credenciais.env` (600) e `.env.vps.local`; enviados ao Coolify pelo `11-assistente.sh` sem passar pelo terminal.
+
+**Riscos aceitos até 08/11:**
+- o BI é HTTP: quem capturar a senha do operador pode usar o assistente até o limite diário (100 perguntas, até 3 chamadas cada). Configure também um teto de gasto no painel da OpenAI;
+- o token do bot foi colado num chat em 07/11: trocar (`/revoke` no @BotFather) depois do evento e atualizar `VPS_TELEGRAM_BOT_TOKEN`.
+
+**Desligar sem apagar nada:** `VPS_ASSISTANT_ENABLED=false` e `VPS_TELEGRAM_ENABLED=false` no Coolify e Redeploy (o worker sai e fica parado; a migração aditiva continua aplicada).
+
 ## Como foi criado (sem token da API)
 
 A sessão de 06/11 não criou token da API do Coolify. O recurso foi criado pelos modelos internos do Coolify, executados com `php` dentro do contêiner `coolify`, repetindo o caminho de `ApplicationsController::create_application` para um repositório público:

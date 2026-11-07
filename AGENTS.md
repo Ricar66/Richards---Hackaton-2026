@@ -55,3 +55,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## RICHARDS Assist (PR de 07/11)
+
+Leia `docs/assistente/HANDOFF_CLAUDE.md` antes de alterar o assistente. `/assistente` e `/api/assistant/*` são privados; nunca liberar para o QR/plateia. Ferramentas OpenAI são somente leitura; não oferecer shell/SQL/HTTP arbitrário ou mutadores de operação. Notificações são determinísticas e independentes da IA, com fila persistida e entrega pelo menos uma vez. Credenciais ficam somente no ambiente. Nenhuma validação de API externa/hardware/deploy foi feita; Claude conclui a ativação com Ricardo.

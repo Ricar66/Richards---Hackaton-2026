@@ -363,6 +363,7 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
   - Alerta REAL de temperatura das 06:53 (DHT11 da bancada do Victor, fora do evento) descartado pela API com nota (`operador:equipe`), para o alerta ao vivo poder abrir.
   - Ocorrência SIMULATED de fluxo do potenciômetro encerrada pela preparação de palco (`preparacao:root`).
   - `palco:checar` na VPS: só falta um lote RESERVED para confirmar a entrega ao vivo (pesagem na balança → verificar → reservar, pela tela).
+- **RICHARDS Assist (PR #6) na VPS (07/11):** IA de explicação no BI (`/assistente`) e alertas/conversa no Telegram (`@Richardshack_bot`), por HTTP com limite de 100 perguntas/dia (risco aceito). Chave OpenAI do projeto Prospector/Iris. Ver `docs/DEPLOY_VPS_TETRIA.md`, "RICHARDS Assist na VPS". Depois do evento: trocar o token do bot (vazou num chat) e conferir o gasto na OpenAI.
 - **Ligar o ESP32 do Victor antes do pitch:** desde 07:21 de 07/11 não chega leitura; sem ele, Sala, BI e `/plateia` mostram "sem leitura".
 - **Revisar a fala e os slides** (`presentation/`): eles ainda citam o histórico SIMULATED do seed ("carimbo roxo no histórico"). Desde 06/11 o histórico é só do sensor.
 - Ensaiar uma vez a contingência `pnpm bancada --cenario palco --inicio-em 5` com o BI e a Sala abertos. Não use `--sensores VAZAO` com a ponte `pnpm mqtt` ligada.
@@ -441,3 +442,11 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 Auditoria e limitações em `docs/entrega/AUDITORIA_2026-11-06.md`. Gerador com validação de PPTX de 10 slides, evidências obrigatórias no modo final, hash externo e verificador de extração. Pitch alinhado às 10 imagens e quatro participantes. Sala com controles visíveis e modo 2D/3D efetivo. Testes novos em `tests/test_entrega.py` e `tests/stage-controls.test.ts`. Firmware/diagrama/evidências físicos seguem pendentes. main e VPS preservadas; pacote desta revisão é PREVIA.
 
 Em 07/11, a documentação `docs/ARQUITETURA.md` foi reconciliada com a implementação atual (BI nativo, MQTT, transação de ingestão, SSE e fallback SVG), removendo descrições da versão inicial que já não se aplicavam. Sem alteração de contratos, migrations ou infraestrutura.
+
+## 07/11/2026 — RICHARDS Assist + Telegram (PR para develop)
+
+Pedido do Ricardo: implementar assistente com OpenAI e monitor/Telegram, abrir PR e deixar handoff para Claude concluir a ativação. Branch temporária de revisão `feat/richards-assist-telegram`, alvo develop; main e VPS preservadas. Ver `docs/assistente/README.md` e `HANDOFF_CLAUDE.md` antes de continuar.
+
+Implementados: página privada `/assistente`, API de chat com ferramentas somente leitura, cotas persistidas, vinculação Telegram por código temporário de uso único, preferências/stop, fila com chave única/lease/retry, inbox com offset persistido e worker contínuo opcional. OpenAI/Telegram reais NÃO foram chamados com credenciais. Flags ficam false por padrão. Migration aditiva de seis tabelas; aplicada apenas em Postgres 18.6 temporário de teste, nunca no banco real.
+
+Validação após incorporar develop até `bd7bca15ac102d81da49a2c099ded883ddcd38f3`: 136 unitários, 109 integração, typecheck/lint/build e fumaça HTTP local passaram. Não validado: transporte externo real, Docker/PG16, navegador interativo, hardware, projetor e deploy. As atualizações concorrentes de balança, plateia, estimativa de custo e triagem sanitária foram preservadas. Este PR não altera detector/fixtures físicos nem stream público. Conferir HEAD remoto antes de continuar; outras sessões também estão publicando.
