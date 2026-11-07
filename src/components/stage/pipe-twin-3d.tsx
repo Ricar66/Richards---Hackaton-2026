@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { twinCapability, type TwinProbe, type TwinReason } from "./stage-logic";
+import { twinCapability, type TwinReason } from "./stage-logic";
 import { createPipeScene, type PipeScene, type SceneInput, type SceneStats } from "./three/pipe-scene";
+import { probeWebGL } from "./three/webgl-probe";
 
 export type Twin3DFail = Exclude<TwinReason, "off" | "reduced">;
 export type Twin3DProps = SceneInput & {
@@ -9,25 +10,6 @@ export type Twin3DProps = SceneInput & {
   onFail(reason: Twin3DFail): void;
   onStats?(s: SceneStats): void;
 };
-
-/**
- * Sonda do WebGL antes de criar a cena: webgl2 existe? Com failIfMajorPerformanceCaveat ele sai (recusa WARP)?
- * E o nome do renderizador (SwiftShader/llvmpipe = software). Os contextos de teste são descartados na hora.
- */
-function probeWebGL(): TwinProbe {
-  try {
-    const a = document.createElement("canvas").getContext("webgl2");
-    if (!a) return { webgl2: false, caveatOk: false, renderer: null };
-    const info = a.getExtension("WEBGL_debug_renderer_info");
-    const renderer = String(info ? a.getParameter(info.UNMASKED_RENDERER_WEBGL) : a.getParameter(a.RENDERER));
-    a.getExtension("WEBGL_lose_context")?.loseContext();
-    const b = document.createElement("canvas").getContext("webgl2", { failIfMajorPerformanceCaveat: true });
-    b?.getExtension("WEBGL_lose_context")?.loseContext();
-    return { webgl2: true, caveatOk: !!b, renderer };
-  } catch {
-    return { webgl2: false, caveatOk: false, renderer: null };
-  }
-}
 
 /**
  * Cano 3D por cima do SVG (carregado só com a chave ligada, por next/dynamic com ssr:false). Os objetos do three
