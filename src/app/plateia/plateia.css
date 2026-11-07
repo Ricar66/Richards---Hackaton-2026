@@ -1,0 +1,35 @@
+.audience{min-height:100vh;position:relative;overflow:hidden;background:#061316;color:#eafff8;font-family:var(--font-ui,system-ui,sans-serif);isolation:isolate}
+.aud-glow{position:absolute;inset:-5% -35% auto -35%;height:640px;background:radial-gradient(ellipse at 66% 32%,rgba(47,179,143,.18),transparent 55%),radial-gradient(ellipse at 22% 24%,rgba(63,122,144,.16),transparent 48%);pointer-events:none;z-index:-1}
+.aud-shell{max-width:1120px;margin:0 auto;padding:24px clamp(18px,4vw,54px) 36px}
+.aud-header,.aud-heading,.aud-tile-top,.aud-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.aud-header{border-bottom:1px solid #26423f;padding:0 0 22px}.aud-header>small{color:#8baaa9;letter-spacing:.14em;font-size:10px;font-weight:700;text-align:right}
+.aud-brand{display:flex;align-items:center;gap:12px;letter-spacing:.12em}.aud-brand>span{font-size:24px;font-weight:900;background:#63ebbf;color:#08382c;border-radius:12px;width:44px;height:44px;display:grid;place-items:center}
+.aud-brand b{display:block;font-size:19px;line-height:1;font-weight:850}.aud-brand small{display:block;color:#91c7bb;font-size:9px;letter-spacing:.28em;margin-top:6px}
+.aud-hero{padding:52px 0 35px;max-width:840px}.aud-eyebrow{display:inline-flex;align-items:center;gap:9px;color:#79e7bb;letter-spacing:.14em;font-size:11px;font-weight:750}
+.aud-eyebrow i{display:block;width:8px;height:8px;background:#63ebbf;border-radius:100%;box-shadow:0 0 18px #63ebbf}
+.aud-hero h1{margin:15px 0;font-family:var(--font-head,system-ui);font-size:clamp(32px,6.2vw,68px);line-height:1.1;letter-spacing:-.052em;font-weight:850;max-width:840px}
+.aud-hero h1 em{font-style:normal;background:linear-gradient(120deg,#81efc7,#83c5ff);background-clip:text;color:transparent}
+.aud-hero>p{max-width:600px;color:#aac2c0;font-size:clamp(14px,2vw,18px);line-height:1.65;margin:0 0 28px}
+.aud-connection{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid #37534a;background:#10271f;border-radius:12px;padding:12px 15px;width:fit-content;max-width:100%}
+.aud-connection strong{font-size:12px}.aud-connection span{font-size:11px;color:#adc4bf}.aud-connection.offline{border-color:#67553d;background:#282115}
+.aud-connection>i{width:9px;height:9px;border-radius:100%;background:#63eab8;box-shadow:0 0 0 4px #63eab81a;flex:none}
+.aud-connection.online>i{animation:aud-beat 2s infinite}.aud-connection.offline>i{background:#f3bf78;box-shadow:none}
+.aud-heading{margin:15px 0}.aud-heading h2{font-size:20px;letter-spacing:-.02em}.aud-heading span{font-size:10px;color:#82cdb4;letter-spacing:.15em}
+.aud-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.aud-tile{position:relative;background:linear-gradient(155deg,#13282d,#0c1b21);border:1px solid #325354;border-radius:18px;padding:19px 16px;min-height:205px;display:flex;flex-direction:column;box-shadow:0 15px 28px #0002}
+.aud-tile:before{content:"";position:absolute;width:54px;height:3px;top:0;left:17px;background:#68e2b5;border-radius:0 0 4px 4px}
+.aud-tile.water:before{background:#7cbdff}.aud-tile.heat:before{background:#ffba83}.aud-tile.humidity:before{background:#b4b6ff}
+.aud-tile-top{align-items:flex-start;flex-wrap:wrap;gap:8px}.aud-tile-top>span:first-child{font-size:12px;color:#b7d0cd;font-weight:650}
+.aud-src{font-size:8px;letter-spacing:.08em;font-weight:800;padding:4px 6px;border-radius:4px;white-space:nowrap;border:1px solid #52615f;color:#c6d3d1}
+.aud-src.physical{border-color:#38755f;background:#184134;color:#9ff0c8}.aud-src.simulated{border-color:#8a67b1;background:#2c2143;color:#d4baff}
+.aud-val{display:flex;align-items:baseline;gap:5px;margin-top:25px;min-width:0}.aud-val strong{font-size:clamp(34px,4.7vw,51px);font-weight:800;line-height:1.1;letter-spacing:-.045em;font-variant-numeric:tabular-nums}.aud-val>span{font-size:15px;color:#a4c0be}
+.aud-detail{margin-top:auto;padding-top:19px;color:#799ca0;font-size:10px;overflow-wrap:anywhere}.aud-warning,.aud-rule{font-size:10px;color:#ffcc94;margin:8px 0 0;line-height:1.4}
+.aud-impact{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;background:linear-gradient(105deg,#15332d,#0c2025);border:1px solid #305a50;border-radius:20px;padding:24px;margin-top:24px}
+.aud-impact small,.aud-lot>small{font-size:10px;letter-spacing:.14em;color:#85e5b6;font-weight:750}.aud-impact h2{font-size:24px;max-width:480px;margin:10px 0;line-height:1.2}.aud-impact p{font-size:13px;line-height:1.6;color:#accbc3;max-width:500px;margin:0}
+.aud-lot{display:flex;flex-direction:column;border-left:1px solid #315d56;padding:6px 0 5px 24px;gap:8px}.aud-lot b{font-size:34px;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.aud-lot span{font-size:11px;color:#a6c5bb}.aud-lot strong{font-size:10px;color:#94edc4;letter-spacing:.1em}
+.aud-footer{align-items:flex-start;border-top:1px solid #25413f;margin-top:34px;padding-top:18px;color:#72989a;font-size:10px;line-height:1.5}.aud-footer span:last-child{max-width:430px;text-align:right}
+@keyframes aud-beat{0%,100%{box-shadow:0 0 0 2px #63eab81c}50%{box-shadow:0 0 0 8px #63eab800}}
+@media(max-width:850px){.aud-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.aud-tile{min-height:170px}.aud-impact{grid-template-columns:1fr}.aud-lot{border-left:0;border-top:1px solid #315d56;padding:18px 0 0}}
+@media(max-width:470px){.aud-shell{padding:17px 14px 26px}.aud-header{padding-bottom:14px}.aud-header>small{max-width:110px;line-height:1.4;font-size:9px}.aud-brand b{font-size:16px}.aud-brand>span{width:37px;height:37px;font-size:21px}.aud-hero{padding:40px 0 27px}.aud-hero h1{font-size:clamp(32px,9vw,47px)}.aud-connection{width:100%;gap:8px}.aud-connection span{width:100%;padding-left:18px}.aud-grid{gap:9px}.aud-tile{padding:14px 10px;min-height:166px;border-radius:13px}.aud-tile-top>span:first-child{font-size:11px}.aud-val strong{font-size:clamp(30px,8vw,42px)}.aud-val>span{font-size:12px}.aud-val{margin-top:20px}.aud-detail{font-size:9px}.aud-impact{padding:18px}.aud-impact h2{font-size:22px}.aud-footer{display:block}.aud-footer span{display:block;margin-top:7px}.aud-footer span:last-child{text-align:left}}
+@media(prefers-reduced-motion:reduce){.aud-connection.online>i{animation:none}}
