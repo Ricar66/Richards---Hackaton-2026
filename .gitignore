@@ -19,3 +19,7 @@ __pycache__/
 
 # Carta morta da ponte MQTT (mensagens não gravadas depois do prazo)
 .mqtt-dead-letter.ndjson
+
+# Pacotes locais gerados para avaliacao (fora do Git)
+dist/
+entrega-evidencias/
