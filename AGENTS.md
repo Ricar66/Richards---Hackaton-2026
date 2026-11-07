@@ -59,3 +59,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## RICHARDS Assist (PR de 07/11)
 
 Leia `docs/assistente/HANDOFF_CLAUDE.md` antes de alterar o assistente. `/assistente` e `/api/assistant/*` são privados; nunca liberar para o QR/plateia. Ferramentas OpenAI são somente leitura; não oferecer shell/SQL/HTTP arbitrário ou mutadores de operação. Notificações são determinísticas e independentes da IA, com fila persistida e entrega pelo menos uma vez. Credenciais ficam somente no ambiente. Nenhuma validação de API externa/hardware/deploy foi feita; Claude conclui a ativação com Ricardo.
+
+## Revisão de 3D/mobile (PR 07/11)
+
+Leia `docs/entrega/3D_MOBILE_HANDOFF_2026-11-07.md` antes de continuar. A Sala tenta 3D automaticamente com fallback, amplia sem duplicar canvas e muda para cartões com rolagem no celular. Shader nunca usa tempo independente para inventar fluxo. Aceite visual/browser/aparelhos/projetor ainda NÃO executado; não anunciar responsividade universal ou FPS com base no build. Preservar `?3d=0`, SVG acessível, movimento reduzido e orçamento adaptativo. Não publicar main/VPS automaticamente.

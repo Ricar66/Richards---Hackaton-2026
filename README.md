@@ -133,8 +133,9 @@ flowchart LR
 - **Tempo real sem peça nova.** O `NOTIFY` sai dentro da transação da gravação e só chega no COMMIT; a tela refaz a consulta ao receber o evento, e o navegador nunca soma número. Sem stream, ela volta à consulta periódica e diz isso na pílula de status.
 - **Ponte MQTT.** É só um adaptador: passa pelos mesmos casos de uso do HTTP. Confirma ao broker na chegada e grava por uma fila com retentativa e prazo de relógio. O que não grava vai para a carta morta, nunca some em silêncio. As garantias e o risco residual estão em `docs/CONTRATO_IOT.md`.
 - **Gêmeo do cano.**
-  - Por padrão é uma representação esquemática em SVG; o 3D em three.js é opcional, carregado sob demanda (137 KB gzip).
+  - A Sala tenta o 3D em three.js após carregar no cliente, respeitando a opção gravada e `?3d=0`. O SVG permanece montado como representação acessível e fallback; o BI não carrega a cena.
   - Qualquer falha volta ao SVG na hora: sem WebGL2, renderização por software, perda de contexto ou orçamento de quadro.
+  - **Ampliar gêmeo** abre inspeção com o mesmo canvas, dois enquadramentos e dados em texto. A Sala passa a cartões com rolagem no celular; controles de toque e redução de movimento continuam disponíveis. [Revisão 3D/mobile e ensaios pendentes](docs/entrega/3D_MOBILE_HANDOFF_2026-11-07.md).
   - A velocidade da água vem da vazão medida.
 
 ### Stack
