@@ -683,3 +683,30 @@ select option { background: var(--surface); color: var(--ink); }
 .bi-sensor-cards article p{margin:8px 0 0;font-size:10px;color:var(--warn)}
 .bi-sensor-note{color:var(--muted);font-size:11px;margin:14px 0 0}
 @media(max-width:640px){.bi-sensor-live{padding:15px}.bi-sensor-cards{grid-template-columns:1fr}.bi-sensor-cards article strong{font-size:34px}}
+
+
+/* -------- Auditoria escolar de pontos hidráulicos / 72h -------- */
+.fixture-panel { border-color: var(--line); }
+.fixture-intro { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+.fixture-intro span { display:flex; gap:8px; align-items:center; min-width:0; padding:10px 12px; border:1px solid var(--line-2); border-radius:10px; background:var(--surface-2); color:var(--ink-2); font-size:12.5px; }
+.fixture-intro svg { flex:none; color:var(--muted); }
+.fixture-controls { display:grid; grid-template-columns:minmax(220px,.8fr) minmax(280px,1.2fr); align-items:start; gap:18px; margin:10px 0 16px; }
+.fixture-select { display:flex; flex-direction:column; gap:7px; font-size:13px; font-weight:600; color:var(--ink-2); }
+.fixture-select select { width:100%; min-width:0; height:38px; padding:0 10px; border-radius:9px; border:1px solid var(--line); background:var(--surface-3); color:var(--ink); }
+.fixture-conditions { display:flex; flex-direction:column; gap:9px; padding:5px 0; }
+.fixture-conditions label { display:flex; align-items:flex-start; gap:9px; color:var(--ink-2); font-size:12.5px; line-height:1.5; cursor:pointer; }
+.fixture-conditions input { margin-top:3px; accent-color:var(--accent); }
+.fixture-result { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line-2); padding:16px 0; }
+.fixture-result strong { display:block; color:var(--ink); font-size:15px; }
+.fixture-result span:not(.tag) { color:var(--muted); font-size:12px; }
+.fixture-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.fixture-metrics > div { min-width:0; padding:14px; border:1px solid var(--line-2); border-radius:10px; background:var(--surface-2); }
+.fixture-metrics span,.fixture-metrics small { display:block; font-size:12px; color:var(--muted); line-height:1.45; }
+.fixture-metrics strong { display:block; margin:7px 0 4px; font-size:18px; font-weight:700; color:var(--ink); overflow-wrap:anywhere; }
+.fixture-warning,.fixture-hint,.fixture-method { margin:14px 0 0; padding:12px 14px; border-radius:9px; font-size:12.5px; line-height:1.6; }
+.fixture-warning { display:flex; align-items:flex-start; gap:10px; background:var(--warn-soft); border:1px solid var(--warn-line); color:var(--ink-2); }
+.fixture-warning svg { flex:none; color:var(--warn); margin-top:2px; }
+.fixture-hint { background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line-2); }
+.fixture-method { display:flex; align-items:center; flex-wrap:wrap; gap:6px; color:var(--muted); border-top:1px solid var(--line-2); border-radius:0; padding-left:0; padding-right:0; }
+@media(max-width:940px) { .fixture-intro { grid-template-columns:1fr; } .fixture-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:640px) { .fixture-controls { grid-template-columns:1fr; } .fixture-metrics { grid-template-columns:1fr; } }
