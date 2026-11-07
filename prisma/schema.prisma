@@ -89,6 +89,7 @@ model User {
   createdAt      DateTime @default(now())
 }
 model Site {
+  hydraulicMap HydraulicMap?
   id String @id @default(cuid())
   organizationId String
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -281,4 +282,14 @@ model TelegramInbox {
   leasedUntil DateTime?
   attempts Int @default(0)
   lastError String?
+}
+
+model HydraulicMap {
+ siteId String @id
+ site Site @relation(fields:[siteId], references:[id], onDelete:Restrict)
+ name String
+ layout Json
+ version Int @default(0)
+ updatedBy String
+ updatedAt DateTime @updatedAt
 }
