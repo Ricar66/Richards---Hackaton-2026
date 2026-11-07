@@ -234,10 +234,11 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     const stageState = stageOk ? await stage.$eval("[data-stage]", el => el.getAttribute("data-live-state")) : null;
     if (stageOk) { await wait(1500); await stage.screenshot({ path: shot("j-sala-ao-vivo.png") }); }
     check("S1 Sala ao vivo carrega (raiz [data-stage] com data-live-state)", stageOk, stageState ? `estado ${stageState}` : "");
-    // S2–S5: gêmeo (SVG padrão, 3D por chave com reserva), tecla 3 e tecla P. O SVG é sempre o elemento acessível.
+    // S2–S5: SVG explícito para rollback, 3D por chave com reserva, teclas 3 e P. O SVG segue acessível.
+    await stage.goto(base + "/ao-vivo?3d=0", { waitUntil: "load" });
     const twin = () => stage.$eval(".twin-slot", el => [el.getAttribute("data-twin-mode"), el.getAttribute("data-twin-reason")]).catch(() => [null, null]);
     const [m0, r0] = stageOk ? await twin() : [null, null];
-    check("S2 sem chave: gêmeo no SVG (motivo 'off'), sem canvas 3D", m0 === "svg" && r0 === "off" && !(await stage.$(".twin-canvas")), `modo=${m0} motivo=${r0}`);
+    check("S2 ?3d=0: rollback para SVG (motivo 'off'), sem canvas 3D", m0 === "svg" && r0 === "off" && !(await stage.$(".twin-canvas")), `modo=${m0} motivo=${r0}`);
     await stage.goto(base + "/ao-vivo?3d=1", { waitUntil: "load" }).catch(() => {});
     await stage.waitForFunction(() => { const el = document.querySelector(".twin-slot"); return el && (el.getAttribute("data-twin-mode") === "3d" || el.getAttribute("data-twin-reason")); }, { timeout: 15000 }).catch(() => {});
     const [m1, r1] = await twin();
