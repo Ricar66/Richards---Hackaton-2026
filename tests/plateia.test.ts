@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { audienceKey, publicReadings } from "../src/modules/audience/public-feed";
+import { publicReadings } from "../src/modules/audience/public-feed";
 import { stampLiveEvent, type LiveEventInput } from "../src/modules/realtime/domain/live-event";
 const at = "2026-11-07T11:20:00.000Z";
 test("plateia recebe apenas campos explícitos da vazão e preserva SIMULATED", () => {
@@ -17,8 +17,8 @@ test("temperatura e balança são eventos públicos distintos com origem indepen
     scale: { kg: 1.62, source: "SIMULATED", progress: { phase: "stabilizing", minKg: 1.5, stableSeconds: 3, requiredSeconds: 6 } },
     timing: { receivedAt: at, emittedAt: at } };
   const r = publicReadings(stampLiveEvent(e));
-  assert.deepEqual(r.map(audienceKey), ["environment:HORT-01", "scale:HORT-01"]);
-  assert.deepEqual(r.map(v => v.source), ["DEVICE", "SIMULATED"]);
+  assert.deepEqual(r,[],"grandezas retiradas não são publicadas");
+
   assert.ok(!JSON.stringify(r).includes("priv"));
 });
 test("atores, nomes e notas privadas NUNCA são encaminhados", () => {
@@ -27,5 +27,5 @@ test("atores, nomes e notas privadas NUNCA são encaminhados", () => {
   const manual: LiveEventInput = { type: "donation.created", orgId: "org", id: "id", kg: 2, status: "PENDING_REVIEW", description: "Descrição privada", origin: "manual", source: "MANUAL" };
   assert.deepEqual(publicReadings(stampLiveEvent(manual)), []);
   const scale: LiveEventInput = { type: "donation.created", orgId: "org", id: "id-secreto", kg: 1.5, status: "PENDING_REVIEW", description: "Privado", origin: "scale", deviceCode: "HORT-01", source: "DEVICE" };
-  assert.deepEqual(publicReadings(stampLiveEvent(scale, new Date(at))), [{ kind: "lot", deviceCode: "HORT-01", at, kg: 1.5, source: "DEVICE" }]);
+  assert.deepEqual(publicReadings(stampLiveEvent(scale, new Date(at))), []);
 });

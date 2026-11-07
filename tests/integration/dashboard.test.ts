@@ -70,11 +70,7 @@ test("T43 kg entregues contam só DELIVERED recebido no período; disponível é
     { organizationId: DEMO_ORG_ID, source: "MANUAL", description: "pendente", weightKg: 9, status: "PENDING_REVIEW" },
   ] });
   const d = await getDashboard(parseAnalyticsFilter({ range: "7d" }));
-  assert.equal(d.kpis.deliveredKg, 5); assert.equal(d.kpis.deliveredCount, 1);
-  assert.equal(d.kpis.availableKg, 5, "AVAILABLE + RESERVED, fora dos entregues");
-  assert.equal(d.kpis.pendingReview, 1);
-  assert.deepEqual(d.donations.pipeline.map(p => [p.status, p.count]), [["PENDING_REVIEW", 1], ["AVAILABLE", 1], ["RESERVED", 1], ["DELIVERED", 1], ["CANCELLED", 0]]);
-  assert.equal((await getDashboard(parseAnalyticsFilter({ range: "30d" }))).kpis.deliveredKg, 55);
+  assert.equal(d.kpis.deliveredKg,0);assert.equal(d.kpis.availableKg,0);assert.equal(d.kpis.pendingReview,0);assert.deepEqual(d.donations.items,[]);assert.equal(await db().donationBatch.count(),5,"histórico preservado e excluído do BI hídrico");
 });
 
 test("T44 ocorrência da regra vira marcador com janela, e o intervalo clicado devolve leituras + ligação registrada", async () => {

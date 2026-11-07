@@ -1,11 +1,10 @@
 // Cenários adversariais da revisão de 06/11 (corrida do anel, feed, autor, refresh e balança bloqueada).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pipeTone, publicActor, ringView, scaleView, settleRefresh, mergeFeed, lineFromEvent, lineFromAudit } from "../src/components/stage/stage-logic";
+import { pipeTone, publicActor, ringView, settleRefresh, mergeFeed, lineFromEvent, lineFromAudit } from "../src/components/stage/stage-logic";
 import { activeOccurrences, flowOccurrenceFor, focusSource, initModel, reduceStage, type StageModel } from "../src/components/stage/stage-model";
 import type { StageSnapshot } from "../src/modules/analytics/application/get-stage-snapshot";
 import type { LiveEvent, ReadingCreatedEvent } from "../src/modules/realtime/domain/live-event";
-import { ScaleSurplusDetector } from "../src/modules/monitoring/domain/scale-surplus-detector";
 
 const T0 = Date.parse("2026-11-06T14:00:00Z");
 const at = (s: number) => T0 + s * 1000;
@@ -95,23 +94,4 @@ test("feed: linha com origem nunca é rebaixada por linha sem origem", () => {
   const e = lineFromEvent({ v: 1, type: "donation.status", orgId: "o", emittedAt: iso(10), id: "L", kg: 6, from: "RESERVED", status: "DELIVERED" } as LiveEvent)!;
   assert.equal(mergeFeed(mergeFeed([], [a]), [e])[0].source, "SIMULATED");
   assert.equal(mergeFeed([], [e, a])[0].source, "SIMULATED", "mesmo lote, evento e auditoria no mesmo merge");
-});
-
-test("balança: pendente verificado no meio, carga mantida, depois esvazia e nova carga cria lote", () => {
-  const d = new ScaleSurplusDetector(5, 6);
-  const p = (s: number, kg: number) => { d.push({ at: new Date(at(s)), value: kg }); return d.progress().phase; };
-  p(0, 6.1); p(2, 6.1); p(4, 6.1);
-  const trig = d.push({ at: new Date(at(6)), value: 6.1 });
-  assert.equal(trig.trigger, true);
-  d.markBlocked("velho");
-  assert.equal(d.progress().phase, "blocked");
-  assert.equal(p(8, 6.1), "blocked");
-  assert.equal(p(10, 0), "idle");
-  p(12, 6.0); p(14, 6.0); p(16, 6.0);
-  assert.equal(d.push({ at: new Date(at(18)), value: 6.0 }).trigger, true, "rearma depois de esvaziar");
-  assert.equal(d.progress().phase, "triggered");
-  assert.equal(p(20, 6.0), "disarmed");
-  const v = scaleView({ deviceId: "d", deviceCode: "B", kg: 6.1, source: "DEVICE", channel: "mqtt", progress: { phase: "blocked", minKg: 5, stableSeconds: 6, requiredSeconds: 6, pendingLotId: "velho" }, at: at(8) }, { id: "velho", kg: 5.3, deviceCode: "B", source: "DEVICE", at: at(-600) }, at(9));
-  assert.match(`${v.label} ${v.sub}`, /já existe lote/, "pesagem bloqueada não diz que virou lote");
-  assert.doesNotMatch(`${v.label} ${v.sub}`, /lote criado|virou lote/);
 });

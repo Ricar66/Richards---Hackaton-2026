@@ -105,19 +105,8 @@ test("M3.4 prazo esgotado: carta morta com hora de chegada, conteúdo, motivo e 
   assert.deepEqual((await readings()).map(r => Number(r.flowLpm)), [0.5]);
 });
 
-test("M3.5 gravação PARCIAL: vazão gravada e temperatura falhando vão para a carta morta como PARCIAL, com bootId/sequence da vazão", async () => {
-  const { cfg, ingestion } = setup({ MQTT_RETRY_BUDGET_SECONDS: "2", MQTT_TEMP_SECONDS: "1", MQTT_SIMULATED_SENSORS: "" });
-  let clock = Date.now();
-  const process = createMessageProcessor(ingestion, cfg, { log: silent, now: () => clock, sleep: async ms => { clock += ms; } });
-  const base = Date.now() - 10_000;
-  await process(TOPIC, body({ dispositivo_id: "hortifruti_01", TEMP: 35 }), new Date(base));
-  await injectFailure("Occurrence");
-  assert.equal(await process(TOPIC, body({ dispositivo_id: "hortifruti_01", VAZAO: 0.2, TEMP: 36 }), new Date(base + 3000)), "dead-letter");
-  const line = deadLines(cfg).at(-1)!;
-  assert.ok(line.partial?.flow, "a vazão já tinha sido gravada");
-  assert.equal(typeof line.partial.flow.sequence, "number"); assert.ok(line.partial.flow.bootId);
-  assert.equal(line.partial.temperature, null, "a temperatura ficou de fora");
-  assert.equal((await readings()).length, 1, "a vazão gravada continua lá (não é desfeita)");
+test("M3.5 campos retirados não causam gravação parcial nem ocorrência",async()=>{
+ const {cfg,ingestion}=setup({MQTT_SIMULATED_SENSORS:""});const process=createMessageProcessor(ingestion,cfg,{log:silent});await injectFailure("Occurrence");try{assert.equal(await process(TOPIC,body({dispositivo_id:"hortifruti_01",VAZAO:.2,TEMP:40,PESO:50}),new Date()),"persisted");assert.equal((await readings()).length,1);assert.equal(await db().donationBatch.count(),0);}finally{await clearFailure();}
 });
 
 test("M3.6 erro permanente vai direto para a carta morta, sem esperar o prazo; erro de conexão continua transitório", async () => {

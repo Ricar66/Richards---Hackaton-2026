@@ -80,3 +80,8 @@ test("assistente e vinculação Telegram continuam protegidos; nunca são parte 
  for(const path of ["/assistente","/api/assistant/telegram","/api/assistant/chat"])
   assert.equal(proxy(req(path)).status,401);
 });
+
+test("mapa e APIs hidráulicas são privados e recusam escrita de outro site",()=>{
+ for(const path of["/mapa","/api/water-map"]){assert.equal(proxy(req(path,{headers:{"x-richards-actor":"operador:forjado"}})).status,401);}
+ const headers={authorization:basic("op","s3nha"),"content-type":"application/json",origin:"https://outro.example"};assert.equal(proxy(req("/api/water-map",{method:"PUT",headers})).status,403);
+});
