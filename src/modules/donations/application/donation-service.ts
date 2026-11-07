@@ -87,9 +87,10 @@ export class DonationService {
       await tx.auditEvent.create({ data: auditRecord({ organizationId: DEMO_ORG_ID, entity: "DonationBatch", entityId: id, action: next, actor, metadata: {
         from: old.status,
         verifiedBy: next === "AVAILABLE" ? details.verifiedBy ?? null : null,
-        ...(next === "AVAILABLE" ? { foodOrigin: details.foodOrigin, reviewerQualification: details.reviewerQualification,
-          sanitaryChecklist: { inspectionOk: details.inspectionOk, conservationOk: details.conservationOk,
-            validityOk: details.validityOk, transportOk: details.transportOk } } : {}),
+        ...(next === "AVAILABLE" ? { foodOrigin: details.foodOrigin ?? null,
+          reviewerQualification: details.reviewerQualification ?? null,
+          sanitaryChecklist: { inspectionOk: details.inspectionOk === true, conservationOk: details.conservationOk === true,
+            validityOk: details.validityOk === true, transportOk: details.transportOk === true } } : {}),
         recipientId: recipient?.id ?? null, recipientName: recipient?.name ?? null,
         receivedBy: next === "DELIVERED" ? details.receivedBy ?? null : null,
         reason: next === "CANCELLED" ? details.reason ?? null : null,
