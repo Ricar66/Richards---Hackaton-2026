@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { LiveSensorTiles } from "../live-sensors";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Clock3, Cpu, Download, Droplets, HeartHandshake, TriangleAlert, Zap } from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Cpu, Download, Droplets, HeartHandshake, ShieldAlert, TriangleAlert, Zap } from "lucide-react";
 import type { DashboardDTO, DashboardOccurrence } from "@/modules/analytics/domain/dashboard";
 import { agoBR, dateBR, durationBR, hourBR, numBR } from "@/lib/format";
 import { notifyDataChanged, useDashboard, useNow } from "../hooks";
@@ -154,6 +154,17 @@ export function ControlCenter({ initial }: { initial: DashboardDTO }) {
     </div>
 
     <LiveSensorTiles />
+    <Panel id="p-social-facilities" eyebrow="Aplicação em escolas, restaurantes e pequenos negócios"
+      title="Do desperdício invisível à manutenção e ao impacto social"
+      caption="Água monitorada, vistoria documentada e alimentos com destinação segura: um sistema, decisões verificáveis."
+      actions={<Link href="/monitoramento?source=DEVICE" className="link">Auditar uso e custo da água <ArrowRight size={15} /></Link>}>
+      <div className="fixture-intro">
+        <span><Droplets size={17} /> <b>Fluxo contínuo:</b> investigar desperdício e custo potencial</span>
+        <span><CalendarDays size={17} /> <b>72h sem fluxo:</b> avaliar uso esperado e abrir vistoria manual</span>
+        <span><HeartHandshake size={17} /> <b>Excedentes:</b> triagem humana antes da doação</span>
+      </div>
+      <p className="muted-text small"><ShieldAlert size={14} style={{ verticalAlign: "middle" }} /> Sem fluxo não comprova entupimento; sem comunicação não comprova ausência de uso. Os números de economia dependem de inspeção e comparação real antes/depois.</p>
+    </Panel>
     <div className="grid-main">
       <Panel id="p-volume" title="Volume observado por intervalo" className={`dim-${data.filter.bucket}`}
         caption="Clique num ponto para abrir as leituras daquele intervalo."
