@@ -142,7 +142,7 @@ def generate(args: argparse.Namespace) -> Path:
                 add(files, "01_APRESENTACAO/CHECKLIST_VICTOR_IOT.md", source.read(info))
             iot_copies = {
                 "docs/CONTRATO_IOT.md": "03_IOT_E_TESTES/CONTRATO_IOT.md",
-                "docs/entrega/REGISTRO_TESTE_FISICO.md": "03_IOT_E_TESTES/REGISTRO_TESTE_FISICO.md",
+                "docs/agua/REGISTRO_TESTE_FISICO.md": "03_IOT_E_TESTES/REGISTRO_TESTE_FISICO.md",
                 "iot/evidencias/README.md": "03_IOT_E_TESTES/GUIA_DE_EVIDENCIAS.md",
             }
             if info.filename in iot_copies:

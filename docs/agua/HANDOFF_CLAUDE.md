@@ -32,7 +32,9 @@ O ambiente anterior tornou-se indisponível e seus arquivos locais foram removid
 | pnpm typecheck / lint / build | PASSOU |
 | node --import tsx --test tests/*.test.ts | PASSOU: 132/132, sem ignorados |
 | node --import tsx --test --test-concurrency=1 tests/integration/*.test.ts, migrations aplicadas no banco isolado | PASSOU: 87/87, sem ignorados |
-| HTTP/Chromium/empacotamento da versão final | Em conclusão; consultar complemento abaixo e descrição do PR |
+| HTTP Next produção + banco isolado | PASSOU: autenticação, CSRF, corpo limitado, salvar/conflito, rotas 410, telemetria 202/repetição, origem, projeções e 8 páginas |
+| Python do gerador | PASSOU: 6/6 testes; extração/CRC/hashes também conferidos na prévia |
+| Chromium interativo | NÃO EXECUTADO: processo encerrou ao conectar (Target.setDiscoverTargets: Target closed); não aprovar layout/GPU/mobile por este ensaio |
 | PostgreSQL 16 / celular físico / hardware / projetor / API externa / carga de público | NÃO EXECUTADO nesta sessão |
 
 Os testes dedicados às jornadas retiradas foram arquivados; não contam como testes do produto atual. As regressões do novo escopo verificam inclusive a exclusão do histórico da projeção, sem removê-lo do banco. Fixture DEVICE em teste é um registro controlado de software, nunca evidência de hardware.
@@ -52,3 +54,9 @@ Os testes dedicados às jornadas retiradas foram arquivados; não contam como te
 ## Limites
 
 Basic Auth de laboratório e organização fixa do MVP; não é RBAC/multi-tenant completo. Planta não é projeto executivo, não simula pressão nem diagnostica vazamento/entupimento. Não fecha válvula, não comprova economia ou calibração. Vínculo cadastral não prova instalação física. Main/VPS continuam dependentes da aprovação de Ricardo.
+
+## Complemento de conclusão
+
+Checkpoint remoto foi salvo antes de tentar o navegador; árvores locais/remotas foram comparadas. Smoke HTTP foi executado com sucesso duas vezes, incluindo a chamada com --browser. Chromium não iniciou; não há screenshot/aceite visual válido dessa execução. A perspectiva SVG tem regressão SSR que confirma um único ponto animado com medidor e ausência de animação após 120 s, mas isso não aprova aparência ou responsividade física.
+
+Prévia foi extraída com verificador de caminhos, CRC e todos os hashes SHA256. Conferência de conteúdo inclui ausência de archive/, .git, ambientes privados, dependências instaladas, bancos locais e imagens antigas. O modelo de registro físico exportado e o template de credenciais MQTT também foram alinhados ao escopo hídrico. Valores de sensores nos testes são fixtures controladas; não comprovaram bancada física.

@@ -8,7 +8,7 @@ Conteúdo de cada sessão:
 
 | Arquivo/pasta | Conteúdo exigido |
 |---|---|
-| `registro.md` | Cópia preenchida de `docs/entrega/REGISTRO_TESTE_FISICO.md` |
+| `registro.md` | Cópia preenchida de `docs/agua/REGISTRO_TESTE_FISICO.md` |
 | `firmware.txt` | Caminho do firmware versionado, SHA do commit, versão Arduino/core/bibliotecas, resultado da compilação |
 | `ligacoes.pdf` ou imagem | Pinagem real, alimentação e proteção do GPIO, revisadas pelo montador |
 | `fotos/` | Visão geral e conexões legíveis, sem credenciais |

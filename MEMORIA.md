@@ -21,3 +21,9 @@ Base remota conferida: develop e main em `29cb92fc2ec7ba68d5b96eb4250bed4aafa52f
 O ambiente anterior ficou indisponível e seu diretório de trabalho foi removido na manutenção. A implementação foi reaplicada nesta sessão; os resultados daquela sessão são históricos. Consultar `docs/agua/HANDOFF_CLAUDE.md` para os resultados atuais e aceites pendentes. Não atribuir um teste da cópia anterior a uma revisão nova sem executá-lo de novo.
 
 Deck visual anterior arquivado. Roteiro hídrico alvo 5min40 existe; novo deck/PDF/PPTX ainda precisa ser produzido/aprovado. O gerador bloqueia FINAL sem esse aceite. Fotos, firmware MQTT do Victor, calibração, hardware, celular físico e projetor dependem de evidência própria.
+
+## Resultados reexecutados nesta reconstrução
+
+PASSOU: instalação frozen/generate, typecheck, lint, build, 132 unitários, 87 integrações em PG18.6 isolado (timezone America/Sao_Paulo), 6 testes Python e fumaça HTTP contra Next produção. Corpo limitado/401/CSRF/410, persistência/conflito, telemetria 202/duplicata, origem e projeções verificados.
+
+NÃO EXECUTADO/pendente: Chromium encerrou ao conectar (Target.setDiscoverTargets: Target closed); layout/GPU/mobile não aprovados. PG16, celular físico, hardware/calibração, projetor, carga de público e API externa permanecem sem aceite desta sessão. Prévia extraída com CRC/hashes e seleção de conteúdo; não é ZIP FINAL aprovado. Checkpoint remoto preservado antes da tentativa de browser; PR de revisão para develop, sem merge automático.

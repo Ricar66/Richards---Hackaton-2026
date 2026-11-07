@@ -22,6 +22,8 @@ class EntregaTest(unittest.TestCase):
             with self.subTest(p=p): self.assertFalse(g.allowed_name(p))
 
     def test_templates_and_official_pitch(self):
+        self.assertIsNone(g.route("archive/previous-scope/presentation/imagens/06_alimentos.webp"))
+        self.assertIsNotNone(g.route("docs/agua/ESCOPO.md"))
         self.assertTrue(g.allowed_name(".env.example"))
         self.assertTrue(g.allowed_name("iot/secrets.h.example"))
         self.assertIsNone(g.route("presentation/slides/01_capa.svg"))
