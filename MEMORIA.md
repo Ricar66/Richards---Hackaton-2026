@@ -450,3 +450,13 @@ Pedido do Ricardo: implementar assistente com OpenAI e monitor/Telegram, abrir P
 Implementados: página privada `/assistente`, API de chat com ferramentas somente leitura, cotas persistidas, vinculação Telegram por código temporário de uso único, preferências/stop, fila com chave única/lease/retry, inbox com offset persistido e worker contínuo opcional. OpenAI/Telegram reais NÃO foram chamados com credenciais. Flags ficam false por padrão. Migration aditiva de seis tabelas; aplicada apenas em Postgres 18.6 temporário de teste, nunca no banco real.
 
 Validação após incorporar develop até `bd7bca15ac102d81da49a2c099ded883ddcd38f3`: 136 unitários, 109 integração, typecheck/lint/build e fumaça HTTP local passaram. Não validado: transporte externo real, Docker/PG16, navegador interativo, hardware, projetor e deploy. As atualizações concorrentes de balança, plateia, estimativa de custo e triagem sanitária foram preservadas. Este PR não altera detector/fixtures físicos nem stream público. Conferir HEAD remoto antes de continuar; outras sessões também estão publicando.
+
+## 07/11/2026 — robô do RICHARDS Assist no BI (develop)
+
+Pedido do Ricardo ("um robozinho andando pela tela"). Componente `src/components/bi/assist-robot.tsx` (lógica pura em `assist-robot-state.ts`, testes em `tests/assist-robot.test.ts`), montado no `BiShell`; CSS `robo-*` no fim do `globals.css`.
+- Desenho SVG próprio, sem dependência nem arquivo externo. Anda no rodapé do BI só com `transform`; o percurso para antes do canto direito, onde ficam os avisos. Fica abaixo das gavetas (z 120) e dos avisos (z 200).
+- Clique abre um menu: **Conversar com o Assist** (`/assistente`), **Parar de andar** e **Esconder o robô** (WCAG 2.2.2). A escolha fica no navegador (`richards.robo`). Escondido, a barra lateral mostra "Mostrar o robô do Assist".
+- Para no hover/foco. "Reduzir movimento" deixa parado. Não aparece em `/assistente`, na Sala (`/ao-vivo`) nem na `/plateia`.
+- A fala usa só a contagem de ocorrências ativas do servidor (a mesma do sino). A antena fica laranja com ocorrência ativa e cinza com o servidor fora.
+- Armadilha: pausar com `animation-play-state` em `.robo-walker *` congelava a entrada do menu (`pop`) na opacidade 0. O menu existia mas ficava invisível. A pausa vale só para o passeio e para `.robo-figure`.
+- Ensaio no Chrome (servidor local, banco de teste): 18/18. Inclui p95 de 16,9 ms com o robô andando, menu visível, Esc devolve o foco, parado gravado, esconder/mostrar, celular 360 e 390 e 0 erros. Celular físico: NÃO EXECUTADO.

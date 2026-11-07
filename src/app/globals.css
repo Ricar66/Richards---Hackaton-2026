@@ -710,3 +710,60 @@ select option { background: var(--surface); color: var(--ink); }
 .fixture-method { display:flex; align-items:center; flex-wrap:wrap; gap:6px; color:var(--muted); border-top:1px solid var(--line-2); border-radius:0; padding-left:0; padding-right:0; }
 @media(max-width:940px) { .fixture-intro { grid-template-columns:1fr; } .fixture-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:640px) { .fixture-controls { grid-template-columns:1fr; } .fixture-metrics { grid-template-columns:1fr; } }
+
+/* Robô do RICHARDS Assist: atalho que anda no rodapé do BI. Só transform/opacity; abaixo das gavetas (120) e dos avisos (200).
+   O percurso evita o canto dos avisos (direita) e para no hover/foco; "parado", menu aberto e reduzir movimento congelam tudo. */
+.robo-strip { position: fixed; left: 252px; right: 0; bottom: 0; height: 80px; z-index: 50; pointer-events: none; container-type: inline-size;
+  --robo-end: max(24px, calc(100cqw - 440px)); }
+.main-col:has(.robo-strip) .page { padding-bottom: 104px; }
+.robo-walker { position: absolute; left: 0; bottom: 4px; pointer-events: auto; transform: translateX(24px); animation: robo-walk 64s linear infinite; }
+.robo-btn { display: block; width: 64px; height: 74px; padding: 4px; border: 0; border-radius: 14px; background: none; cursor: pointer; touch-action: manipulation; }
+.robo-btn:hover .robo-figure { filter: drop-shadow(0 0 10px rgba(99, 235, 191, .35)); }
+.robo-figure { display: block; overflow: visible; transform-origin: 50% 50%; animation: robo-face 64s linear infinite; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .45)); }
+.robo-figure .robo-shell { fill: #d6e9e4; stroke: #8fb3ab; stroke-width: 1; }
+.robo-figure .robo-body { fill: #bcd5ce; stroke: #8fb3ab; stroke-width: 1; }
+.robo-figure .robo-visor { fill: #0a171d; }
+.robo-figure .robo-dark, .robo-figure .robo-arm, .robo-figure .robo-leg { fill: #6f8f88; }
+.robo-figure .robo-line { stroke: #8fb3ab; stroke-width: 2; stroke-linecap: round; }
+.robo-figure .robo-eyes circle, .robo-figure .robo-drop { fill: var(--accent); }
+.robo-figure .robo-smile { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+.robo-figure .robo-light { fill: var(--accent); }
+.robo-walker[data-tone="warn"] .robo-light { fill: var(--warn); }
+.robo-walker[data-tone="off"] .robo-light { fill: var(--faint); }
+.robo-eyes { transform-box: fill-box; transform-origin: center; animation: robo-blink 5.2s ease-in-out infinite; }
+.robo-leg, .robo-arm { transform-box: fill-box; transform-origin: 50% 0; animation: robo-swing .9s ease-in-out infinite alternate; }
+.robo-leg-r, .robo-arm-l { animation-direction: alternate-reverse; }
+.robo-bubble { position: absolute; left: 4px; bottom: 80px; width: max-content; max-width: 230px; padding: 8px 11px; border-radius: 11px 11px 11px 3px;
+  background: var(--surface-2); border: 1px solid var(--accent-line); color: var(--ink); font-size: 12.5px; font-weight: 600; line-height: 1.4;
+  box-shadow: var(--shadow-pop); opacity: 0; transform: translateY(4px); transition: opacity .18s ease-out, transform .18s ease-out; pointer-events: none; }
+.robo-walker:hover .robo-bubble, .robo-walker:focus-within .robo-bubble { opacity: 1; transform: none; }
+.robo-strip[data-open] .robo-bubble { display: none; }
+.robo-menu { position: absolute; left: 0; bottom: 80px; min-width: 232px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); animation: pop .16s ease-out; }
+.robo-item { display: flex; align-items: center; width: 100%; min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: none;
+  color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.robo-item:hover:not(:disabled), .robo-item:focus-visible { background: var(--nav-2); color: var(--ink); }
+.robo-item.primary { color: var(--accent); }
+.robo-item:disabled { cursor: default; opacity: .6; }
+.robo-show { align-self: flex-start; padding: 0 4px; border: 0; background: none; font: inherit; font-size: 12px; color: var(--faint); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.robo-show:hover { color: var(--ink-2); }
+/* Parar: hover, foco, menu aberto ou escolha "parado". Congela o passeio e o desenho (pernas, braços, olhos), nunca o menu:
+   pausar a entrada do menu (pop) deixaria ele preso na opacidade 0. */
+.robo-walker:hover, .robo-walker:hover .robo-figure, .robo-walker:hover .robo-figure *,
+.robo-walker:focus-within, .robo-walker:focus-within .robo-figure, .robo-walker:focus-within .robo-figure *,
+.robo-strip[data-open] .robo-walker, .robo-strip[data-open] .robo-figure, .robo-strip[data-open] .robo-figure *,
+.robo-strip[data-robo="parado"] .robo-walker, .robo-strip[data-robo="parado"] .robo-figure, .robo-strip[data-robo="parado"] .robo-figure * { animation-play-state: paused; }
+@keyframes robo-walk { 0%, 3% { transform: translateX(24px); } 47%, 53% { transform: translateX(var(--robo-end)); } 97%, 100% { transform: translateX(24px); } }
+@keyframes robo-face { 0%, 49.9% { transform: scaleX(1); } 50%, 100% { transform: scaleX(-1); } }
+@keyframes robo-swing { from { transform: rotate(-13deg); } to { transform: rotate(13deg); } }
+@keyframes robo-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.12); } }
+@media (max-width: 960px) { .robo-strip { left: 0; --robo-end: max(16px, calc(100cqw - 300px)); } }
+/* Celular: menor, para cobrir menos dos cartões quando passa (o alvo de toque continua acima de 44 px). */
+@media (max-width: 640px) {
+  .robo-strip { height: 68px; }
+  .robo-btn { width: 50px; height: 60px; padding: 3px; }
+  .robo-figure { width: 44px; height: 52px; }
+  .robo-bubble, .robo-menu { bottom: 64px; }
+}
+@media (prefers-reduced-motion: reduce) { .robo-walker, .robo-walker * { animation: none !important; transition: none !important; } }
+@media print { .robo-strip { display: none !important; } }

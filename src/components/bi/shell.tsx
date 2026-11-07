@@ -9,6 +9,7 @@ import { useLiveEvent, useLiveStream, useNewOccurrence, type LiveView } from "./
 import { SEVERITY_COLOR, SOURCE_LABEL, STATUS_LABEL } from "./labels";
 import { OccurrenceDrawer } from "./occurrence-drawer";
 import { IntervalDrawer, type IntervalRequest } from "./interval-drawer";
+import { AssistRobot, RobotToggle } from "./assist-robot";
 
 const NAV = [
   { href: "/", label: "Centro de controle", Icon: LayoutDashboard },
@@ -230,6 +231,7 @@ export function BiShell({ children }: { children: React.ReactNode }) {
         <div className="side-foot">
           <SystemBlock onNavigate={() => setNavOpen(false)} />
           <a className="side-legacy" href="/intelligence">Abrir BI V3 legado (contingência)</a>
+          <RobotToggle />
           <small>Hackathon Senac RP · 2026</small>
         </div>
       </aside>
@@ -244,6 +246,7 @@ export function BiShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main id="conteudo" className="page" aria-busy={pending}>{children}</main>
+        <AssistRobot />
       </div>
     </div>
     {occurrenceId && <OccurrenceDrawer key={occurrenceId} id={occurrenceId} onClose={closeOccurrence} onChanged={() => { notifyDataChanged(); }} />}
