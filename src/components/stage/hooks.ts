@@ -34,7 +34,7 @@ function readTwinFlag(): boolean | null {
 }
 /**
  * Chave do gêmeo 3D. Prioridade: a tecla 3 nesta sessão > `?3d=1` / `?3d=0` > o que ficou gravado neste navegador >
- * DESLIGADO. A tecla grava a escolha (localStorage em try/catch: aba privada ou bloqueio não quebram a Sala).
+ * tentativa automática com cadeia de fallback. A tecla grava a escolha (localStorage em try/catch).
  */
 export function useTwinFlag(urlFlag: boolean | null): [boolean, () => void] {
   const stored = useSyncExternalStore(
@@ -43,7 +43,7 @@ export function useTwinFlag(urlFlag: boolean | null): [boolean, () => void] {
     () => null,
   );
   const [override, setOverride] = useState<boolean | null>(null);
-  const flag = override ?? urlFlag ?? stored ?? false;
+  const flag = override ?? urlFlag ?? stored ?? true;
   const toggle = () => {
     const next = !flag;
     setOverride(next);

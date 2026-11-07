@@ -120,6 +120,35 @@
 .stage .twin figcaption { align-items: center; justify-content: flex-end; }
 .stage .twin-note { position: absolute; left: 0; top: 0; color: var(--label); font-size: calc(var(--u) * 1.7); }
 .stage .twin-tag { display: inline-flex; align-items: center; gap: calc(var(--u) * .8); color: var(--ink); white-space: nowrap; min-width: 0; }
+.stage .twin-tools { position: absolute; z-index: 4; right: 0; top: 24px; }
+.stage .twin-tool-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.stage .twin-tools button { min-height: 36px; padding: 6px 10px; border: 1px solid #42616c; border-radius: 7px; background: #132a33; color: var(--ink); font: 600 12px var(--font-body), sans-serif; cursor: pointer; }
+.stage .twin-tools button:hover { background: #203e48; }
+.stage .twin-tools button[aria-pressed="true"] { border-color: var(--data); color: var(--data); }
+.stage .twin-tools button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.stage .twin-tools button:disabled { opacity: .6; cursor: default; }
+/* Ampliar reaproveita a cena, sem criar um segundo contexto WebGL. O fundo continua sem animação. */
+.stage .twin-slot[data-expanded] { position: fixed; z-index: 30; inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  display: grid; grid-template: auto minmax(0, 1fr) auto auto / minmax(0, 1fr); gap: 12px; padding: clamp(14px, 2vw, 32px); border: 1px solid #48636e; border-radius: 16px; outline: none;
+  background: radial-gradient(ellipse at 52% 44%, #183842 0, #0d2028 53%, #09171e 100%); box-shadow: 0 0 0 100vmax rgb(3 10 14 / .85); }
+.stage .twin-slot[data-expanded] > .twin-tools { position: static; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.stage .twin-inspector-title { display: grid; gap: 5px; }
+.stage .twin-inspector-title span { font: 600 12px var(--mono); letter-spacing: .1em; color: var(--label); }
+.stage .twin-inspector-title strong { font: 700 clamp(18px, 2vw, 28px) var(--font-body), sans-serif; }
+.stage .twin-slot[data-expanded] .twin-tools button { min-height: 44px; font-size: 14px; }
+.stage .twin-slot[data-expanded] > .pipe, .stage .twin-slot[data-expanded] > .twin-canvas { grid-area: 2 / 1; width: 100%; height: 100%; min-height: 0; }
+.stage .twin-slot[data-expanded] > .twin-canvas { position: relative; inset: auto; }
+.stage .twin-inspector-data { grid-area: 3 / 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding-top: 16px; border-top: 1px solid #2b4752; }
+.stage .twin-inspector-reading { display: grid; gap: 6px; color: var(--label); font-size: 14px; }
+.stage .twin-inspector-reading strong { font-size: clamp(32px, 4vw, 64px); line-height: 1.1; color: var(--ink); }
+.stage .twin-inspector-reading small { font-size: .36em; color: var(--label); }
+.stage .twin-inspector-explanation { color: var(--label); font-size: 14px; line-height: 1.45; }
+.stage .twin-inspector-explanation b { color: var(--data); font: 700 13px var(--mono); }
+.stage .twin-inspector-explanation b.twin-origin-sim { color: var(--sim); }
+.stage .twin-inspector-explanation p { margin-top: 8px; }
+.stage .twin-slot[data-expanded] > .twin-mode-label { grid-area: 4 / 1; position: static; max-width: none; background: transparent; padding: 0; text-align: left; }
+.stage .twin-slot[data-expanded] .twin-diag { top: 100px; right: 24px; font-size: 13px; }
+.stage[data-signal="lost"] .instruments:has(.twin-slot[data-expanded]) { opacity: 1; }
 /* Alarme ISA-18.2 no gêmeo: halo ATRÁS do cano (z-index -1 dentro da .stage). Pisca a 0,5 Hz só enquanto a ocorrência do
    sensor está aberta e ninguém assumiu; assumida = fixo. Sem animação (reduzir movimento ou P), fica fixo e visível. */
 .stage .twin::before { content: ""; position: absolute; z-index: -1; inset: 4% 0 8%; border-radius: 50%; pointer-events: none; opacity: 0;
@@ -273,6 +302,59 @@
 .stage .trip-rider { position: absolute; left: 0; right: 0; top: 50%; height: 0; pointer-events: none; opacity: 0; will-change: transform, opacity; }
 .stage .trip-rider i { position: absolute; left: 0; top: 0; width: calc(var(--u) * 1.4); height: calc(var(--u) * 1.4); margin: calc(var(--u) * -.7) 0 0 calc(var(--u) * -.7); border-radius: 50%; background: var(--data); box-shadow: 0 0 calc(var(--u) * 1.4) var(--data); }
 
+/* Celular/tablet: instrumentos legíveis e rolagem vertical, em vez de reduzir um telão 16:9 inteiro. */
+@media (max-width: 1024px), (max-height: 600px) {
+  .stage { --u: 8px; position: relative; inset: auto; width: 100%; min-height: 100dvh; height: auto; overflow: visible; display: block; padding: 0 16px max(16px, env(safe-area-inset-bottom)); }
+  .stage[data-idle], .stage[data-idle] * { cursor: auto; }
+  .stage .stage-head { flex-wrap: wrap; gap: 12px; padding: 16px 0; }
+  .stage .brand-stage { width: 100%; }
+  .stage .brand-stage b { font-size: 21px; }
+  .stage .brand-stage span { font-size: 12px; }
+  .stage .stage-head .unit { flex-basis: 100%; font-size: 14px; }
+  .stage .stage-head .clock { font-size: 24px; }
+  .stage .conn { font-size: 13px; margin-left: auto; }
+  .stage .seal { font-size: 12px; }
+  .stage .instruments { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; column-gap: 16px; }
+  .stage .inst, .stage .inst + .inst:not(.temp):not(.trip) { grid-column: auto; grid-row: auto; border-left: 0; margin-left: 0; padding: 20px 0; }
+  .stage .inst.flow, .stage .inst.rule-ring, .stage .inst.feed, .stage .inst.trip { grid-column: 1 / -1; }
+  .stage .inst.flow { min-height: 670px; }
+  .stage .inst.rule-ring { min-height: 320px; }
+  .stage .inst.temp, .stage .inst.scale, .stage .inst.today { min-height: 240px; }
+  .stage .inst.feed { min-height: 260px; }
+  .stage .inst.trip { min-height: 180px; }
+  .stage .inst-head { flex-wrap: wrap; gap: 8px; }
+  .stage .inst-head h2 { font-size: 17px; }
+  .stage .inst-code, .stage .inst-label { font-size: 13px; }
+  .stage .flow-top { height: auto; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .stage .flow-number .huge { font-size: clamp(60px, 18vw, 100px); }
+  .stage .unit-lpm { font-size: 28px; }
+  .stage .flow-meta, .stage .flow-note { font-size: 13px; overflow-wrap: anywhere; }
+  .stage .twin { height: 270px; }
+  .stage .twin-note { font-size: 12px; max-width: 100%; }
+  .stage .twin-tools { top: 30px; }
+  .stage .twin-tools button, .stage .stage-controls button { min-height: 44px; }
+  .stage .twin-mode-label { font-size: 12px; max-width: 95%; }
+  .stage .strip { height: 190px; flex: 1 0 190px; }
+  .stage .strip-legend { font-size: 12px; line-height: 1.6; }
+  .stage .stage-controls { justify-content: flex-start; flex-wrap: wrap; gap: 8px; padding-top: 16px; }
+  .stage .stg-alerts { position: relative; top: auto; left: auto; transform: none; width: auto; max-width: 100%; margin-top: 12px; }
+  .stage .lost-banner, .stage .snap-error { width: 100%; font-size: 14px; }
+  .stage .trip-track { margin: 0 24px; min-height: 70px; }
+  .stage .trip-node em, .stage .trip-seg { font-size: 11px; }
+}
+@media (max-width: 639px) {
+  .stage .instruments { grid-template-columns: minmax(0, 1fr); }
+  .stage .inst { grid-column: 1 / -1; }
+  .stage .twin-slot[data-expanded] { gap: 8px; padding: 12px; border-radius: 12px; }
+  .stage .twin-slot[data-expanded] > .twin-tools { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .stage .twin-slot[data-expanded] .twin-tool-buttons { gap: 6px; }
+  .stage .twin-slot[data-expanded] .twin-tools button { font-size: 12px; padding: 6px 9px; }
+  .stage .twin-inspector-data { grid-template-columns: minmax(0, 1fr); gap: 10px; padding-top: 10px; }
+  .stage .twin-inspector-reading { font-size: 12px; gap: 4px; }
+  .stage .twin-inspector-explanation { font-size: 12px; }
+  .stage .twin-inspector-explanation p { margin-top: 4px; }
+  .stage .twin-slot[data-expanded] .twin-diag { top: 150px; right: 12px; font-size: 11px; }
+}
 /* ---------- movimento ---------- */
 @keyframes stg-born { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes stg-beat { 0% { transform: scale(1); opacity: 1; } 45% { transform: scale(1.9); opacity: .35; } 100% { transform: scale(1); opacity: 1; } }

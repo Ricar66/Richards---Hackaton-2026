@@ -26,7 +26,7 @@ const STATUS: Record<string, string> = { OPEN: "aberta", ACKNOWLEDGED: "assumida
 
 type Props = {
   initial: StageSnapshot | null; initialError: "not-seeded" | "database" | null; pinnedCode: string | null;
-  /** `?3d=1` liga e `?3d=0` desliga o gêmeo 3D; null = vale o que ficou gravado (padrão: desligado). */
+  /** `?3d=1` liga e `?3d=0` desliga; null respeita a escolha gravada e, sem ela, tenta 3D com fallback. */
   initial3d?: boolean | null;
   /** `?atalhos=0` desliga os atalhos de uma tecla (F, P, 3, D): WCAG 2.1.4. */
   shortcuts?: boolean;
@@ -207,7 +207,7 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
           </div>
           <figure className="twin" data-alarm={alarm ?? undefined} data-sim={flowSim ? "" : undefined}>
             <TwinSlot flowLpm={fresh && lastReading ? lastReading.flowLpm : null} tone={pipeTone(ring.state, ring.foreign)} simulated={flowSim} live={fresh}
-              pulseKey={pulseKey} still={still} reduced={reduced} want3d={want3d} diag={diag} />
+              pulseKey={pulseKey} still={still} reduced={reduced} want3d={want3d} diag={diag} sourceLabel={flowSeal?.label} deviceCode={focus?.code} />
             <span className="twin-note">representação esquemática{pulseOn ? " · pulso no medidor = leitura gravada" : paused ? " · movimento pausado (P)" : ""}</span>
             <figcaption>
               {focus && <span className="twin-tag"><span className="mono">{lastReading && fresh ? `${fixedBR(lastReading.flowLpm, 2)} L/min` : "sem leitura recente"}</span>{flowSeal && <Seal label={flowSeal.label} simulated={flowSeal.simulated} small />}</span>}

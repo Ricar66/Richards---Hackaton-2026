@@ -9,7 +9,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 /**
  * Tela de palco. O primeiro quadro já sai com o snapshot do servidor; banco fora não derruba a página:
  * a Sala abre dizendo que não há dado e continua tentando (nunca mostra número de enfeite).
- * `?dispositivo=CODIGO` fixa o sensor da vazão. `?3d=1` liga e `?3d=0` desliga o gêmeo 3D (padrão: desligado;
+ * `?dispositivo=CODIGO` fixa o sensor da vazão. `?3d=1` liga e `?3d=0` desliga o gêmeo 3D (padrão: tentar com fallback;
  * a tecla 3 alterna na hora). `?atalhos=0` desliga os atalhos de uma tecla (F, P, 3, D).
  */
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
