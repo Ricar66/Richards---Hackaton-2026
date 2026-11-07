@@ -424,3 +424,5 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 ## Revisão incremental da entrega (06/11/2026)
 
 Auditoria e limitações em `docs/entrega/AUDITORIA_2026-11-06.md`. Gerador com validação de PPTX de 10 slides, evidências obrigatórias no modo final, hash externo e verificador de extração. Pitch alinhado às 10 imagens e quatro participantes. Sala com controles visíveis e modo 2D/3D efetivo. Testes novos em `tests/test_entrega.py` e `tests/stage-controls.test.ts`. Firmware/diagrama/evidências físicos seguem pendentes. main e VPS preservadas; pacote desta revisão é PREVIA.
+
+Em 07/11, a documentação `docs/ARQUITETURA.md` foi reconciliada com a implementação atual (BI nativo, MQTT, transação de ingestão, SSE e fallback SVG), removendo descrições da versão inicial que já não se aplicavam. Sem alteração de contratos, migrations ou infraestrutura.
