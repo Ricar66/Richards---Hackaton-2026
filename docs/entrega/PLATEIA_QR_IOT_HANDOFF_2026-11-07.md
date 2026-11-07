@@ -50,7 +50,7 @@ Se a apresentação migrar para DNS/HTTPS ou trocar de IP/porta:
 
 ## Comando de ensaio de audiência
 
-    node scripts/plateia-carga.mjs http://IP-DA-HOMOLOGACAO:PORTA/api/plateia/stream 70 25
+    node scripts/plateia-carga.mjs --url http://IP-DA-HOMOLOGACAO:PORTA/plateia --clients 70 --seconds 20
 
 A saída registra quantos dos 70 receberam HTTP 200, pelo menos um status, quantos frames de amostra chegaram, P95 de abertura, recusas e erros. Com sensores parados, framesSample=0 é normal; não representa falha do stream. **Para testar distribuições de leitura, publicar dados durante o ensaio**. Confirmar que as conexões são encerradas após aborto e que a CPU volta ao normal. Repetir para 50 e 70, mais 70 celulares físicos se disponíveis. Instrumentação do servidor: docker stats, contagem de sockets e logs; não fotografar segredos.
 
