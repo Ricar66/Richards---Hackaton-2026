@@ -14,15 +14,16 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import io
+import json
 from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
 import sys
-from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, BadZipFile
 
 ROOT_FILES = {
-    "README.md", ".env.example", ".dockerignore", "Dockerfile", "docker-compose.yml",
+    "README.md", "AGENTS.md", "MEMORIA.md", "ENTREGA_SENAC_2026.md", ".env.example", ".dockerignore", "Dockerfile", "docker-compose.yml",
     "compose.iot-lab.yml", "package.json", "pnpm-lock.yaml", "next.config.ts",
     "next-env.d.ts", "prisma.config.ts", "tsconfig.json", "postcss.config.mjs",
     "eslint.config.mjs",
@@ -52,13 +53,13 @@ def git(*args: str) -> bytes:
 
 def allowed_name(path: str) -> bool:
     p = PurePosixPath(path)
-    if p.is_absolute() or not p.parts or ".." in p.parts or any(x in BLOCKED_PARTS for x in p.parts):
+    if "\\" in path or ":" in path or p.is_absolute() or not p.parts or ".." in p.parts or any(x.lower() in BLOCKED_PARTS for x in p.parts):
         return False
-    if p.name in BLOCKED_NAMES or p.suffix.lower() in BLOCKED_SUFFIX:
+    if p.name.lower() in BLOCKED_NAMES or p.suffix.lower() in BLOCKED_SUFFIX:
         return False
-    if p.name.startswith(".env") and p.name != ".env.example":
+    if p.name.lower().startswith(".env") and p.name != ".env.example":
         return False
-    if p.name.startswith("secrets.") and p.name != "secrets.h.example":
+    if p.name.lower().startswith("secrets.") and p.name != "secrets.h.example":
         return False
     return True
 
@@ -68,7 +69,9 @@ def route(path: str) -> str | None:
     if path in ROOT_FILES or path.startswith(CODE_DIRS) or path in TECH_DOCS or path.startswith("docs/dados/"):
         return "02_CODIGO/RICHARDS_PLATFORM/" + path
     if path.startswith("presentation/imagens/") and path.endswith((".webp", ".png", ".jpg", ".jpeg")):
-        return "01_APRESENTACAO/IMAGENS/" + PurePosixPath(path).name
+        return "01_APRESENTACAO/imagens/" + PurePosixPath(path).name
+    if path == "presentation/imagens/README.md":
+        return "01_APRESENTACAO/imagens/README.md"
     if path in PITCH_DOCS:
         return "01_APRESENTACAO/" + PurePosixPath(path).name
     if path == "presentation/CHECKLIST_VICTOR_IOT.md":
@@ -78,6 +81,8 @@ def route(path: str) -> str | None:
     return None
 
 def add(files: dict[str, bytes], path: str, data: bytes) -> None:
+    if not allowed_name(path):
+        raise RuntimeError("Caminho inseguro: " + path)
     if len(data) > MAX_FILE:
         raise RuntimeError("Arquivo maior que 80 MB: " + path)
     if SECRET.search(data):
@@ -85,6 +90,22 @@ def add(files: dict[str, bytes], path: str, data: bytes) -> None:
     if path in files:
         raise RuntimeError("Caminho duplicado: " + path)
     files[path] = data
+
+def validate_pitch(data: bytes, suffix: str) -> None:
+    """Confere o formato real, não apenas a extensão do arquivo fornecido."""
+    if suffix == ".pdf":
+        if not data.startswith(b"%PDF-") or b"%%EOF" not in data[-2048:]:
+            raise RuntimeError("PDF inválido ou incompleto.")
+        return
+    with ZipFile(io.BytesIO(data)) as deck:
+        if deck.testzip() or "ppt/presentation.xml" not in deck.namelist():
+            raise RuntimeError("PPTX inválido ou incompleto.")
+        slides = [n for n in deck.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)]
+        if len(slides) != 10:
+            raise RuntimeError("O PPTX oficial precisa conter as 10 imagens, não os 14 SVGs históricos.")
+        for info in deck.infolist():
+            if info.file_size > MAX_FILE or SECRET.search(deck.read(info)):
+                raise RuntimeError("Conteúdo inválido ou possível segredo no PPTX.")
 
 def generate(args: argparse.Namespace) -> Path:
     root = Path(__file__).resolve().parents[2]
@@ -99,6 +120,8 @@ def generate(args: argparse.Namespace) -> Path:
         raise RuntimeError("Entrega FINAL exige arvore sem alteracoes rastreadas nao commitadas.")
     if args.final and (not args.pdf or not args.pptx):
         raise RuntimeError("Entrega FINAL exige --pdf e --pptx da apresentacao aprovada.")
+    if args.final and not args.evidencias:
+        raise RuntimeError("Entrega FINAL exige --evidencias com registros reais e limitações explícitas.")
 
     files: dict[str, bytes] = {}
     archive = git("archive", "--format=zip", sha)
@@ -109,25 +132,42 @@ def generate(args: argparse.Namespace) -> Path:
             dest = route(info.filename)
             if dest:
                 add(files, dest, source.read(info))
+            # Preserva os caminhos relativos usados pelo README e pelos roteiros.
+            # Somente documentação versionada; arquivos operacionais da VPS ficam fora.
+            if allowed_name(info.filename) and (
+                info.filename.startswith("docs/")
+                or info.filename.startswith("docs/FASE_")
+                or info.filename in PITCH_DOCS
+                or info.filename.startswith("presentation/imagens/")
+                or info.filename == "presentation/CHECKLIST_VICTOR_IOT.md"
+            ):
+                copy = "02_CODIGO/RICHARDS_PLATFORM/" + info.filename
+                if copy not in files:
+                    add(files, copy, source.read(info))
 
     for opt, filename in ((args.pdf, "RICHARDS_PITCH_FINAL.pdf"), (args.pptx, "RICHARDS_PITCH_FINAL.pptx")):
         if opt:
             p = Path(opt).expanduser().resolve()
             if not p.is_file() or p.suffix.lower() != Path(filename).suffix:
                 raise RuntimeError("Apresentacao invalida ou ausente: " + str(p))
-            add(files, "01_APRESENTACAO/" + filename, p.read_bytes())
+            data = p.read_bytes()
+            validate_pitch(data, p.suffix.lower())
+            add(files, "01_APRESENTACAO/" + filename, data)
 
     if args.evidencias:
         folder = Path(args.evidencias).expanduser().resolve()
         if not folder.is_dir():
             raise RuntimeError("Pasta de evidencias nao encontrada: " + str(folder))
         for p in sorted(folder.rglob("*")):
-            if not p.is_file() or p.is_symlink():
+            if not p.is_file() or p.is_symlink() or any(parent.is_symlink() for parent in p.parents if parent != folder):
                 continue
             rel = p.relative_to(folder).as_posix()
             if not allowed_name(rel) or p.suffix.lower() not in EVIDENCE_SUFFIX:
                 continue
             add(files, "05_EVIDENCIAS/" + rel, p.read_bytes())
+
+    if args.final and not any(p.startswith("05_EVIDENCIAS/") for p in files):
+        raise RuntimeError("Pasta de evidências vazia ou sem arquivos permitidos.")
 
     if "02_CODIGO/RICHARDS_PLATFORM/package.json" not in files:
         raise RuntimeError("package.json nao encontrado no commit.")
@@ -150,6 +190,12 @@ def generate(args: argparse.Namespace) -> Path:
         "\nMODO=" + mode + "\nUTC=" + now + "\n" +
         "FONTE=git archive do commit + materiais explicitamente fornecidos\n"
     ).encode("utf-8"))
+    add(files, "LIMITACOES.json", json.dumps({
+        "modo": mode, "commit": sha, "branch": branch,
+        "aprovacao_hardware": "NÃO INFERIDA: consultar registro de teste físico",
+        "aprovacao_projetor": "NÃO INFERIDA: consultar registro do projetor",
+        "segredos": "Triagem automática não substitui revisão humana das evidências",
+    }, ensure_ascii=False, indent=2).encode("utf-8"))
     hashes = [hashlib.sha256(v).hexdigest() + "  " + k for k, v in sorted(files.items())]
     add(files, "SHA256SUMS.txt", ("\n".join(hashes) + "\n").encode("utf-8"))
 
@@ -174,6 +220,7 @@ def generate(args: argparse.Namespace) -> Path:
     print("PACOTE:", target)
     print("COMMIT:", sha, "BRANCH:", branch, "MODO:", mode, "ARQUIVOS:", len(files))
     print("SHA256 ZIP:", hashlib.sha256(target.read_bytes()).hexdigest())
+    target.with_suffix(".zip.sha256").write_text(hashlib.sha256(target.read_bytes()).hexdigest() + "  " + target.name + "\n", encoding="utf-8")
     if dirty:
         print("AVISO: alteracoes locais nao commitadas nao entraram no ZIP.")
     if not args.final:
@@ -189,7 +236,7 @@ def main() -> None:
     p.add_argument("--saida", help="diretorio de saida, padrao dist/")
     try:
         generate(p.parse_args())
-    except (RuntimeError, OSError, ValueError) as error:
+    except (RuntimeError, OSError, ValueError, BadZipFile) as error:
         print("ERRO:", error, file=sys.stderr)
         sys.exit(1)
 

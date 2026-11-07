@@ -28,6 +28,17 @@ python scripts/entrega/gerar_zip.py --final --pdf CAMINHO_PITCH.pdf --pptx CAMIN
 
 É possível usar `--saida` para escolher o diretório. O script não faz deploy, não modifica banco, não muda branches e não cria commits.
 
+Para verificar e extrair a prévia em uma pasta **nova**:
+
+```bash
+python scripts/entrega/verificar_zip.py dist/RICHARDS_PREVIA_SEU_SHA.zip --extrair ../conferencia-entrega
+python -m unittest discover -s tests -p test_entrega.py
+```
+
+O verificador exige cobertura exata do manifesto, confere CRC e SHA256 antes e depois da extração, e recusa caminhos inseguros. O gerador cria também o arquivo externo `.zip.sha256`. O template `.env.example` está incluído para a instalação; nenhum ambiente preenchido deve entrar.
+
+O modo final exige evidências não vazias e verifica o formato PDF e a estrutura PPTX de 10 slides. Isso **não aprova** automaticamente o conteúdo, o hardware ou o projetor. A revisão humana das imagens, documentos e resultados continua obrigatória.
+
 ## O que conferir antes de entregar
 1. Seguir `docs/entrega/CHECKLIST_FINAL.md`.
 2. Victor preencher `docs/entrega/REGISTRO_TESTE_FISICO.md` com testes físicos reais, ou marcar NÃO EXECUTADO.
