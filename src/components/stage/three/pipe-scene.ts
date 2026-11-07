@@ -15,6 +15,9 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { advancePhase, budgetRestart, budgetStart, frameBudgetStep, median, type BudgetState, type PipeTone } from "../stage-logic";
 import { progress } from "@/lib/ease";
+import { createIndustrialAssembly } from "./industrial-assembly";
+
+export type TwinView = "overview" | "inspection";
 
 export type SceneInput = {
   /** Velocidade da água em unidades do desenho SVG por segundo (`waterSpeed`). 0 = parada. */
@@ -29,6 +32,8 @@ export type SceneInput = {
   pulseKey: string | null;
   /** O 3D está por cima do SVG (senão não desenha nada). */
   visible: boolean;
+  /** Enquadramento escolhido pela pessoa. Sem órbita automática ou transição que pareça dado. */
+  view?: TwinView;
 };
 export type SceneStats = { fps: number; p50: number; p95: number; calls: number; triangles: number; dpr: number; level: 0 | 1 | 2 };
 export type PipeScene = { ready: Promise<void>; update(i: Partial<SceneInput>): void; dpr(): number; dispose(): void };
@@ -55,16 +60,22 @@ uniform vec3 uA, uB, uDash, uSimC;
 varying vec2 vUv; varying vec3 vN;
 void main() {
   float along = vUv.x * uLen;
-  float t = fract((along - uPhase) / uPeriod);
+  float advected = along - uPhase;
+  float t = fract(advected / uPeriod);
   // Faixa estreita e suave por período (o "traço" da água do SVG), ondulando em volta do tubo.
-  float ripple = sin(vUv.y * 25.1327 + along * 2.2) * 0.04;
+  float ripple = sin(vUv.y * 25.1327 + advected / uPeriod * 6.2831853) * 0.04;
   float band = smoothstep(0.0, 0.07, t + ripple) * (1.0 - smoothstep(0.14, 0.3, t + ripple));
   vec3 n = normalize(vN);
   float light = 0.35 + 0.65 * max(dot(n, normalize(vec3(-0.25, 0.85, 0.45))), 0.0);
   float spec = pow(max(dot(n, normalize(vec3(-0.15, 0.95, 0.3))), 0.0), 28.0);
-  vec3 col = mix(uB * 0.8, uA, light);
-  col = mix(col, uDash, band * 0.62);
-  col += uDash * spec * 0.35;
+  // Profundidade óptica e veios de luz advectados pela MESMA fase da vazão, nunca por relógio independente.
+  float facing = abs(n.z);
+  float veins = pow(0.5 + 0.5 * sin(advected / uPeriod * 18.849556 + sin(vUv.y * 31.4159) * 1.8), 7.0);
+  float fine = pow(0.5 + 0.5 * sin(advected / uPeriod * 31.415927 - vUv.y * 50.2655), 12.0);
+  vec3 col = mix(uB * 0.58, uA * 0.82, light * facing);
+  col = mix(col, uDash, band * 0.38);
+  col += uDash * (spec * 0.5 + veins * 0.12 + fine * 0.045) * facing;
+  col += uA * pow(1.0 - facing, 3.0) * 0.3;
   // Simulado: hachura fina e discreta (o roxo forte fica na borda do vidro e no selo do DOM).
   if (uSim > 0.5) { float h = step(0.78, fract(vUv.x * uLen * 2.2 + vUv.y * 6.0)); col = mix(col, uSimC, h * 0.3); }
   col *= mix(1.0, 0.42, uDim);
@@ -124,11 +135,11 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
     // failIfMajorPerformanceCaveat: recusa o WARP/SwiftShader (o erro é síncrono e cai no SVG).
     renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance", failIfMajorPerformanceCaveat: true });
   } catch (e) { canvas.remove(); throw e; }
-  let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  let dpr = Math.min(window.devicePixelRatio || 1, host.clientWidth < 600 ? 1.25 : 1.5);
   renderer.setPixelRatio(dpr);
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.12;
   renderer.outputColorSpace = SRGBColorSpace;
 
   const scene = new Scene();
@@ -180,11 +191,11 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
   rimMesh.renderOrder = 3;
   root.add(rimMesh);
 
-  // Flanges e colares metálicos (eixo do cilindro deitado no X).
+  // Montagem industrial com mangas, apoios, juntas e parafusos instanciados.
+  const assembly = createIndustrialAssembly();
+  root.add(assembly.group);
   const metal = keep(new MeshStandardMaterial({ color: "#7fa3ab", metalness: 0.92, roughness: 0.28, envMapIntensity: 1.2 }));
   const darkMetal = keep(new MeshStandardMaterial({ color: "#2a434b", metalness: 0.8, roughness: 0.38 }));
-  const flangeGeo = keep(new CylinderGeometry(0.74, 0.74, 0.2, 48));
-  for (const x of [-4.2, -2.1, 2.1, 4.2]) { const f = new Mesh(flangeGeo, metal); f.rotation.z = Math.PI / 2; f.position.set(x, 0, 0); root.add(f); }
   const collarGeo = keep(new CylinderGeometry(0.82, 0.82, 0.24, 48));
   for (const x of [-6.0, 6.0]) { const c = new Mesh(collarGeo, darkMetal); c.position.set(x, FLOOR_Y + 0.02, 0); root.add(c); }
 
@@ -196,9 +207,12 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
   const body = new Mesh(keep(new RoundedBoxGeometry(1.25, 0.82, 0.92, 4, 0.14)), metal);
   body.position.set(0, 0.95, 0);
   meter.add(body);
+  const bezel = new Mesh(keep(new RoundedBoxGeometry(1.04, 0.52, 0.08, 2, 0.055)), darkMetal);
+  bezel.position.set(0, 0.98, 0.47);
+  meter.add(bezel);
   const screenMat = keep(new MeshBasicMaterial({ color: "#b5ffe9", toneMapped: false }));
   const screen = new Mesh(keep(new PlaneGeometry(0.86, 0.34)), screenMat);
-  screen.position.set(0, 0.98, 0.465);
+  screen.position.set(0, 0.98, 0.516);
   meter.add(screen);
   const ledMat = keep(new MeshBasicMaterial({ color: "#63ebbf", toneMapped: false }));
   const led = new Mesh(keep(new SphereGeometry(0.06, 16, 12)), ledMat);
@@ -207,7 +221,7 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
   // Anel do pulso (leitura gravada): de frente para a câmera, em volta do corpo do medidor; invisível fora do pulso.
   const ringMat = keep(new MeshBasicMaterial({ color: "#eafffb", transparent: true, opacity: 0, depthWrite: false, side: DoubleSide, toneMapped: false }));
   const pulseRing = new Mesh(keep(new RingGeometry(0.78, 0.9, 64)), ringMat);
-  pulseRing.position.set(0, 0.95, 0.5);
+  pulseRing.position.set(0, 0.95, 0.56);
   pulseRing.renderOrder = 4;
   pulseRing.quaternion.copy(camera.quaternion); // câmera fixa: basta orientar uma vez
   meter.add(pulseRing);
@@ -223,9 +237,15 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
   const sun = new DirectionalLight("#ffffff", 1.4);
   sun.position.set(-3, 8, 6);
   scene.add(sun);
+  const edgeLight = new DirectionalLight("#b7d9ec", 2.2);
+  edgeLight.position.set(4, 3, -5);
+  scene.add(edgeLight);
+  const fillLight = new DirectionalLight("#cee3da", 0.8);
+  fillLight.position.set(-7, 1, 3);
+  scene.add(fillLight);
 
   // ---------- estado ----------
-  const state: SceneInput = { speed: 0, tone: "ok", simulated: false, live: false, still: false, pulseKey: null, visible: false };
+  const state: SceneInput = { speed: 0, tone: "ok", simulated: false, live: false, still: false, pulseKey: null, visible: false, view: "overview" };
   let phase = 0, pulseStart = -1, lastPulseAt = -Infinity, raf = false, last = 0, disposed = false, initialized = false;
   let budget: BudgetState = budgetStart(performance.now());
   const deltas: number[] = [];
@@ -238,7 +258,8 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
     (water.uniforms.uDash.value as Color).set(t.dash);
     (rim.uniforms.uRim.value as Color).set(state.simulated ? SIM : t.glass);
     water.uniforms.uSim.value = state.simulated ? 1 : 0;
-    water.uniforms.uDim.value = state.speed > 0 ? 0 : 1;
+    water.uniforms.uDim.value = state.live && state.speed > 0 ? 0 : 1;
+    glass.opacity = state.view === "inspection" ? 0.07 : 0.16;
     screenMat.color.set(state.live ? t.dash : "#33484e");
     ledMat.color.set(state.live ? "#63ebbf" : "#56666b");
   };
@@ -247,7 +268,12 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
     const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight);
     renderer.setSize(w, h, false);
     // Enquadramento: o cano (≈ 10,5 de largura na tela, ≈ 5 de altura com cotovelos e medidor) com folga curta.
-    const aspect = w / h, needW = 12.6, needH = 5.5;
+    const inspection = state.view === "inspection";
+    camera.position.set(inspection ? 2.4 : 7.2, inspection ? 3.8 : 6.4, inspection ? 17 : 13);
+    camera.lookAt(0, -0.4, 0);
+    camera.updateMatrixWorld();
+    pulseRing.quaternion.copy(camera.quaternion);
+    const aspect = w / h, needW = inspection ? 14.3 : 13.2, needH = 6.1;
     const viewH = Math.max(needH, needW / aspect);
     camera.left = (-viewH * aspect) / 2; camera.right = (viewH * aspect) / 2; camera.top = viewH / 2; camera.bottom = -viewH / 2;
     camera.updateProjectionMatrix();
@@ -256,7 +282,7 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
   // Aba oculta não desenha: o visibilitychange redesenha o estado atual na volta.
   const draw = () => { if (!disposed && state.visible && document.visibilityState === "visible") renderer.render(scene, camera); };
   const pulseActive = (now: number) => pulseStart >= 0 && now - pulseStart < PULSE_MS;
-  const wantsLoop = () => !disposed && state.visible && !state.still && document.visibilityState === "visible" && (state.speed > 0 || pulseActive(performance.now()));
+  const wantsLoop = () => !disposed && state.visible && !state.still && document.visibilityState === "visible" && ((state.live && state.speed > 0) || pulseActive(performance.now()));
 
   // O pulso marca a CHEGADA de uma leitura gravada: anel em volta do medidor + tela que acende, igual ao SVG.
   // Nunca corre pela água (aí seria lido como vazão, inclusive com o cano parado).
@@ -264,7 +290,7 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
   const tick = (now: number) => {
     const dtMs = last ? Math.max(0, now - last) : 16.7;
     last = Math.max(last, now);
-    phase = advancePhase(phase, state.speed, dtMs / 1000, SVG_PERIOD);
+    phase = advancePhase(phase, state.live ? state.speed : 0, dtMs / 1000, SVG_PERIOD);
     water.uniforms.uPhase.value = phase * scale;
     if (pulseActive(now)) {
       const k = progress(now - pulseStart, PULSE_MS); // 1º quadro pode ser anterior a pulseStart: trava em [0, 1]
@@ -280,7 +306,7 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
       const next = frameBudgetStep(budget, now, median(deltas));
       if (next.level !== budget.level) {
         budget = next;
-        if (budget.level === 1) { dpr = 1; renderer.setPixelRatio(1); fit(); }
+        if (budget.level === 1) { dpr = 1; renderer.setPixelRatio(1); assembly.details.visible = false; fit(); }
         else if (budget.level === 2) { stopLoop(); cb.onBudget(); return; }
       } else budget = next;
     }
@@ -314,15 +340,17 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
     dpr: () => dpr,
     update(i) {
       const prevPulse = state.pulseKey, first = !initialized;
+      const previousView = state.view;
       initialized = true;
       Object.assign(state, i);
       // Só a MUDANÇA da chave pulsa: o valor da montagem (ou do primeiro update) nunca, e null não pulsa nem apaga a referência.
-      if (!first && i.pulseKey !== undefined && i.pulseKey !== null && i.pulseKey !== prevPulse && !state.still) {
+      if (!first && state.live && i.pulseKey !== undefined && i.pulseKey !== null && i.pulseKey !== prevPulse && !state.still) {
         const now = performance.now();
         // No máximo um pulso a cada 500 ms (descarta o desenho, nunca o dado).
         if (now - lastPulseAt >= PULSE_MIN_GAP_MS) { lastPulseAt = now; pulseStart = now; }
       }
       if (i.pulseKey === null) state.pulseKey = prevPulse;
+      if (previousView !== state.view) fit();
       applyLook();
       refresh();
     },
@@ -333,8 +361,10 @@ export function createPipeScene(host: HTMLElement, cb: SceneCallbacks): PipeScen
       ro.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
       canvas.removeEventListener("webglcontextlost", onLost);
-      scene.traverse((o: Object3D) => { const m = o as Mesh; if (m.isMesh) { m.geometry.dispose(); const mat = m.material as Material | Material[]; (Array.isArray(mat) ? mat : [mat]).forEach(x => x.dispose()); } });
-      for (const d of disposables) d.dispose();
+      // Recursos compartilhados (48 instâncias e geometrias reutilizadas) são liberados UMA vez.
+      const resources = new Set<{ dispose(): void }>(disposables);
+      scene.traverse((o: Object3D) => { const m = o as Mesh; if (m.isMesh) { resources.add(m.geometry); const mat = m.material as Material | Material[]; (Array.isArray(mat) ? mat : [mat]).forEach(x => resources.add(x)); if ("isInstancedMesh" in m) resources.add(m as Mesh & { dispose(): void }); } });
+      for (const resource of resources) resource.dispose();
       (envRT.texture as Texture).dispose();
       envRT.dispose();
       renderer.dispose();

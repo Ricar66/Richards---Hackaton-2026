@@ -45,7 +45,9 @@ export function PipeTwin({ flowLpm, tone, still, simulated, active = true, pulse
     const now = performance.now();
     if (now - prev.at < 500) return;
     lastPulse.current.at = now;
-    ring.current.animate([{ opacity: 0.95, transform: "scale(1)" }, { opacity: 0, transform: "scale(2.6)" }], { duration: 700, easing: "ease-out" });
+    const animation = ring.current.animate([{ opacity: 0.95, transform: "scale(1)" }, { opacity: 0, transform: "scale(2.6)" }], { duration: 700, easing: "ease-out" });
+    // WAAPI não obedece ao CSS: pausa, troca para 3D e movimento reduzido cancelam o pulso em andamento.
+    return () => animation.cancel();
   }, [pulseKey, still, active]);
   const c = TONES[tone];
   const label = `Representação esquemática do cano: ${flowLpm === null ? "sem leitura recente" : `${fixedBR(flowLpm, 2)} L/min`}${simulated ? " · leitura simulada" : ""}`;

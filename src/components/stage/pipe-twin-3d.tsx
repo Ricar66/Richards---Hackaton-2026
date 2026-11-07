@@ -63,8 +63,8 @@ export default function PipeTwin3D(props: Twin3DProps) {
     return () => { alive = false; scene.current = null; s.dispose(); };
   }, []);
 
-  const { speed, tone, simulated, live, still, pulseKey, visible } = props;
-  useEffect(() => { scene.current?.update({ speed, tone, simulated, live, still, pulseKey, visible }); }, [speed, tone, simulated, live, still, pulseKey, visible]);
+  const { speed, tone, simulated, live, still, pulseKey, visible, view } = props;
+  useEffect(() => { scene.current?.update({ speed, tone, simulated, live, still, pulseKey, visible, view }); }, [speed, tone, simulated, live, still, pulseKey, visible, view]);
 
   return <div ref={host} className="twin-canvas" aria-hidden="true" />;
 }
