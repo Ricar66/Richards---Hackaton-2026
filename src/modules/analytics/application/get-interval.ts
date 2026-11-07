@@ -16,12 +16,12 @@ export async function getInterval(f: Pick<AnalyticsFilter, "siteId" | "deviceId"
   try {
     const db = getDb();
     const where = {
-      device: { organizationId: DEMO_ORG_ID, ...(f.siteId ? { siteId: f.siteId } : {}) },
+      device: { organizationId: DEMO_ORG_ID, kind:"FLOW" as const, ...(f.siteId ? { siteId: f.siteId } : {}) },
       ...(f.deviceId ? { deviceId: f.deviceId } : {}),
       ...(f.source !== "ALL" ? { source: f.source } : {}),
       capturedAt: { gte: from, lt: to },
     };
-    const occWhere = { organizationId: DEMO_ORG_ID, ...(f.siteId ? { siteId: f.siteId } : {}), ...(f.deviceId ? { deviceId: f.deviceId } : {}), ...(f.source !== "ALL" ? { source: f.source } : {}) };
+    const occWhere = { kind:{not:"TEMPERATURE_EXCURSION" as const}, organizationId: DEMO_ORG_ID, ...(f.siteId ? { siteId: f.siteId } : {}), ...(f.deviceId ? { deviceId: f.deviceId } : {}), ...(f.source !== "ALL" ? { source: f.source } : {}) };
     const [rows, agg, opened, audits] = await Promise.all([
       db.telemetryReading.findMany({ where, include: { device: true }, orderBy: { capturedAt: "asc" }, take: MAX_READINGS + 1 }),
       db.telemetryReading.aggregate({ where, _count: { _all: true }, _sum: { deltaLiters: true }, _max: { flowLpm: true } }),

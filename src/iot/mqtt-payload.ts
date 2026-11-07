@@ -6,19 +6,15 @@ import { z } from "zod";
  */
 export const mqttPayloadSchema = z.object({
   dispositivo_id: z.string().trim().min(1).max(80),
-  VAZAO: z.number().finite().min(0).max(1000).optional(),   // L/min (potenciômetro na bancada ou YF-S201)
-  PESO: z.number().finite().min(-50).max(1000).optional(),  // kg, HX711 (oscila um pouco abaixo de zero depois da tara)
-  TEMP: z.number().finite().min(-40).max(125).optional(),   // °C, DHT11
-  UMIDADE: z.number().finite().min(0).max(100).optional(),  // %, DHT11
+  VAZAO: z.number().finite().min(0).max(1000),   // L/min (potenciômetro na bancada ou YF-S201)
   // O prefixo "mqtt-" é da sessão da ponte: aceitar do cliente deixaria marcar leituras legítimas como duplicadas.
   bootId: z.string().min(4).max(80).refine(b => !b.toLowerCase().startsWith("mqtt-"), { message: "bootId com prefixo reservado da ponte (mqtt-)" }).optional(),
   sequence: z.number().int().min(0).optional(),
 })
-  .refine(p => p.VAZAO !== undefined || p.PESO !== undefined || p.TEMP !== undefined, { message: "payload sem VAZAO, PESO nem TEMP" })
   .refine(p => (p.bootId === undefined) === (p.sequence === undefined), { message: "bootId e sequence vêm juntos ou não vêm" });
 export type MqttPayload = z.infer<typeof mqttPayloadSchema>;
 
-export const MQTT_SENSORS = ["VAZAO", "PESO", "TEMP"] as const;
+export const MQTT_SENSORS = ["VAZAO"] as const;
 export type MqttSensor = (typeof MQTT_SENSORS)[number];
 
 export type MqttBridgeConfig = {
@@ -29,8 +25,6 @@ export type MqttBridgeConfig = {
   simulated: ReadonlySet<MqttSensor>;
   /** Intervalo declarado do firmware; só é usado para o volume da primeira leitura ou depois de um buraco. */
   sampleSeconds: number;
-  tempLimitC: number; tempSeconds: number;
-  scaleMinKg: number; scaleStableSeconds: number;
   /**
    * Tópico por dispositivo (`<topic>/<dispositivo_id>`): com a ACL do broker (`pattern write <topic>/%u`), um equipamento
    * só publica como ele mesmo, e a ponte confere que o `dispositivo_id` do JSON é o do tópico. `true` recusa o tópico
@@ -69,6 +63,7 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
   // Padrão: a vazão da bancada vem de potenciômetro, então é SIMULADA. Defina "" quando o YF-S201 estiver ligado.
   const simulated = new Set<MqttSensor>();
   for (const s of (env.MQTT_SIMULATED_SENSORS ?? "VAZAO").split(",").map(x => x.trim().toUpperCase()).filter(Boolean)) {
+    if(s==="TEMP"||s==="PESO")continue; // Configuração antiga ignorada.
     if (!(MQTT_SENSORS as readonly string[]).includes(s)) throw new Error(`MQTT_SIMULATED_SENSORS: "${s}" inválido, use ${MQTT_SENSORS.join(", ")}`);
     simulated.add(s as MqttSensor);
   }
@@ -82,10 +77,6 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
     password: env.MQTT_PASSWORD || undefined,
     aliases, simulated,
     sampleSeconds: number(env, "MQTT_SAMPLE_SECONDS", 2, 0.5, 60),
-    tempLimitC: number(env, "MQTT_TEMP_LIMIT_C", 28, -20, 80),
-    tempSeconds: number(env, "MQTT_TEMP_SECONDS", 30, 1, 3600),
-    scaleMinKg: number(env, "MQTT_SCALE_MIN_KG", 1.5, 0.1, 500),
-    scaleStableSeconds: number(env, "MQTT_SCALE_STABLE_SECONDS", 6, 1, 600),
     requireDeviceTopic,
     retryBudgetMs: number(env, "MQTT_RETRY_BUDGET_SECONDS", 120, 1, 3600) * 1000,
     deadLetterPath: env.MQTT_DEAD_LETTER?.trim() || ".mqtt-dead-letter.ndjson",

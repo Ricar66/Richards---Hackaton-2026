@@ -7,7 +7,7 @@ export type OccurrenceTransition = "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED";
 export class OccurrenceService {
   async transition(id: string, next: OccurrenceTransition, note: string, actor: string) {
     const db = getDb();
-    const occurrence = await db.occurrence.findFirst({ where: { id, organizationId: DEMO_ORG_ID } });
+    const occurrence = await db.occurrence.findFirst({ where: { id, organizationId: DEMO_ORG_ID, kind:{not:"TEMPERATURE_EXCURSION"} } });
     if (!occurrence) throw new Error("NOT_FOUND");
     const allowed: Record<string, string[]> = { OPEN: ["ACKNOWLEDGED", "RESOLVED", "DISMISSED"], ACKNOWLEDGED: ["RESOLVED", "DISMISSED"], RESOLVED: [], DISMISSED: [] };
     if (!allowed[occurrence.status].includes(next)) throw new Error("INVALID_TRANSITION");

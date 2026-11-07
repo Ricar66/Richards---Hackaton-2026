@@ -5,8 +5,8 @@ import "./globals.css";
 const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 const display = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display", display: "swap" });
 export const metadata: Metadata = {
-  title: "RICHARDS Intelligence | BI de recursos, ocorrências e impacto",
-  description: "Observabilidade operacional, prevenção e impacto social com IoT",
+  title: "RICHARDS Intelligence | Monitoramento hidráulico",
+  description: "Vazão de água, mapa hidráulico e investigação com IoT",
 };
 /** Tema escuro "sala de operação": controles nativos (select, data, rolagem) e barra do navegador no mesmo tom. */
 export const viewport: Viewport = { colorScheme: "dark", themeColor: "#071217" };

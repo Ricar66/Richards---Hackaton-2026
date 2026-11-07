@@ -4,7 +4,7 @@ import { reportFigures } from "@/modules/analytics/domain/report-figures";
 import { TIME_ZONE, bucketLabel, dateBR, durationBR, numBR } from "@/lib/format";
 
 /** Versão do layout do relatório (muda quando o conteúdo/forma muda; aparece no rodapé). */
-export const REPORT_VERSION = "RICHARDS-R2 (Fase 5)";
+export const REPORT_VERSION = "RICHARDS-AGUA-R3";
 const W = 595.28, H = 841.89, M = 40;
 const C = { ink: rgb(0.075, 0.137, 0.165), muted: rgb(0.384, 0.459, 0.475), faint: rgb(0.56, 0.63, 0.645), line: rgb(0.886, 0.914, 0.906), soft: rgb(0.953, 0.965, 0.961), band: rgb(0.059, 0.129, 0.157), accent: rgb(0.075, 0.494, 0.467), accentSoft: rgb(0.78, 0.9, 0.88), warn: rgb(0.81, 0.478, 0.071), danger: rgb(0.78, 0.286, 0.267), sim: rgb(0.353, 0.247, 0.608), white: rgb(1, 1, 1) };
 const STATUS: Record<string, string> = { OPEN: "Aberta", ACKNOWLEDGED: "Em análise", RESOLVED: "Resolvida", DISMISSED: "Descartada" };
@@ -149,7 +149,7 @@ function volumeChart(w: Writer, d: DashboardDTO, top: number, height: number) {
  */
 export async function buildReportPdf(d: DashboardDTO, now = new Date()) {
   const pdf = await PDFDocument.create();
-  pdf.setTitle("RICHARDS Intelligence — Relatório de recursos e impacto");
+  pdf.setTitle("RICHARDS Intelligence — Relatório de monitoramento hidráulico");
   pdf.setAuthor("RICHARDS Intelligence");
   pdf.setCreationDate(now);
   const font = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -158,7 +158,7 @@ export async function buildReportPdf(d: DashboardDTO, now = new Date()) {
 
   // ---------- página 1: monitoramento ----------
   const p1 = new Writer(pdf.addPage([W, H]), font, bold, charset);
-  header(p1, d, "Relatório de recursos e impacto", `${d.organization.name} · ${d.organization.city}`, now);
+  header(p1, d, "Relatório de monitoramento hidráulico", `${d.organization.name} · ${d.organization.city}`, now);
   p1.text("Período", M, 732, { size: 7.5, bold: true, color: C.muted });
   p1.text(`${period} (horário de Brasília)`, M, 720, { size: 10, bold: true });
   p1.text("Recorte", 360, 732, { size: 7.5, bold: true, color: C.muted });
@@ -192,7 +192,7 @@ export async function buildReportPdf(d: DashboardDTO, now = new Date()) {
 
   // ---------- página 2: ocorrências e doações ----------
   const p2 = new Writer(pdf.addPage([W, H]), font, bold, charset);
-  header(p2, d, "Ocorrências e doações", `${period} · ${filterText(d)}`, now);
+  header(p2, d, "Ocorrências e investigação", `${period} · ${filterText(d)}`, now);
   p2.section("Ocorrências do recorte", 735, "abertas no período ou ainda ativas");
   const occ = d.occurrences.slice(0, 14);
   let y2 = occ.length ? p2.table([
@@ -201,22 +201,11 @@ export async function buildReportPdf(d: DashboardDTO, now = new Date()) {
   if (!occ.length) p2.text("Nenhuma ocorrência no recorte.", M, 700, { size: 9, color: C.muted });
   if (d.occurrences.length > occ.length) { p2.text(`+ ${d.occurrences.length - occ.length} ocorrência(s) no recorte; lista completa no BI (/ocorrencias).`, M, y2, { size: 7.5, color: C.muted }); y2 -= 12; }
 
-  const delivered = d.donations.items.filter(x => x.status === "DELIVERED" && x.receivedAt && x.receivedAt >= d.filter.from);
-  const top2 = y2 - 22;
-  p2.section("Entregas confirmadas no período", top2, `${numBR(d.kpis.deliveredKg)} kg · somente lotes DELIVERED`);
-  let y3 = delivered.length ? p2.table([
-    { label: "Lote", w: 160 }, { label: "Instituição", w: 135 }, { label: "Recebido por", w: 105 }, { label: "Kg", w: 40, right: true }, { label: "Entrega", w: 75 },
-  ], delivered.slice(0, 8).map(x => [x.description, x.recipient ?? "—", x.receivedBy ?? "não registrado", numBR(x.kg), x.receivedAt ? dateBR(x.receivedAt) : "—"]), top2 - 20) : top2 - 24;
-  if (!delivered.length) { p2.text("Nenhuma entrega confirmada no período.", M, y3, { size: 9, color: C.muted }); y3 -= 14; }
-  const pipe = d.donations.pipeline;
-  const pick = (s: string) => pipe.find(x => x.status === s)!;
-  p2.text(`Fluxo atual: ${pick("PENDING_REVIEW").count} aguardando verificação (${numBR(pick("PENDING_REVIEW").kg)} kg) · ${pick("AVAILABLE").count} disponível(is) (${numBR(pick("AVAILABLE").kg)} kg) · ${pick("RESERVED").count} reservado(s) (${numBR(pick("RESERVED").kg)} kg) · ${pick("CANCELLED").count} cancelado(s).`, M, y3 - 4, { size: 8, color: C.muted, max: W - 2 * M });
-
   p2.notes("PROVENIÊNCIA E LIMITES", [
-    "Números gerados pelo mesmo serviço e filtro do BI (getDashboard). Kg entregues somam apenas lotes com recebimento confirmado por pessoa da instituição dentro do período; lotes disponíveis ou reservados ainda não são impacto.",
-    "A plataforma registra quem declarou a verificação sanitária; não certifica segurança alimentar. Ocorrência resolvida exige nota de verificação; descartada indica falso alarme registrado.",
-    "Gerado por operador autenticado no ambiente de laboratório (Basic Auth). Protótipo do Hackathon Senac Ribeirão Preto 2026; não substitui auditoria técnica ou sanitária.",
-  ], y3 - 30);
+    "Números gerados pelo mesmo serviço e filtro do BI. Volume observado não significa desperdício nem economia comprovados.",
+    "Ocorrência de fluxo contínuo exige investigação humana. O mapa é esquemático; pontos sem sensor não recebem leitura. Medidores em série não devem ser somados como consumos independentes.",
+    "Protótipo do Hackathon Senac Ribeirão Preto 2026. Não substitui projeto hidráulico, inspeção profissional ou calibração física.",
+  ], y2 - 30);
   footer(p2, 2, 2, now);
 
   return pdf.save();

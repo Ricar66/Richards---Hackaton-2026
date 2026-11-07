@@ -430,3 +430,7 @@
    ficar parado por cima do novo. O que anda em JS (água, faixa, viagem do pacote, FLIP, 3D) recebe `still`. */
 .stage[data-paused] *, .stage[data-paused] *::before, .stage[data-paused] *::after { animation: none !important; transition: none !important; }
 .stage[data-paused] .dg.on::before { content: none; }
+
+/* A operação hídrica ocupa a largura dos instrumentos removidos. */
+.stage .today{grid-column:1/9;grid-row:2}.stage .feed{grid-column:9/13;grid-row:2}
+@media(max-width:1200px){.stage .today,.stage .feed{grid-column:auto;grid-row:auto}}

@@ -7,9 +7,8 @@ import { parseAnalyticsFilter } from "../../src/modules/analytics/domain/analyti
 import { reportFigures } from "../../src/modules/analytics/domain/report-figures";
 import { buildReportPdf, reportFileName } from "../../src/modules/reports/application/build-report-pdf";
 import { IngestTelemetry } from "../../src/modules/monitoring/application/ingest-telemetry";
-import { DonationService } from "../../src/modules/donations/application/donation-service";
 import { GET } from "../../src/app/api/reports/summary/route";
-import { DEMO_DEVICE_ID, DEMO_RECIPIENT_ID } from "../../src/lib/constants";
+import { DEMO_DEVICE_ID } from "../../src/lib/constants";
 import { pageSizes, pdfText } from "./pdf-text";
 
 beforeEach(resetAndSeed);
@@ -20,18 +19,7 @@ async function scenario() {
   await db().telemetryReading.createMany({ data: [3, 2, 1].map((h, i) => ({ deviceId: DEMO_DEVICE_ID, bootId: boot, sequence: i, source: "DEVICE" as const, flowLpm: 1.2, deltaLiters: 12.345 * (i + 1), capturedAt: new Date(Date.now() - h * 3_600_000) })) });
   const ingest = new IngestTelemetry(); const live = newBootId();
   for (const [seq, ago] of [[0, 45], [1, 30], [2, 15]]) await ingest.execute(reading(live, seq, 2.0, ago), DEVICE_KEY);
-  const service = new DonationService();
-  const { id } = await service.create({ description: "Pães do dia", weightKg: 7.25 }, "operador:ana");
-  await service.transition(id, { status: "AVAILABLE", verifiedBy: "Paula Mendes", ...DONATION_TRIAGE }, "operador:ana");
-  await service.transition(id, { status: "RESERVED", recipientId: DEMO_RECIPIENT_ID }, "operador:ana");
-  await service.transition(id, { status: "DELIVERED", receivedBy: "Seu Jorge" }, "operador:ana");
 }
-
-const DONATION_TRIAGE = {
-  foodOrigin: "WHOLE_PRODUCE" as const,
-  reviewerQualification: "Nutricionista responsável",
-  inspectionOk: true, conservationOk: true, validityOk: true, transportOk: true,
-};
 
 test("T47 PDF imprime exatamente os mesmos números do BI para o mesmo filtro", async () => {
   await scenario();
@@ -41,9 +29,9 @@ test("T47 PDF imprime exatamente os mesmos números do BI para o mesmo filtro", 
     assert.ok(text.includes(label), `rótulo ausente no PDF: ${label}`);
     assert.ok(text.includes(value), `valor do BI ausente no PDF: ${label} = ${value}`);
   }
-  assert.equal(data.kpis.deliveredKg, 7.3);
+  assert.equal(data.kpis.deliveredKg,0);
   assert.ok(text.includes("LEITURAS DE DISPOSITIVO"), "só leituras DEVICE: carimbo de dispositivo");
-  assert.ok(text.includes("Seu Jorge") && text.includes("Pães do dia"), "entrega confirmada com quem recebeu");
+  assert.doesNotMatch(text,/Seu Jorge|Pães do dia|Alimentos entregues/);
   assert.ok(text.includes("Página 1 de 2") && text.includes("Página 2 de 2"));
 });
 

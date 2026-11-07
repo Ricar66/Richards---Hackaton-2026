@@ -45,7 +45,7 @@ export function PlateiaLive() {
       source.addEventListener("sample", event => {
         try {
           const p = JSON.parse((event as MessageEvent<string>).data) as AudienceReading;
-          if (!p || !["flow", "environment", "scale", "lot"].includes(p.kind)) return;
+          if (!p || !["flow"].includes(p.kind)) return;
           setData(prev => ({ ...prev, [p.kind]: p }));
         } catch { /* não substituir números por payload inválido */ }
       });
@@ -64,10 +64,6 @@ export function PlateiaLive() {
   const fresh = (reading: AudienceReading | null) => !!reading && clock !== null &&
     clock + offset - Date.parse(reading.at) >= -5000 && clock + offset - Date.parse(reading.at) <= 35000;
   const flow = fresh(data.flow) ? data.flow : null;
-  const env = fresh(data.environment) ? data.environment : null;
-  const scale = fresh(data.scale) ? data.scale : null;
-  const lot = data.lot && clock !== null && clock + offset - Date.parse(data.lot.at) < 120000 ? data.lot : null;
-
   return <main className="audience">
     <div className="aud-glow" aria-hidden="true" />
     <div className="aud-shell">
@@ -88,20 +84,14 @@ export function PlateiaLive() {
         <div className="aud-heading"><h2>Telemetria ao vivo</h2><span>LEITURAS DA BANCADA</span></div>
         <div className="aud-grid">
           <Tile title="Vazão de água" value={flow ? format(flow.flowLpm, 2) : "—"} unit="L/min" reading={flow} tone="water" />
-          <Tile title="Temperatura" value={env ? format(env.temperatureC) : "—"} unit="°C" reading={env} tone="heat">
-            {env && env.temperatureC > env.limitC ? <p className="aud-warning">Acima do limite de {format(env.limitC)} °C · investigar</p> : null}
-          </Tile>
-          <Tile title="Umidade relativa" value={env?.humidityPct !== null && env?.humidityPct !== undefined ? format(env.humidityPct, 0) : "—"} unit="%" reading={env} tone="humidity" />
-          <Tile title="Peso da balança" value={scale ? format(scale.kg, 2) : "—"} unit="kg" reading={scale} tone="weight">
-            {scale ? <p className="aud-rule">{scale.phase === "triggered" ? "Lote criado" : scale.phase === "blocked" ? "Já existe lote pendente" : scale.phase === "stabilizing" ? "Estabilizando peso" : scale.phase === "disarmed" ? "Retire a carga para rearmar" : "Aguardando atingir limite"} · gatilho {format(scale.minKg)} kg / {format(scale.requiredSeconds, 0)} s</p> : null}
-          </Tile>
+
         </div>
       </section>
       <section className="aud-impact">
-        <div><small>DO SENSOR À DECISÃO</small><h2>O dado não é o fim. É o começo de uma ação.</h2><p>O RICHARDS identifica sinais de consumo e excedentes. Pessoas verificam o contexto, decidem e registram a ação.</p></div>
-        <div className="aud-lot"><small>ÚLTIMO LOTE DA BALANÇA</small><b>{lot ? format(lot.kg) + " kg" : "Aguardando"}</b><span>{lot ? "Criado às " + time(lot.at) + " · " + (lot.source === "SIMULATED" ? "SIMULADO" : "SENSOR REAL") : "O lote aparecerá aqui depois de uma pesagem válida."}</span>{lot && <strong>AGUARDA VERIFICAÇÃO HUMANA</strong>}</div>
+        <div><small>DO SENSOR À DECISÃO</small><h2>O dado não é o fim. É o começo de uma ação.</h2><p>O RICHARDS acompanha sinais de vazão na instalação. Pessoas verificam o contexto, decidem e registram a ação.</p></div>
+        <div className="aud-lot"><small>MAPEAMENTO HIDRÁULICO</small><b>Do ponto ao sinal</b><span>O operador vincula os medidores à planta de casa, comércio ou obra. Pontos sem sensor não recebem valores presumidos.</span></div>
       </section>
-      <footer className="aud-footer"><span>RICHARDS INTELLIGENCE · RIBEIRÃO PRETO</span><span>Sensor real e simulação são identificados. Não exibimos economia ou doação presumida. Leitura efêmera, sem histórico nesta tela.</span></footer>
+      <footer className="aud-footer"><span>RICHARDS INTELLIGENCE · RIBEIRÃO PRETO</span><span>Sensor real e simulação são identificados. Não exibimos economia presumida. Leitura efêmera, sem histórico nesta tela.</span></footer>
     </div>
   </main>;
 }
