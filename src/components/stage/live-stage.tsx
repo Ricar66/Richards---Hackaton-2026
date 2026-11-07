@@ -220,8 +220,8 @@ export function LiveStage({ initial, initialError, pinnedCode, initial3d = null,
 
       <RuleRing view={ring} deviceCode={focus?.code ?? null} alarm={alarm} />
 
-      <TemperaturePanel t={temp} view={tempView} occurrence={tempOcc} nowMs={now} />
-      <ScalePanel s={scale} view={scaleV} nowMs={now} />
+      <TemperaturePanel t={temp} view={tempView} occurrence={tempOcc} nowMs={now} want3d={want3d} reduced={reduced} diag={diag} />
+      <ScalePanel s={scale} view={scaleV} nowMs={now} want3d={want3d} reduced={reduced} diag={diag} />
 
       <section className="inst today" aria-labelledby="stg-today-title">
         <header className="inst-head"><h2 id="stg-today-title">Hoje</h2>{snap && <span className="inst-code">desde 00:00</span>}</header>

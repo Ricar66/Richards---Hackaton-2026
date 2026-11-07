@@ -1,27 +1,42 @@
 import type { LiveSource } from "@/modules/realtime/domain/live-event";
 import { BadgeSeal, Seal } from "./seal";
 import { fixedBR, kgBR, occurrenceSeal, secondsSince, sensorSeal, type ScaleLive, type ScaleView, type TemperatureLive, type TemperatureView } from "./stage-logic";
+import { InstrumentTwin } from "./instrument-twin";
+import { scaleInstrument, temperatureInstrument } from "./instrument-state";
+import { ThermalGlyph } from "./thermal-glyph";
 
 type Occ = { openedAt: string; title: string; source: LiveSource } | null;
 const age = (at: number, now: number | null) => (now === null ? null : secondsSince(at, now));
 
 /** Temperatura e umidade do canal ao vivo (DHT11). Ainda não é série gravada: a tela diz isso. */
-export function TemperaturePanel({ t, view, occurrence, nowMs }: { t: TemperatureLive | null; view: TemperatureView | null; occurrence: Occ; nowMs: number | null }) {
+type VisualOptions = { want3d?: boolean; reduced?: boolean; diag?: boolean };
+export function TemperaturePanel({ t, view, occurrence, nowMs, want3d, reduced, diag }: { t: TemperatureLive | null; view: TemperatureView | null; occurrence: Occ; nowMs: number | null } & VisualOptions) {
   const seal = t ? sensorSeal("temperature", t.source, t.channel) : null;
   const ago = t ? age(t.at, nowMs) : null;
   // Ocorrência simulada ou de outra origem que a leitura em foco ganha o próprio selo (a regra 5 não olha a origem).
   const occSeal = occurrence ? occurrenceSeal(occurrence.source, t?.source ?? null) : null;
-  return <section className={`inst temp${view?.stale ? " stale" : ""}`} aria-labelledby="stg-temp-title">
+  const visual = temperatureInstrument(t, view);
+  return <section className={`inst temp${view?.stale ? " stale" : ""}${occurrence ? " temp-has-alarm" : ""}`} aria-labelledby="stg-temp-title">
     <header className="inst-head">
       <h2 id="stg-temp-title">Temperatura</h2>
       {t && <span className="inst-code">{t.deviceCode}</span>}
       {seal && <Seal label={seal.label} simulated={seal.simulated} small />}
     </header>
+    <div className="temp-layout">
+      <InstrumentTwin kind="temperature" input={visual} enabled={want3d} reduced={reduced} diag={diag} label={`Instrumento térmico esquemático · ${visual.fresh ? "escala da leitura recebida" : "sem leitura recente"}${visual.simulated ? " · SIMULADO" : ""}`}>
+        <ThermalGlyph fraction={visual.fraction} fresh={visual.fresh} simulated={visual.simulated} tone={visual.tone} />
+      </InstrumentTwin>
+      <div className="sensor-readout">
     {!t || !view ? <p className="waiting">aguardando leitura</p> : <>
       <div className="temp-values">
         <b className="num big2">{fixedBR(t.c, 1)}<small> °C</small></b>
         {t.humidityPct !== undefined && <span className="num hum">{fixedBR(t.humidityPct, 0)}<small> % UR</small></span>}
       </div>
+      {view.stale && <p className="sensor-last-value">último valor · sem leitura recente</p>}
+    </>}
+      </div>
+    </div>
+    {t && view && <>
       <div className={`meter ${view.state}`} aria-hidden="true">
         <i className="meter-fill" style={{ transform: `scaleX(${view.fraction})` }} />
         <i className="meter-limit" style={{ left: `${view.limitFraction * 100}%` }} />
@@ -64,9 +79,10 @@ function Crate({ fill }: { fill: number }) {
 }
 
 /** Balança (HX711): peso ao vivo, segundos estáveis confirmados e a fase do detector, tudo decidido na ponte. */
-export function ScalePanel({ s, view, nowMs }: { s: ScaleLive | null; view: ScaleView | null; nowMs: number | null }) {
+export function ScalePanel({ s, view, nowMs, want3d, reduced, diag }: { s: ScaleLive | null; view: ScaleView | null; nowMs: number | null } & VisualOptions) {
   const seal = s ? sensorSeal("scale", s.source, s.channel) : null;
   const ago = s ? age(s.at, nowMs) : null;
+  const visual = scaleInstrument(s, view);
   return <section className={`inst scale${view?.stale ? " stale" : ""}`} aria-labelledby="stg-scale-title">
     <header className="inst-head">
       <h2 id="stg-scale-title">Balança</h2>
@@ -74,9 +90,12 @@ export function ScalePanel({ s, view, nowMs }: { s: ScaleLive | null; view: Scal
       {seal && <Seal label={seal.label} simulated={seal.simulated} small />}
     </header>
     <div className="scale-body">
-      <Crate fill={view?.fill ?? 0} />
+      <InstrumentTwin kind="scale" input={visual} enabled={want3d} reduced={reduced} diag={diag} label={`Balança esquemática · carga ilustrativa, não contagem de itens · ${visual.fresh ? "proporcional à leitura recebida" : "sem leitura recente"}${visual.simulated ? " · SIMULADO" : ""}`}>
+        <Crate fill={visual.fraction} />
+      </InstrumentTwin>
       {!s || !view ? <p className="waiting">aguardando leitura</p> : <div className="scale-read">
         <b className="num big2">{fixedBR(s.kg, 2)}<small> kg</small></b>
+        {view.stale && <p className="sensor-last-value">último valor · sem leitura recente</p>}
         <div className="segs" aria-label={`${view.lit} de ${view.total} segmentos de estabilidade`}>
           {Array.from({ length: view.total }, (_, i) => <i key={i} className={i < view.lit ? "on" : ""} />)}
         </div>
@@ -85,6 +104,7 @@ export function ScalePanel({ s, view, nowMs }: { s: ScaleLive | null; view: Scal
         {ago !== null && ago > 5 && <p className="age">última leitura há {ago} s</p>}
       </div>}
     </div>
+    <p className="sensor-illustration">carga ilustrativa · não identifica nem conta alimentos</p>
     <p className="caption">peso do lote = menor leitura estável, arredondada para baixo · {s ? `mínimo ${kgBR(s.progress.minKg)}` : "representação esquemática"}</p>
   </section>;
 }

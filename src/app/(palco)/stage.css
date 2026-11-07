@@ -237,6 +237,33 @@
 /* Selo de origem sobre o vermelho: fundo próprio para o texto do selo continuar legível. */
 .stage .occ-flag .seal { background: var(--bg); margin-right: calc(var(--u) * .7); vertical-align: middle; }
 
+/* Instrumentos adicionais: modelos sob demanda, SVG sempre disponível e valores no DOM. */
+.stage .temp-layout { flex: 1; min-height: 50px; max-height: 130px; display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); grid-template-rows: minmax(0, 1fr); gap: calc(var(--u) * 1); align-items: center; }
+.stage .sensor-readout { min-width: 0; }
+.stage .temp-layout .waiting { min-height: 90px; font-size: calc(var(--u) * 1.9); }
+.stage .temp-layout .temp-values { gap: 8px; }
+.stage .temp-layout .big2 { font-size: calc(var(--u) * 5.5); }
+.stage .sensor-last-value { color: var(--label); font: 600 12px var(--mono); margin-top: 5px; }
+.stage .sensor-illustration { color: var(--label); font-size: 11px; margin-top: 5px; }
+.stage .instrument-twin { position: relative; min-width: 0; width: 100%; height: clamp(120px, 17vh, 190px); background: radial-gradient(ellipse at center, #17333e77, transparent 70%); }
+.stage .instrument-temperature { max-height: 175px; }
+.stage .temp-layout .instrument-twin, .stage .scale-body .instrument-twin { height: 100%; min-height: 0; }
+.stage .temp-has-alarm .temp-layout { flex: 0 1 65px; }
+.stage .temp-has-alarm .temp-layout .big2 { font-size: calc(var(--u) * 4.3); }
+.stage .temp-has-alarm .temp-layout .hum { font-size: calc(var(--u) * 2.7); }
+.stage .instrument-fallback, .stage .instrument-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.stage .instrument-fallback { transition: opacity 180ms; }
+.stage .instrument-canvas { opacity: 0; pointer-events: none; }
+.stage .instrument-canvas canvas { display: block; width: 100%; height: 100%; }
+.stage .instrument-fallback svg { display: block; width: 100%; height: 100%; }
+.stage .instrument-twin[data-instrument-mode="3d"] .instrument-fallback { opacity: 0; }
+.stage .instrument-twin[data-instrument-mode="3d"] .instrument-canvas { opacity: 1; }
+.stage .instrument-mode { position: absolute; left: 4px; bottom: 1px; padding: 2px 4px; background: #0f2128dd; color: var(--label); font: 10px var(--mono); max-width: 100%; }
+.stage .instrument-twin[data-sim] { border-bottom: 1px dashed var(--sim); }
+.stage .instrument-diagnostic { position: absolute; inset: 0 0 auto; color: var(--ink); background: #0a1821e8; font: 10px var(--mono); padding: 4px; overflow-wrap: anywhere; }
+.stage .ring-body { filter: drop-shadow(0 8px 6px #0003); }
+.stage .ring-center b { text-shadow: 0 3px 0 #06131b; }
+
 /* ---------- balança ---------- */
 .stage .scale-body { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: calc(var(--u) * 1.4); align-items: center; }
 .stage .scale .big2 { font-size: calc(var(--u) * 6); }
@@ -294,6 +321,9 @@
 .stage .trip-node { position: absolute; top: 50%; transform: translate(-50%, -50%); }
 .stage .trip-node i { display: block; width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); border-radius: 50%; border: 2px solid var(--label); background: var(--bg); }
 .stage .trip-node.on i { border-color: var(--data); }
+.stage .trip-node i { position: relative; border-radius: 3px; transform: rotate(-30deg) skewX(12deg); background: linear-gradient(135deg, #49616b, #162c37); box-shadow: -3px 4px 0 #071720, -3px 5px 0 #304955; }
+.stage .trip-node.on i { background: linear-gradient(135deg, #a3dfce, #216352); }
+.stage .feed-line .glyph { border: 1px solid #36505b; box-shadow: inset 0 1px #6d899733, 0 3px 0 #071720; background: linear-gradient(145deg, #1c3642, #0c202a); }
 .stage .trip-node em { position: absolute; top: calc(var(--u) * 2.1); left: 50%; transform: translateX(-50%); font-style: normal; color: var(--ink); font-size: calc(var(--u) * 1.8); white-space: nowrap; }
 .stage .trip-node:first-of-type em { left: calc(var(--u) * -.8); transform: none; }
 .stage .trip-node:nth-of-type(5) em { left: auto; right: calc(var(--u) * -.8); transform: none; }
@@ -354,6 +384,24 @@
   .stage .twin-inspector-explanation { font-size: 12px; }
   .stage .twin-inspector-explanation p { margin-top: 4px; }
   .stage .twin-slot[data-expanded] .twin-diag { top: 150px; right: 12px; font-size: 11px; }
+  .stage .temp-layout { grid-template-columns: minmax(90px, .8fr) minmax(0, 1.2fr); gap: 12px; }
+  .stage .instrument-twin { height: 180px; }
+  .stage .temp-layout .instrument-twin, .stage .scale-body .instrument-twin { min-height: 100px; }
+  .stage .temp-layout { flex: 1 0 130px; max-height: none; }
+  .stage .temp-has-alarm .temp-layout { flex: 1 0 130px; }
+  .stage .instrument-temperature { max-height: 180px; }
+  .stage .temp-layout .big2 { font-size: 38px; }
+  .stage .scale .big2 { font-size: 40px; }
+  .stage .scale-body { gap: 10px; }
+  .stage .scale-sub { white-space: normal; overflow-wrap: anywhere; }
+  .stage .trip .inst-head { align-items: flex-start; }
+  .stage .trip-sum { margin-left: 0; width: 100%; font-size: 13px; white-space: normal; }
+  .stage .trip-id { font-size: 12px; overflow-wrap: anywhere; }
+  .stage .trip-track { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 95px auto; min-height: 160px; margin: 0 20px; gap: 8px; }
+  .stage .trip-track > .trip-node, .stage .trip-rail, .stage .trip-rider { top: 28px; }
+  .stage .trip-node em { max-width: 62px; white-space: normal; overflow-wrap: anywhere; text-align: center; }
+  .stage .trip-seg { position: static; grid-row: 2; transform: none; white-space: normal; text-align: center; font-size: 11px; }
+  .stage .trip-seg b { font-size: 13px; }
 }
 /* ---------- movimento ---------- */
 @keyframes stg-born { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }

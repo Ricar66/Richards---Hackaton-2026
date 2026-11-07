@@ -24,8 +24,12 @@ export function RuleRing({ view, deviceCode, alarm }: { view: RingView; deviceCo
     </header>
     <div className="ring-body">
       <svg className="ring-svg" viewBox="0 0 200 200" aria-hidden="true">
+        <defs><linearGradient id="stg-ring-bezel" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#63818d" /><stop offset=".35" stopColor="#263f4a" /><stop offset=".7" stopColor="#10242e" /><stop offset="1" stopColor="#45616c" /></linearGradient><radialGradient id="stg-ring-face"><stop stopColor="#18313c" /><stop offset="1" stopColor="#0c1d26" /></radialGradient></defs>
+        <circle cx="100" cy="100" r="98" fill="url(#stg-ring-bezel)" stroke="#8aa0a8" strokeWidth=".7" />
+        <circle cx="100" cy="100" r="92" fill="url(#stg-ring-face)" stroke="#09161d" strokeWidth="3" />
+        <circle cx="100" cy="100" r="70" fill="none" stroke="#1e3a45" strokeWidth="1" />
         {Array.from({ length: n }, (_, i) => (
-          <line key={i} x1="100" y1="10" x2="100" y2="26" transform={`rotate(${(i / n) * 360} 100 100)`} className={i < lit ? "tick on" : "tick"} />
+          <line key={i} x1="100" y1="17" x2="100" y2="28" transform={`rotate(${(i / n) * 360} 100 100)`} className={i < lit ? "tick on" : "tick"} />
         ))}
       </svg>
       <div className="ring-center">

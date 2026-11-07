@@ -33,7 +33,8 @@ export function PacketTrip({ trip, view, reduced }: { trip: TripSample | null; v
     frames.push({ transform: "translateX(75%)", opacity: 1, offset: Math.min(1, acc) * TRAVEL });
     frames.push({ transform: "translateX(100%)", opacity: 1, offset: TRAVEL });
     frames.push({ transform: "translateX(100%)", opacity: 0, offset: 1 });
-    rider.current.animate(frames, { duration: 1000, easing: "linear" });
+    const animation = rider.current.animate(frames, { duration: 1000, easing: "linear" });
+    return () => animation.cancel();
   }, [key, dev, proc, deliv, reduced]);
 
   const channel = trip ? CHANNEL_LABEL[trip.channel] ?? trip.channel : "ponte / API";
