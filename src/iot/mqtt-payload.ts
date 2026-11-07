@@ -84,7 +84,7 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
     sampleSeconds: number(env, "MQTT_SAMPLE_SECONDS", 2, 0.5, 60),
     tempLimitC: number(env, "MQTT_TEMP_LIMIT_C", 28, -20, 80),
     tempSeconds: number(env, "MQTT_TEMP_SECONDS", 30, 1, 3600),
-    scaleMinKg: number(env, "MQTT_SCALE_MIN_KG", 5, 0.1, 500),
+    scaleMinKg: number(env, "MQTT_SCALE_MIN_KG", 1.5, 0.1, 500),
     scaleStableSeconds: number(env, "MQTT_SCALE_STABLE_SECONDS", 6, 1, 600),
     requireDeviceTopic,
     retryBudgetMs: number(env, "MQTT_RETRY_BUDGET_SECONDS", 120, 1, 3600) * 1000,

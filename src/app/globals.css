@@ -665,3 +665,21 @@ select option { background: var(--surface); color: var(--ink); }
   .app { display: block; }
   .panel, .kpi, .paper { box-shadow: none; break-inside: avoid; }
 }
+
+
+/* Painel de temperatura / umidade / peso: usa stream único do BI, sem histórico inventado. */
+.bi-sensor-live{border:1px solid var(--line);border-radius:14px;background:linear-gradient(115deg,#102923,#0e2025);padding:19px 20px;margin:18px 0 24px}
+.bi-sensor-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.bi-sensor-head span{color:#87e7bd;font-size:10px;font-weight:800;letter-spacing:.13em}
+.bi-sensor-head h2{margin:5px 0;font-size:20px;color:var(--ink)}
+.bi-sensor-head p{margin:0;color:var(--muted);font-size:12px}
+.bi-sensor-head>a{color:#092c22;background:var(--accent);border:1px solid var(--accent-line);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:750}
+.bi-sensor-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.bi-sensor-cards article{border:1px solid #2a5148;border-radius:11px;padding:14px;background:#0a1e21;min-width:0}
+.bi-sensor-cards article>span{display:block;color:var(--ink-2);font-size:12px}
+.bi-sensor-cards article strong{display:block;margin:9px 0 8px;color:var(--ink);font-size:clamp(26px,3vw,38px);font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.bi-sensor-cards article strong small{font-size:14px;color:var(--muted)}
+.bi-sensor-cards article div{font-size:10px;color:#a9c6bb;overflow-wrap:anywhere}
+.bi-sensor-cards article p{margin:8px 0 0;font-size:10px;color:var(--warn)}
+.bi-sensor-note{color:var(--muted);font-size:11px;margin:14px 0 0}
+@media(max-width:640px){.bi-sensor-live{padding:15px}.bi-sensor-cards{grid-template-columns:1fr}.bi-sensor-cards article strong{font-size:34px}}
