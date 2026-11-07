@@ -84,6 +84,9 @@ services:
       MQTT_DEVICE_ALIASES: ${VPS_MQTT_DEVICE_ALIASES:-hortifruti_01=RICHARDS-FLOW-001}
       # Potenciômetro no lugar do YF-S201 (confirmado pelo Victor em 06/11): a vazão sai carimbada SIMULADO.
       MQTT_SIMULATED_SENSORS: ${VPS_MQTT_SIMULATED_SENSORS:-VAZAO}
+      # HX711 física tem capacidade nominal 5 kg; limiar de demo 1,5 kg após tara/calibração.
+      MQTT_SCALE_MIN_KG: ${VPS_MQTT_SCALE_MIN_KG:-1.5}
+      MQTT_SCALE_STABLE_SECONDS: ${VPS_MQTT_SCALE_STABLE_SECONDS:-6}
       MQTT_DEAD_LETTER: /data/carta-morta.ndjson
     volumes:
       - richards_vps_mqtt:/data

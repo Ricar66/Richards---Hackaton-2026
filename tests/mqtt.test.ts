@@ -30,6 +30,7 @@ test("configuração da ponte: padrões honestos, apelidos explícitos e valor i
   assert.throws(() => loadMqttConfig({ MQTT_SIMULATED_SENSORS: "UMIDADE" }), /MQTT_SIMULATED_SENSORS/);
   assert.throws(() => loadMqttConfig({ MQTT_TEMP_LIMIT_C: "quente" }), /MQTT_TEMP_LIMIT_C/);
   assert.equal(loadMqttConfig({ MQTT_SCALE_MIN_KG: "2.5" }).scaleMinKg, 2.5);
+  assert.equal(loadMqttConfig({}).scaleMinKg, 1.5, "limiar padrão da balança física");
 });
 
 test("broker sem usuário e senha só é aceito em bancada de demonstração (fail-closed)", () => {
