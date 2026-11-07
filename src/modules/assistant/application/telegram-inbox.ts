@@ -54,7 +54,8 @@ async function reply(chatId: string, text: string) {
   const history: ChatMessage[] = sub.historyAt && Date.now()-sub.historyAt.getTime()<3600000 && parsedHistory.success ? parsedHistory.data : [];
   const answer = await answerQuestion(text,history);
   await getDb().telegramSubscription.update({ where: { id: sub.id }, data: { history: [...history,{role:"user",content:text},{role:"assistant",content:answer.answer.slice(0,2000)}].slice(-6), historyAt: new Date() } });
-  return answer.answer+"\n\nFontes consultadas: "+answer.sources.map(s=>s.label).join("; ");
+  // Conversa sem consulta (cumprimento, dúvida de uso) não tem fonte: não imprimir "Fontes consultadas:" vazio.
+  return answer.sources.length ? answer.answer+"\n\nFontes consultadas: "+answer.sources.map(s=>s.label).join("; ") : answer.answer;
 }
 export async function processInboxOne(api: Pick<TelegramApi,"send">) {
   const db=getDb(), now=new Date(), token=randomUUID(), until=new Date(now.getTime()+120000);

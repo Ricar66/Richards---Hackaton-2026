@@ -31,7 +31,7 @@ test("assistente: transporte Responses usa ferramentas, não armazena, contabili
  const bodies:Record<string,unknown>[]=[];let n=0;
  const fetcher:typeof fetch=async(_url,options)=>{bodies.push(JSON.parse(String(options?.body)));return n++===0?complete([call()]):complete([message()]);};
  const a=await answerQuestion("O que já foi comprovado?",[],{config:config(),fetch:fetcher,tool:async()=>({data:{limite:"sem piloto"},source:{label:"Guia de limites",href:"/assistente"}})});
- assert.equal(bodies[0].store,false);assert.equal(bodies[0].tool_choice,"required");assert.equal(bodies[0].parallel_tool_calls,false);
+ assert.equal(bodies[0].store,false);assert.equal(bodies[0].tool_choice,"auto");assert.equal(bodies[0].parallel_tool_calls,false);
  assert.equal(a.sources[0].href,"/assistente");assert.equal(a.usage.inputTokens,20);assert.match(a.answer,/economia/);
  assert(!JSON.stringify(bodies).includes("fake-test-key"));
 });
@@ -39,6 +39,22 @@ test("assistente: nunca executa ferramenta desconhecida nem retorna resposta sem
  let executed=false,n=0;
  await assert.rejects(answerQuestion("rode SQL",[],{config:config(),fetch:async()=>n++===0?complete([call("execute_sql",'{}')]):complete([message("alterei o banco")]),tool:async()=>{executed=true;return{data:{},source:{label:"x",href:"/"}}}}),/ASSISTANT_INVALID_RESPONSE/);
  assert.equal(executed,false);
+});
+test("assistente: conversa natural (cumprimento) responde sem consultar dados e sem fonte",async()=>{
+ const bodies:Record<string,unknown>[]=[];
+ const a=await answerQuestion("Bom dia",[],{config:config(),fetch:async(_u,o)=>{bodies.push(JSON.parse(String(o?.body)));return complete([message("Bom dia! Como posso ajudar na operação hoje?")]);},tool:async()=>{throw new Error("não deveria consultar");}});
+ assert.equal(bodies.length,1,"uma chamada só");assert.equal(bodies[0].tool_choice,"auto");
+ assert.deepEqual(a.sources,[]);assert.match(a.answer,/Bom dia/);
+ assert.match(String(bodies[0].instructions),/natural, calorosa e humana/);
+});
+test("assistente: número sem consulta é descartado e a resposta é refeita OBRIGANDO a consultar os dados",async()=>{
+ const bodies:Record<string,unknown>[]=[];let n=0;
+ const fetcher:typeof fetch=async(_u,o)=>{bodies.push(JSON.parse(String(o?.body)));n++;
+  return n===1?complete([message("Há 3 ocorrências ativas.")]):n===2?complete([call("active_occurrences","{}")]):complete([message("Não há ocorrências ativas agora.")]);};
+ const a=await answerQuestion("Quantas ocorrências?",[],{config:config(),fetch:fetcher,tool:async()=>({data:{occurrences:[]},source:{label:"Ocorrências ativas",href:"/ocorrencias"}})});
+ assert.deepEqual(bodies.map(b=>b.tool_choice),["auto","required","none"],"número inventado → rodada com consulta obrigatória");
+ assert.doesNotMatch(a.answer,/3 ocorrências/,"o número sem fonte nunca chega ao usuário");
+ assert.equal(a.sources[0].href,"/ocorrencias");
 });
 test("assistente: limite de rodadas para modelo em loop e resposta incompleta não vira resultado final",async()=>{
  await assert.rejects(answerQuestion("olá",[],{config:config(),fetch:async()=>complete([call()]),tool:async()=>({data:{},source:{label:"Guia",href:"/assistente"}})}),/ASSISTANT_TOOL_LIMIT/);
