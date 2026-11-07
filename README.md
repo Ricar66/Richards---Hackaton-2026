@@ -289,3 +289,12 @@ Antes de abrir um PR para a `develop`, rode `pnpm typecheck`, `pnpm lint` e `pnp
 - **Kit de pitch:** fica em [`presentation/`](presentation/).
 
 <p align="center"><img src="presentation/imagens/01_capa.webp" alt="Capa do pitch do RICHARDS Intelligence" width="70%"></p>
+
+
+## Experiência da plateia por QR (develop, 07/11/2026)
+
+- Operador acessa /convite (Basic Auth) para projetar QR Code offline, apontando para http://187.77.229.205:8090/plateia.
+- Plateia acessa /plateia sem senha: vazão, temperatura, umidade e peso em SSE público SOMENTE leitura, com selo de dados reais/simulados e indicação de leituras desatualizadas. /api/plateia/stream expõe só campos sanitizados, não o stream privado do BI.
+- O BI principal agora mostra DHT11 e HX711 em Centro de Controle, Monitoramento e Dispositivos, com sinais efêmeros. Sem pacote novo, não apresenta valores como atuais; histórico continua só para vazão.
+- Gatilho padrão da ponte MQTT da balança física: 1,5 kg por 6s, após tara/calibração; não confundir com o limite nominal de 5 kg da célula do Victor. Bancada virtual mantém cenário independente.
+- 70 espectadores é ALVO de teste, não benchmark já executado. Use scripts/plateia-carga.mjs; instruções, riscos e handoff para Claude em docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md. A main só deve receber essa entrega após aceites reais.

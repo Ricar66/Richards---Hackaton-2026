@@ -64,3 +64,15 @@ O Compose principal publica a web apenas em `127.0.0.1:3000`. Na LAN isolada, us
 - [ ] Abrir `/plateia` em celular via QR projetado em `/convite` (somente leitura e sem autenticação).
 - [ ] Conferir no BI (`/`, `/monitoramento`, `/dispositivos`) os cards DHT11 e HX711 no mesmo momento da leitura MQTT.
 - [ ] Rodar carga de 70 conexões SSE com `scripts/plateia-carga.mjs` na VPS SOMENTE após autorização da equipe; evidenciar HTTP 200 + evento e atualização real. Referência: `docs/entrega/PLATEIA_QR_HANDOFF.md`.
+
+
+### Atualização 07/11 — feedback do Victor
+
+- [ ] Confirmar capacidade nominal de 5 kg da célula e PESO TOTAL (suporte, recipiente, alimento), sem sobrecarga; calibrar com pesos conhecidos.
+- [ ] Verificar se o firmware MQTT local possui regra antiga de 6/6,2 kg e, se houver, reduzir ali também. O firmware MQTT do Victor ainda não foi entregue neste repositório.
+- [ ] Validar que o processo pnpm mqtt usa MQTT_SCALE_MIN_KG=1.5 (na VPS vem de VPS_MQTT_SCALE_MIN_KG; reiniciar ponte depois de alterar).
+- [ ] Abrir /ao-vivo, /monitoramento e /plateia em 4G. Conferir peso e temperatura na mesma amostra, origem correta e criação PENDING_REVIEW após 6s.
+- [ ] Abrir /convite (operador) e escanear o QR que aponta para http://187.77.229.205:8090/plateia.
+- [ ] Testar 50–70 conexões com scripts/plateia-carga.mjs antes do merge para main. Não declarar PASSOU sem evidências.
+
+Handoff completo em docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.

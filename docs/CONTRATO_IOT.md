@@ -333,3 +333,10 @@ Toda gravação que muda o que as telas mostram avisa o navegador sem consulta p
 ## Iteração de 07/11 — leitura pela plateia (QR)
 
 A página pública `/plateia` é somente de leitura. O operador projeta o QR em `/convite`, protegido por Basic Auth; ele abre o stream GET `/api/plateia/stream`, que passa apenas dados sanitizados por `src/modules/audience/public-feed.ts` e não pode mostrar eventos brutos do BI. A ponte MQTT continua com a mesma semântica dos eventos `sensor.live` (DHT11/HX711 efêmeros, não série histórica). O documento completo de implantação/segurança/testes é [`docs/entrega/PLATEIA_QR_HANDOFF.md`](entrega/PLATEIA_QR_HANDOFF.md). A balança física de 5 kg requer tara, calibração, gatilho operacional 1,5 kg e carga total abaixo da capacidade nominal.
+
+
+## Extensão pública de 07/11/2026 — QR Code da plateia
+
+A rota GET /api/plateia/stream é pública, separada do SSE de operador (GET /api/live/stream). Só envia vazão, temperatura, umidade, peso e lote criado pela balança, via projeção de whitelist; não transmite payload completo, IDs internos, atores ou nomes. A página /plateia não autentica; /convite permanece sob Basic Auth. Capacidade-alvo: 50–70 celulares, ainda **não validada em carga**; limite de segurança: 110 streams públicos por processo. Ver docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.
+
+**Atenção:** o cenário da bancada VIRTUAL continua com seu próprio limiar de 5 kg, para preservar ensaios determinísticos existentes; já a ponte da bancada FÍSICA utiliza o padrão 1,5 kg com HX711 de capacidade nominal 5 kg. Em ambos os casos é indispensável verificar tara, calibração e peso total antes do teste.
