@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 export type AuditInput = {
-  organizationId: string; entity: "TelegramSubscription" | "TelegramLink" | "Occurrence" | "DonationBatch" | "RecipientOrganization" | "Organization"; entityId: string;
+  organizationId: string; entity: "CircularBatch" | "CircularPartner" | "CircularEvidence" | "TelegramSubscription" | "TelegramLink" | "Occurrence" | "DonationBatch" | "RecipientOrganization" | "Organization"; entityId: string;
   action: string; actor: string; metadata?: Record<string, Prisma.InputJsonValue | null>;
 };
 /** Monta o AuditEvent; gravar com o MESMO client de transação da mudança auditada. */
