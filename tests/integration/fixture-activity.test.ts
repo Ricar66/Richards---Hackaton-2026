@@ -26,6 +26,10 @@ test("72h de amostras zeradas DEVICE permitem análise; simulação não conta",
     flowLpm: 0, deltaLiters: 0,
   }))).flat();
   await db().telemetryReading.createMany({ data: samples });
+  await db().telemetryReading.create({ data: {
+    deviceId: DEMO_DEVICE_ID, bootId: "fixture-real", sequence: 865, source: "DEVICE",
+    capturedAt: new Date(now.getTime() - 25_000), flowLpm: 0, deltaLiters: 0,
+  } });
   await db().device.update({ where: { id: DEMO_DEVICE_ID }, data: { lastSeenAt: now } });
   const res = await getFixtureActivity({}, now);
   assert.equal(res.items[0].state, "NO_FLOW_OBSERVED");
@@ -43,4 +47,14 @@ test("72h de amostras zeradas DEVICE permitem análise; simulação não conta",
   assert.equal((await getFixtureActivity({}, now)).items[0].state, "FLOW_OBSERVED");
   await db().device.update({ where: { id: DEMO_DEVICE_ID }, data: { lastSeenAt: new Date(now.getTime() - 200_000) } });
   assert.equal((await getFixtureActivity({}, now)).items[0].state, "NO_SIGNAL", "sensor offline não permite inferir inatividade");
+});
+
+test("simulação pode marcar dispositivo ONLINE, mas não provar que o sensor físico está comunicando", async () => {
+  const now = new Date();
+  await db().device.update({ where: { id: DEMO_DEVICE_ID }, data: { lastSeenAt: now } });
+  await db().telemetryReading.create({ data: {
+    deviceId: DEMO_DEVICE_ID, bootId: "fixture-virtual", sequence: 1, source: "SIMULATED",
+    capturedAt: new Date(now.getTime() - 15_000), flowLpm: 0, deltaLiters: 0,
+  } });
+  assert.equal((await getFixtureActivity({}, now)).items[0].state, "NO_SIGNAL");
 });
