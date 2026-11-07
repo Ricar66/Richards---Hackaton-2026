@@ -482,3 +482,11 @@ Pedido do Ricardo ("um robozinho andando pela tela"). Componente `src/components
 - A fala usa só a contagem de ocorrências ativas do servidor (a mesma do sino). A antena fica laranja com ocorrência ativa e cinza com o servidor fora.
 - Armadilha: pausar com `animation-play-state` em `.robo-walker *` congelava a entrada do menu (`pop`) na opacidade 0. O menu existia mas ficava invisível. A pausa vale só para o passeio e para `.robo-figure`.
 - Ensaio no Chrome (servidor local, banco de teste): 18/18. Inclui p95 de 16,9 ms com o robô andando, menu visível, Esc devolve o foco, parado gravado, esconder/mostrar, celular 360 e 390 e 0 erros. Celular físico: NÃO EXECUTADO.
+
+## 07/11/2026 — extensão dos instrumentos 3D e proposta Circular
+
+Após as capturas enviadas por Ricardo, implementada em `feat/instrumentos-3d` a extensão da Sala: balança e instrumento térmico Three.js sob demanda, fallbacks SVG acessíveis, estado neutro para dados antigos, moldura do anel e nós/eventos com profundidade. Sem laço contínuo nos novos modelos, até dois contextos adicionais criados por interseção, DPR limitado e fallback. Estabilidade continua vindo da ponte; não avança pelo relógio. Dados e selos ficam no DOM. Base develop `95511de`, main consultada `07b92f4`; este trabalho não alterou main/VPS/APIs/banco/migrations/dependências.
+
+PASSOU nesta revisão: 155 unitários (seis novos de instrumentos), generate/typecheck/lint/build, HTTP SSR local e seis testes Python. Renderer/layout/GPU/celular/projetor desta extensão NÃO executados; aceites anteriores do cano continuam históricos. Scripts, matriz e orientação ao Claude em `docs/entrega/INSTRUMENTOS_3D_HANDOFF_2026-11-07.md`.
+
+Ricardo trouxe a ideia RICHARDS Circular e confirmou que 5 kg/dia é exemplo ilustrativo. Recomendação: mostrar roadmap e rastreabilidade futura, consolidando a operação atual antes de implementar outro módulo. Conceito, aritmética e referências primárias verificadas em `docs/propostas/RICHARDS_CIRCULAR.md`. Não há módulo Circular implementado nem resultado real de redução/destinação; não misturar estimativas, doação confirmada e tratamento documentado.

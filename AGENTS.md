@@ -63,3 +63,7 @@ Leia `docs/assistente/HANDOFF_CLAUDE.md` antes de alterar o assistente. `/assist
 ## Revisão de 3D/mobile (PR 07/11)
 
 Leia `docs/entrega/3D_MOBILE_HANDOFF_2026-11-07.md` antes de continuar. A Sala tenta 3D automaticamente com fallback, amplia sem duplicar canvas e muda para cartões com rolagem no celular. Shader nunca usa tempo independente para inventar fluxo. Aceite visual/browser/aparelhos/projetor ainda NÃO executado; não anunciar responsividade universal ou FPS com base no build. Preservar `?3d=0`, SVG acessível, movimento reduzido e orçamento adaptativo. Não publicar main/VPS automaticamente.
+
+## Instrumentos 3D complementares e Circular (07/11)
+
+Leia `docs/entrega/INSTRUMENTOS_3D_HANDOFF_2026-11-07.md`: temperatura/balança passam a ter modelos sob demanda, sem laço contínuo; o aceite visual desta extensão ainda está pendente e não herda os resultados anteriores do cano. Esperar até três canvases na Sala, zero com 2D forçado. `docs/propostas/RICHARDS_CIRCULAR.md` é só roadmap, com 5 kg/dia explicitamente ilustrativos; não existe módulo Circular nem destinação comprovada nesta entrega.

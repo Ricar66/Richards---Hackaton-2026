@@ -136,6 +136,7 @@ flowchart LR
   - A Sala tenta o 3D em three.js após carregar no cliente, respeitando a opção gravada e `?3d=0`. O SVG permanece montado como representação acessível e fallback; o BI não carrega a cena.
   - Qualquer falha volta ao SVG na hora: sem WebGL2, renderização por software, perda de contexto ou orçamento de quadro.
   - **Ampliar gêmeo** abre inspeção com o mesmo canvas, dois enquadramentos e dados em texto. A Sala passa a cartões com rolagem no celular; controles de toque e redução de movimento continuam disponíveis. [Revisão 3D/mobile e ensaios pendentes](docs/entrega/3D_MOBILE_HANDOFF_2026-11-07.md).
+  - Temperatura e balança também possuem modelos opcionais sob demanda, sem animação autônoma. [Estado, fallback e aceite dos instrumentos](docs/entrega/INSTRUMENTOS_3D_HANDOFF_2026-11-07.md). [RICHARDS Circular](docs/propostas/RICHARDS_CIRCULAR.md) é proposta de evolução, ainda não implementada.
   - A velocidade da água vem da vazão medida.
 
 ### Stack
