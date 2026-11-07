@@ -60,3 +60,15 @@ test("stream ao vivo (/api/live/stream) exige a senha do operador como o resto d
   assert.ok(passed(r), "GET do EventSource não tem Content-Type JSON e não pode ser barrado pela regra de escrita");
   assert.equal(forwardedActor(r), "operador:op");
 });
+
+
+test("plateia pública é whitelist exata de leitura, sem liberar o painel e a API do operador", () => {
+  for (const path of ["/plateia", "/api/plateia/stream", "/qr-plateia.png"]) {
+    const r = proxy(req(path));
+    assert.ok(passed(r));
+    assert.equal(forwardedActor(r), null);
+  }
+  for (const path of ["/convite", "/api/live/stream", "/api/plateia/admin", "/plateia/admin"])
+    assert.equal(proxy(req(path)).status, 401);
+  assert.equal(proxy(req("/api/plateia/stream", { method: "POST", headers: { "content-type": "application/json" } })).status, 401);
+});
