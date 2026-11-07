@@ -22,10 +22,16 @@ async function scenario() {
   for (const [seq, ago] of [[0, 45], [1, 30], [2, 15]]) await ingest.execute(reading(live, seq, 2.0, ago), DEVICE_KEY);
   const service = new DonationService();
   const { id } = await service.create({ description: "Pães do dia", weightKg: 7.25 }, "operador:ana");
-  await service.transition(id, { status: "AVAILABLE", verifiedBy: "Paula Mendes" }, "operador:ana");
+  await service.transition(id, { status: "AVAILABLE", verifiedBy: "Paula Mendes", ...DONATION_TRIAGE }, "operador:ana");
   await service.transition(id, { status: "RESERVED", recipientId: DEMO_RECIPIENT_ID }, "operador:ana");
   await service.transition(id, { status: "DELIVERED", receivedBy: "Seu Jorge" }, "operador:ana");
 }
+
+const DONATION_TRIAGE = {
+  foodOrigin: "WHOLE_PRODUCE" as const,
+  reviewerQualification: "Nutricionista responsável",
+  inspectionOk: true, conservationOk: true, validityOk: true, transportOk: true,
+};
 
 test("T47 PDF imprime exatamente os mesmos números do BI para o mesmo filtro", async () => {
   await scenario();

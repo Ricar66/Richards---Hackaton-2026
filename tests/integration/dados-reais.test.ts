@@ -30,12 +30,18 @@ async function cenarioMisto() {
   const real = await db().occurrence.create({ data: { organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, deviceId: DEMO_DEVICE_ID, kind: "UNUSUAL_FLOW", severity: "HIGH", status: "OPEN", source: "DEVICE", title: "Fluxo real", description: "sensor" } });
   const service = new DonationService();
   const realLot = await service.create({ description: "Lote real do operador", weightKg: 3 }, "operador:ana");          // MANUAL
-  await service.transition(realLot.id, { status: "AVAILABLE", verifiedBy: "Ana Lima" }, "operador:ana");
+  await service.transition(realLot.id, { status: "AVAILABLE", verifiedBy: "Ana Lima", ...DONATION_TRIAGE }, "operador:ana");
   await service.transition(realLot.id, { status: "RESERVED", recipientId: DEMO_RECIPIENT_ID }, "operador:ana");     // lote real na instituição fictícia A
   const simLot = await db().donationBatch.create({ data: { organizationId: DEMO_ORG_ID, description: "Lote simulado", weightKg: 6, status: "RESERVED", source: "SIMULATED", recipientId: DEMO_RECIPIENT_IDS[1], safetyVerifiedBy: "seed", safetyVerifiedAt: new Date() } });
   await db().auditEvent.create({ data: { organizationId: DEMO_ORG_ID, entity: "DonationBatch", entityId: simLot.id, action: "CREATED", metadata: { actor: "seed" } } });
   return { simOcc: sim.occurrenceId, realOcc: real.id, realLot: realLot.id, simLot: simLot.id };
 }
+
+const DONATION_TRIAGE = {
+  foodOrigin: "WHOLE_PRODUCE" as const,
+  reviewerQualification: "Nutricionista responsável",
+  inspectionOk: true, conservationOk: true, validityOk: true, transportOk: true,
+};
 
 test("D1 inventário conta o simulado e separa o real, sem apagar nada", async () => {
   const ids = await cenarioMisto();
@@ -115,7 +121,7 @@ test("D7 cadastro de instituição real: cria com auditoria, não duplica e recu
   await assert.rejects(cadastrarInstituicao(db(), { nome: "Cozinha · Demonstração", cidade: "Ribeirão Preto", actor: "admin:teste" }), /Demonstração/);
   // A instituição nova serve de destino de reserva como qualquer outra.
   const lot = await new DonationService().create({ description: "Lote real", weightKg: 2 }, "operador:ana");
-  await new DonationService().transition(lot.id, { status: "AVAILABLE", verifiedBy: "Ana Lima" }, "operador:ana");
+  await new DonationService().transition(lot.id, { status: "AVAILABLE", verifiedBy: "Ana Lima", ...DONATION_TRIAGE }, "operador:ana");
   const res = await new DonationService().transition(lot.id, { status: "RESERVED", recipientId: a.id }, "operador:ana");
   assert.equal(res.status, "RESERVED");
 });

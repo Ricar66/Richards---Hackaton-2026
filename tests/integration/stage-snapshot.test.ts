@@ -16,11 +16,17 @@ const device = () => db().device.findUniqueOrThrow({ where: { id: DEMO_DEVICE_ID
 
 async function deliver(description: string, kg: number, receivedBy: string) {
   const { id } = await donations.create({ description, weightKg: kg }, "operador:ricardo");
-  await donations.transition(id, { status: "AVAILABLE", verifiedBy: "Verificadora Sanitária Ana" }, "operador:ricardo");
+  await donations.transition(id, { status: "AVAILABLE", verifiedBy: "Verificadora Sanitária Ana", ...DONATION_TRIAGE }, "operador:ricardo");
   await donations.transition(id, { status: "RESERVED", recipientId: DEMO_RECIPIENT_ID }, "operador:ricardo");
   await donations.transition(id, { status: "DELIVERED", receivedBy }, "operador:ricardo");
   return id;
 }
+
+const DONATION_TRIAGE = {
+  foodOrigin: "WHOLE_PRODUCE" as const,
+  reviewerQualification: "Nutricionista responsável",
+  inspectionOk: true, conservationOk: true, validityOk: true, transportOk: true,
+};
 
 test("snapshot do palco: kg de hoje pela data de recebimento, sem quem recebeu, sem usuário do operador", async () => {
   const now = new Date();

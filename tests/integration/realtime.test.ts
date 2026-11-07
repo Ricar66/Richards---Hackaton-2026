@@ -45,6 +45,12 @@ async function collect(): Promise<LiveEvent[]> {
 const only = <T extends LiveEvent["type"]>(events: LiveEvent[], type: T) => events.filter((e): e is Extract<LiveEvent, { type: T }> => e.type === type);
 const rejected = (reason: string): LiveEventInput => ({ type: "message.rejected", orgId: DEMO_ORG_ID, channel: "mqtt", reason });
 
+const DONATION_TRIAGE = {
+  foodOrigin: "WHOLE_PRODUCE" as const,
+  reviewerQualification: "Nutricionista responsável",
+  inspectionOk: true, conservationOk: true, validityOk: true, transportOk: true,
+};
+
 test("NOTIFY dentro da transação: COMMIT entrega, ROLLBACK não", async () => {
   await db().$transaction(async tx => { await notifyLive(tx, rejected("confirmado")); });
   await assert.rejects(db().$transaction(async tx => { await notifyLive(tx, rejected("desfeito")); throw new Error("desfaz"); }), /desfaz/);
@@ -113,7 +119,7 @@ test("transição de ocorrência emite occurrence.status no COMMIT; transição 
 test("doação: created (manual) e cada status; entrega leva só a instituição, nunca quem recebeu nem quem verificou", async () => {
   const service = new DonationService();
   const { id } = await service.create({ description: "Hortaliças de teste", weightKg: 4.25 }, "operador:ana");
-  await service.transition(id, { status: "AVAILABLE", verifiedBy: "Responsável Sanitário" }, "operador:ana");
+  await service.transition(id, { status: "AVAILABLE", verifiedBy: "Responsável Sanitário", ...DONATION_TRIAGE }, "operador:ana");
   await service.transition(id, { status: "RESERVED", recipientId: DEMO_RECIPIENT_ID }, "operador:ana");
   await service.transition(id, { status: "DELIVERED", receivedBy: "Carla Pessoa Física" }, "operador:bia");
   await assert.rejects(service.transition(id, { status: "CANCELLED", reason: "teste de recusa" }, "operador:bia"));

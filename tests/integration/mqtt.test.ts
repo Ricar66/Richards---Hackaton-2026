@@ -31,6 +31,12 @@ function bridge(env: Record<string, string> = {}, step = 2) {
 const active = (kind: "UNUSUAL_FLOW" | "TEMPERATURE_EXCURSION") =>
   db().occurrence.findMany({ where: { deviceId: DEMO_DEVICE_ID, kind, status: { in: ["OPEN", "ACKNOWLEDGED"] } } });
 
+const DONATION_TRIAGE = {
+  foodOrigin: "WHOLE_PRODUCE" as const,
+  reviewerQualification: "Nutricionista responsável",
+  inspectionOk: true, conservationOk: true, validityOk: true, transportOk: true,
+};
+
 test("MQTT: payload do firmware via apelido grava a leitura (potenciômetro = SIMULATED) com volume pelo intervalo real", async () => {
   const { ingestion, many } = bridge({}, 5);
   await many(2, { PESO: 0, VAZAO: 3, TEMP: 25, UMIDADE: 60 });
@@ -116,7 +122,7 @@ test("MQTT: carga estável vira UM lote PENDING_REVIEW; com lote pendente não c
   const again = await many(6, load([0, 6, 6, 6, 6, 6]));
   assert.deepEqual(again.filter(r => r.donation).map(r => [r.donation!.created, r.donation!.id]), [[false, lot.id]], "um lote da balança aguardando verificação por vez");
 
-  await new DonationService().transition(lot.id, { status: "AVAILABLE", verifiedBy: "Maria (nutricionista)" }, "operador:teste");
+  await new DonationService().transition(lot.id, { status: "AVAILABLE", verifiedBy: "Maria (nutricionista)", ...DONATION_TRIAGE }, "operador:teste");
   const next = await many(6, load([0, 6, 6, 6, 6, 6]));
   assert.equal(next.filter(r => r.donation?.created).length, 1);
   assert.equal(await db().donationBatch.count({ where: { source: "DEVICE" } }), 2);
