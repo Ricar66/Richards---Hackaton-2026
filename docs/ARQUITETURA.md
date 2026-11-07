@@ -77,3 +77,7 @@ O modelo cobre organizações, unidades, dispositivos, leituras, ocorrências/ev
 - Compilação do firmware, calibração, testes do ESP32 físico e desempenho no projetor dependem das evidências da equipe. Teste automatizado do software não aprova esses itens.
 
 Contratos: `CONTRATO_IOT.md`. Escopo inicial e critérios: `docs/plano/01_PRODUTO_E_OBJETIVOS.md` e `02_ESCOPO_FUNCIONAL_CRITERIOS.md`. Estado de execução: `docs/entrega/AUDITORIA_2026-11-06.md` e `REGISTRO_TESTE_FISICO.md`. Roteiro: `docs/ROTEIRO_DEMO.md` e `presentation/FALA_5MIN40.md`.
+
+## Circular — módulo opcional de rastreabilidade
+
+`src/modules/circular` mantém contratos no domínio, transações/quantidades na aplicação e autenticação/anexos na infraestrutura; APIs finas em `/api/circular/*` e UI em `/circular`. `CircularPartner`, `CircularBatch` e `CircularEvidence` acrescentam dados sem alterar telemetria, regras ou firmware. Ligação opcional única com `DonationBatch`, sempre pendente de verificação humana. Documentos ficam no PostgreSQL e não no bundle público. AuditEvent compartilha a transação. Feature desligada por padrão; não integra ainda o worker Telegram. Fluxo e limites em `docs/circular/README.md`.

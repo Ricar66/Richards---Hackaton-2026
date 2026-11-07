@@ -482,3 +482,11 @@ Pedido do Ricardo ("um robozinho andando pela tela"). Componente `src/components
 - A fala usa só a contagem de ocorrências ativas do servidor (a mesma do sino). A antena fica laranja com ocorrência ativa e cinza com o servidor fora.
 - Armadilha: pausar com `animation-play-state` em `.robo-walker *` congelava a entrada do menu (`pop`) na opacidade 0. O menu existia mas ficava invisível. A pausa vale só para o passeio e para `.robo-figure`.
 - Ensaio no Chrome (servidor local, banco de teste): 18/18. Inclui p95 de 16,9 ms com o robô andando, menu visível, Esc devolve o foco, parado gravado, esconder/mostrar, celular 360 e 390 e 0 erros. Celular físico: NÃO EXECUTADO.
+
+## 07/11/2026 — Circular: MVP para revisão em develop
+
+- Jornada `/circular` privada, flag `CIRCULAR_ENABLED=false`, cadastro manual/simulado, triagem humana, operador/processo compatível, coleta parcial e comprovantes de recebimento/destinação. Sem seed real ou dados dos 5 kg nos KPIs.
+- Migration aditiva `20261107180000_circular`: cinco enums e três tabelas; anexos até 2 MiB em bytea. Startup do container aplica migrations mesmo com flag desligada: revisar antes de qualquer deploy.
+- Conservação de massa, retentativas, versões e auditoria transacional. Candidato à doação gera apenas PENDING_REVIEW. Nada de exclusão/estorno manual de fatos físicos/documentos. Tratamento comprovado significa documento conferido, não certificação automática do software.
+- Resultados locais: typecheck/lint/build; 155 unitários; 126 integração em PG18.6 isolado; 6 testes de ZIP; fluxo HTTP com Next produção. Comando CLI `pnpm test` bloqueado por pipe EPERM, mesma suíte passou com loader `node --import tsx --test`.
+- PG16, browser/mobile e piloto físico ainda pendentes; nenhum deploy/main/VPS alterado. Telegram/IA do Circular ficam para depois. Leia `docs/circular/HANDOFF_CLAUDE.md` para revisão e aceite antes de ativar.

@@ -317,3 +317,9 @@ Antes de abrir um PR para a `develop`, rode `pnpm typecheck`, `pnpm lint` e `pnp
 O assistente privado em `/assistente` consulta o BI e ajuda a entender as ocorrências. O worker de Telegram acompanha eventos persistidos, mantém fila de entregas/retentativas e funciona independentemente do navegador e da IA. Tudo fica desativado por padrão.
 
 Ativação, configuração e limites: [`docs/assistente/README.md`](docs/assistente/README.md). Revisão e testes pendentes para Claude: [`docs/assistente/HANDOFF_CLAUDE.md`](docs/assistente/HANDOFF_CLAUDE.md). Não colocar chaves em código nem expor as rotas do assistente à plateia pública.
+
+## RICHARDS Circular (piloto opcional)
+
+Nova jornada privada em `/circular`: sobra → triagem humana → operador/processo compatível → coleta → recebimento e destinação documentados. Candidatos à doação continuam `PENDING_REVIEW`; dados manuais e simulados permanecem separados. Sem parceiros ou resultados reais inventados.
+
+Desligado por padrão (`CIRCULAR_ENABLED=false`). Migração aditiva, instalação, limites e APIs: [`docs/circular/README.md`](docs/circular/README.md). Revisão e aceite do piloto: [`docs/circular/HANDOFF_CLAUDE.md`](docs/circular/HANDOFF_CLAUDE.md). Ativação opcional via `compose.circular.yml` depois da homologação. Os lembretes do Circular pelo Telegram ficam para a próxima etapa.

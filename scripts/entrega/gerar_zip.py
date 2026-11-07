@@ -24,7 +24,7 @@ from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, BadZipFile
 
 ROOT_FILES = {
     "README.md", "AGENTS.md", "MEMORIA.md", "ENTREGA_SENAC_2026.md", ".env.example", ".dockerignore", "Dockerfile", "docker-compose.yml",
-    "compose.iot-lab.yml", "compose.assistant.yml", "package.json", "pnpm-lock.yaml", "next.config.ts",
+    "compose.iot-lab.yml", "compose.assistant.yml", "compose.circular.yml", "package.json", "pnpm-lock.yaml", "next.config.ts",
     "next-env.d.ts", "prisma.config.ts", "tsconfig.json", "postcss.config.mjs",
     "eslint.config.mjs",
 }
@@ -66,7 +66,7 @@ def allowed_name(path: str) -> bool:
 def route(path: str) -> str | None:
     if not allowed_name(path):
         return None
-    if path in ROOT_FILES or path.startswith(CODE_DIRS) or path in TECH_DOCS or path.startswith("docs/dados/"):
+    if path in ROOT_FILES or path.startswith(CODE_DIRS) or path in TECH_DOCS or path.startswith(("docs/dados/", "docs/circular/")):
         return "02_CODIGO/RICHARDS_PLATFORM/" + path
     if path.startswith("presentation/imagens/") and path.endswith((".webp", ".png", ".jpg", ".jpeg")):
         return "01_APRESENTACAO/imagens/" + PurePosixPath(path).name

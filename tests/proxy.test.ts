@@ -80,3 +80,10 @@ test("assistente e vinculação Telegram continuam protegidos; nunca são parte 
  for(const path of ["/assistente","/api/assistant/telegram","/api/assistant/chat"])
   assert.equal(proxy(req(path)).status,401);
 });
+
+test("Circular, anexos e operadores exigem autenticação e recusam escrita cross-site",()=>{
+ for(const path of ["/circular","/api/circular","/api/circular/evidence/id","/api/circular/partners","/api/circular/batches"])
+  assert.equal(proxy(req(path,{headers:{"x-richards-actor":"operador:forjado"}})).status,401);
+ const headers={authorization:basic("op","s3nha"),"content-type":"application/json",origin:"https://outro.example"};
+ assert.equal(proxy(req("/api/circular/batches",{method:"POST",headers})).status,403);
+});

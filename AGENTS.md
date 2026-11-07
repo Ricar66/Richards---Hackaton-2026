@@ -63,3 +63,7 @@ Leia `docs/assistente/HANDOFF_CLAUDE.md` antes de alterar o assistente. `/assist
 ## Revisão de 3D/mobile (PR 07/11)
 
 Leia `docs/entrega/3D_MOBILE_HANDOFF_2026-11-07.md` antes de continuar. A Sala tenta 3D automaticamente com fallback, amplia sem duplicar canvas e muda para cartões com rolagem no celular. Shader nunca usa tempo independente para inventar fluxo. Aceite visual/browser/aparelhos/projetor ainda NÃO executado; não anunciar responsividade universal ou FPS com base no build. Preservar `?3d=0`, SVG acessível, movimento reduzido e orçamento adaptativo. Não publicar main/VPS automaticamente.
+
+## RICHARDS Circular (PR incremental de 07/11)
+
+Leia `docs/circular/HANDOFF_CLAUDE.md` e `docs/circular/README.md`. Recurso privado, `CIRCULAR_ENABLED=false`, migration aditiva. Conservação de massa e origem MANUAL/SIMULATED são obrigatórias; coleta não comprova tratamento. Candidato à doação só PENDING_REVIEW. Não apagar/estornar documentos ou movimentações manualmente. Telegram do Circular ainda não implementado. Ensaio de software não aprova operador, legislação aplicável ou destinação física. Main/VPS dependem da aprovação de Ricardo.
