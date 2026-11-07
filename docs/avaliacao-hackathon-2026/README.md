@@ -8,6 +8,8 @@ Esta pasta, integrada ao repositório principal do RICHARDS, reúne a documenta�
 
 [**Leia aqui — escolas, desperdício hídrico e doações seguras**](00_LEIA_AQUI_ATUALIZACAO_2026-11-07.md). Os documentos originais da Bruna foram preservados nos cinco critérios do dossiê.
 
+**Proveniência:** [repositório de avaliação da equipe](https://github.com/brunamed96/Richards-Hackathon-2026-Avaliacao/tree/f34c432073c3b40cf963cea8b114e19877ac4e2d), importado de main @ f34c432; atualização documental complementar baseada no código do Ricar66 develop @ 57cdd0a. Uma linha colada do CSV de indicadores foi separada; nenhuma métrica fictícia foi inserida como resultado.
+
 ## Repositório principal
 - Código-fonte e desenvolvimento: https://github.com/Ricar66/Richards---Hackaton-2026
 
