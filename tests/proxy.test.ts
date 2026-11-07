@@ -63,7 +63,7 @@ test("stream ao vivo (/api/live/stream) exige a senha do operador como o resto d
 
 
 test("plateia pública é whitelist exata de leitura, sem liberar o painel e a API do operador", () => {
-  for (const path of ["/plateia", "/api/plateia/stream", "/qr-plateia.svg"]) {
+  for (const path of ["/plateia", "/api/plateia/stream", "/qr-plateia.svg", "/icon.svg"]) {
     const r = proxy(req(path));
     assert.ok(passed(r));
     assert.equal(forwardedActor(r), null);
@@ -73,4 +73,5 @@ test("plateia pública é whitelist exata de leitura, sem liberar o painel e a A
   assert.equal(proxy(req("/api/plateia/stream", { method: "POST", headers: { "content-type": "application/json" } })).status, 401);
   assert.equal(proxy(req("/api/plateia/stream", { method: "HEAD" })).status, 401, "não abrir HEAD no SSE infinito");
   assert.ok(passed(proxy(req("/qr-plateia.svg", { method: "HEAD" }))));
+  for (const path of ["/icon.png", "/icon.svg/x", "/apple-icon.png"]) assert.equal(proxy(req(path)).status, 401, `${path} continua fechado`);
 });

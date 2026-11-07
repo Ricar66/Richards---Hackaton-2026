@@ -42,13 +42,18 @@ export async function GET(request: NextRequest) {
     start(controller) {
       let stopped = false;
       let unsubscribe = () => {};
-      let heartbeat: ReturnType<typeof setInterval> | undefined;
+      // Criado ANTES do cleanup: se o envio inicial já encerrar a conexão (cliente lento), o cleanup consegue parar o
+      // intervalo. Criado depois, ele nascia com a conexão fechada e ficava rodando para sempre (um timer por conexão).
+      const heartbeat = setInterval(() => {
+        if (getLiveHub() !== hub) { cleanup(); return; }
+        send(frame("status", status()));
+      }, HEARTBEAT_MS);
       const abort = () => cleanup();
       cleanup = () => {
         if (stopped) return;
         stopped = true;
         clients--;
-        if (heartbeat) clearInterval(heartbeat);
+        clearInterval(heartbeat);
         unsubscribe();
         request.signal.removeEventListener("abort", abort);
         try { controller.close(); } catch { /* cancelamento pelo browser */ }
@@ -72,10 +77,6 @@ export async function GET(request: NextRequest) {
       });
       send("retry: 4000\n\n" + frame("status", status()));
       for (const sample of snapshot()) send(frame("sample", sample));
-      heartbeat = setInterval(() => {
-        if (getLiveHub() !== hub) { cleanup(); return; }
-        send(frame("status", status()));
-      }, HEARTBEAT_MS);
       if (request.signal.aborted) cleanup();
       else request.signal.addEventListener("abort", abort, { once: true });
     },

@@ -155,6 +155,8 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     await go("/?range=24h"); await wait(1200);
     check("A6 marcador da ocorrência aparece no gráfico", !!(await page.$("[aria-labelledby=p-volume] .marker")));
     // Mira a coluna do marcador mais recente, longe dele no eixo vertical (clicar no marcador abre a ocorrência).
+    // O gráfico fica abaixo dos cartões de sensores (07/11): rolar até ele antes de medir, senão o clique cai fora da tela.
+    await page.$eval("[aria-labelledby=p-volume]", el => el.scrollIntoView({ block: "center" })); await wait(300);
     const box = await (await page.$("[aria-labelledby=p-volume] .recharts-wrapper")).boundingBox();
     const markerX = Math.max(...await page.$$eval("[aria-labelledby=p-volume] .marker", ms => ms.map(m => { const r = m.getBoundingClientRect(); return r.x + r.width / 2; })));
     await page.mouse.move(markerX, box.y + box.height * 0.25); await wait(300);

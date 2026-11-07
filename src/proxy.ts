@@ -32,7 +32,9 @@ export function proxy(req:NextRequest){
  // O stream é público só em GET (HEAD em stream infinito não faz sentido).
  // QR e página pública aceitam GET/HEAD. Nenhuma API administrativa foi liberada.
  if (path === '/api/plateia/stream' && req.method === 'GET') return forward(req,null);
- if ((path === '/plateia' || path === '/qr-plateia.svg')
+ // /icon.svg: o ícone do app (src/app/icon.svg, estático). Protegido, o celular sem login recebia 401 no ícone da
+ // plateia, e o Safari pode abrir a caixa de senha por causa de um sub-recurso (sonda de 07/11).
+ if ((path === '/plateia' || path === '/qr-plateia.svg' || path === '/icon.svg')
    && (req.method === 'GET' || req.method === 'HEAD')) return forward(req,null);
  const blocked=rejectCrossSiteWrite(req);if(blocked)return blocked;
  // Fail-closed: só AUTH_MODE="none" explícito desliga a senha (variável ausente ou com erro de digitação mantém a proteção).
