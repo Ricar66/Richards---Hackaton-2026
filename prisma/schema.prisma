@@ -69,6 +69,8 @@ model Organization {
   city       String
   isDemo     Boolean @default(false)
   createdAt  DateTime @default(now())
+  telegramSubscriptions TelegramSubscription[]
+  telegramLinkCodes TelegramLinkCode[]
   users      User[]
   sites      Site[]
   devices    Device[]
@@ -216,4 +218,67 @@ model AuditEvent {
   metadata Json?
   at DateTime @default(now())
   @@index([organizationId, at(sort: Desc)])
+}
+
+// Assistente opcional. Tabelas aditivas; nenhum dado operacional é alterado.
+model TelegramSubscription {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorHash String
+  chatId String @unique
+  active Boolean @default(true)
+  includeSimulated Boolean @default(false)
+  dailySummary Boolean @default(false)
+  linkedAt DateTime @default(now())
+  history Json @default("[]")
+  historyAt DateTime?
+  deliveries NotificationDelivery[]
+  @@index([organizationId, actorHash])
+}
+model TelegramLinkCode {
+  hash String @id
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorHash String
+  expiresAt DateTime
+  consumedAt DateTime?
+}
+model NotificationDelivery {
+  id String @id @default(cuid())
+  subscriptionId String
+  subscription TelegramSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  dedupeKey String @unique
+  kind String
+  payload Json
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  leaseToken String?
+  leasedUntil DateTime?
+  sentAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  @@index([status, availableAt])
+}
+model AssistantUsage {
+  key String @id
+  count Int @default(0)
+}
+model AssistantWorkerState {
+  key String @id
+  offset BigInt @default(0)
+  heartbeatAt DateTime?
+}
+model TelegramInbox {
+  updateId BigInt @id
+  chatId String
+  text String
+  receivedAt DateTime @default(now())
+  replyText String?
+  processedAt DateTime?
+  leaseToken String?
+  leasedUntil DateTime?
+  attempts Int @default(0)
+  lastError String?
 }
