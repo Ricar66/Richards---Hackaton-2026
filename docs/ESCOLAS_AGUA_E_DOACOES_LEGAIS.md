@@ -1,7 +1,7 @@
 # RICHARDS — Escolas, água e segurança alimentar (07/11/2026)
 
 ## Descarga de escola: fluxo suspeito
-Sensor dimensionado e calibrado em ramal compatível → fluxo persistente → suspeita para inspeção humana → correção documentada. Sensor de vazão NÃO comprova vazamento. Exemplo: 1 L/min × 24 h × 30 dias = 43.200 L = 43,2 m³. Com tarifa linear ilustrativa de R$ 10/m³ = R$ 432 de consumo estimado; NÃO economia comprovada. Usar a tarifa efetiva da conta (água/esgoto, faixas, mínimo), associada à unidade. Eficiência precisa de piloto antes/depois.
+Sensor dimensionado e calibrado em ramal compatível → fluxo persistente → suspeita para inspeção humana → correção documentada. Sensor de vazão NÃO comprova vazamento. Atenção à sensibilidade: limiar inicial de 1,5 L/min pode não identificar o cenário ilustrativo de 1 L/min, e vazões muito pequenas podem não ser medidas pelo hardware de bancada. Alterar limiar depende de calibração física e taxa de falsos positivos. Exemplo: 1 L/min × 24 h × 30 dias = 43.200 L = 43,2 m³. Com tarifa linear ilustrativa de R$ 10/m³ = R$ 432 de consumo estimado; NÃO economia comprovada. Usar a tarifa efetiva da conta (água/esgoto, faixas, mínimo), associada à unidade. Eficiência precisa de piloto antes/depois.
 
 ## Vaso entupido
 Não detectável de modo confiável apenas por vazão. Requer inspeção e, se for detectar transbordamento, sensor adicional de nível/umidade. Não anunciar como capacidade do hardware atual.

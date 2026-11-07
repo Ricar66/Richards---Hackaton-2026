@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { LiveSensorTiles } from "../live-sensors";
+import { FixtureActivityPanel } from "../fixture-activity-panel";
 import { Activity, Droplets, Gauge, MoonStar } from "lucide-react";
 import { estimateContinuousFlow } from "@/modules/monitoring/domain/water-loss-estimate";
 import type { DashboardDTO } from "@/modules/analytics/domain/dashboard";
@@ -44,6 +45,7 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
     days: Number(days), effectiveRateBRLPerM3: Number(tariff),
   });
   const k = data.kpis;
+  const measuredNightCost = data.filter.source === "DEVICE" && k.nightLiters !== null && Number.isFinite(Number(tariff)) && Number(tariff) >= 0 && Number(tariff) <= 1000 ? Math.round(k.nightLiters * Number(tariff)) / 1000 : null;
   const withData = data.series.filter(p => p.samples > 0).length;
   const nightShare = k.observedLiters && k.nightLiters !== null ? (k.nightLiters / k.observedLiters) * 100 : null;
   const onBucket = (p: { t: number; end: number }) => openInterval({ start: p.t, end: p.end });
@@ -54,6 +56,7 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
     <StaleBanner since={stale} />
     <ProvenanceBanner p={data.provenance} />
     <LiveSensorTiles />
+    <FixtureActivityPanel siteId={data.filter.siteId} deviceId={data.filter.deviceId} />
     <div className="kpi-grid">
       <KpiTile label="Volume observado" icon={<Droplets size={15} />} value={k.observedLiters} unit=" L" foot="soma das leituras do recorte">
         <Delta current={k.observedLiters} previous={k.previousLiters} previousSamples={k.previousSamples} samples={data.provenance.samples} label="período anterior" />
@@ -84,8 +87,10 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
           foot={exposure ? `${numBR(exposure.cubicMeters, 2)} m³ no período assumido` : "Informe valores válidos"} />
         <KpiTile label="Custo hipotético" icon={<Gauge size={15} />} value={exposure?.estimatedCostBRL ?? null} digits={2} unit=" R$"
           foot="Cálculo linear com tarifa informada · não é fatura nem economia comprovada" />
+        <KpiTile label="Valor indicativo do volume noturno" icon={<MoonStar size={15} />} value={measuredNightCost} digits={2} unit=" R$"
+          foot="Requer filtro Origem = Sensor · valor do volume medido, não desperdício ou economia" />
       </div>
-      <p className="info-note">Exemplo inicial: 1 L/min continuamente por 24 h, durante 30 dias = 43,2 m³. R$ 10/m³ é apenas tarifa ilustrativa; substitua pela tarifa efetiva de água e esgoto da fatura. A cobrança real pode ter faixas e componentes adicionais. Só inspeção confirma defeito.</p>
+      <p className="info-note">Exemplo inicial: 1 L/min continuamente por 24 h, durante 30 dias = 43,2 m³. R$ 10/m³ é apenas tarifa ilustrativa; substitua pela tarifa efetiva de água e esgoto da fatura. A cobrança real pode ter faixas e componentes adicionais. Só inspeção confirma defeito. <b>Atenção:</b> 1 L/min pode estar abaixo do limiar padrão de alerta (ex.: 1,5 L/min), dependendo do sensor. Ajustes exigem calibração e teste físico.</p>
       <p className="muted-text small"><b>Vaso entupido:</b> medidor de vazão não detecta obstrução com segurança. Exige inspeção e, para alerta automático de transbordamento, sensor adicional de nível/presença de água.</p>
     </Panel>
 
