@@ -71,4 +71,6 @@ test("plateia pública é whitelist exata de leitura, sem liberar o painel e a A
   for (const path of ["/convite", "/api/live/stream", "/api/plateia/admin", "/plateia/admin"])
     assert.equal(proxy(req(path)).status, 401);
   assert.equal(proxy(req("/api/plateia/stream", { method: "POST", headers: { "content-type": "application/json" } })).status, 401);
+  assert.equal(proxy(req("/api/plateia/stream", { method: "HEAD" })).status, 401, "não abrir HEAD no SSE infinito");
+  assert.ok(passed(proxy(req("/qr-plateia.svg", { method: "HEAD" }))));
 });
