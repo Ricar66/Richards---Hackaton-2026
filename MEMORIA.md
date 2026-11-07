@@ -378,7 +378,16 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
     - Do notebook da Tracbel: 66 a 70 de 70. As falhas são `UND_ERR_CONNECT_TIMEOUT` na rede do notebook. No contêiner, ListenOverflows/ListenDrops = 0, então o servidor nunca descartou conexão.
   - **NÃO EXECUTADO:** 70 celulares reais, rede do Senac, 3D no projetor do evento e ESP32 físico.
   - **Rollback do 3D:** `/ao-vivo?3d=0` ou a tecla 3.
-- **Ligar o ESP32 do Victor antes do pitch:** desde 07:21 de 07/11 não chega leitura; sem ele, Sala, BI e `/plateia` mostram "sem leitura".
+- **Produção em 07/11, 15:34 (o Ricardo escolheu "publicar PR #9"):** `main` = `develop` = `36495d4`, publicado e compilado pelo Coolify (deploy `o1qsplmhyeqe9je3qjtt64ge`).
+  - **O que entrou:** instrumentos 3D de temperatura e balança, com as correções do aceite.
+  - **Backup:** `richards-vps-antes-instrumentos-3d-20261107T183152Z.dump` (3.054 leituras).
+  - **Testes no commit:** unitários 155/155 e E2E 36/36 (porta 3110: a 3100 estava ocupada por outra ferramenta).
+  - **Verificação pós-deploy:** 12/12. A Sala sobe com 3 canvas no telão e no celular 390. Leituras do ESP32 do Victor (`esp32-787fa`, VAZAO como SIMULATED) voltaram logo depois do reinício.
+  - **`palco:checar` na VPS, 2 FALHAS:**
+    - uma UNUSUAL_FLOW SIMULATED aberta pelo potenciômetro bloqueia o alerta ao vivo pela regra 5;
+    - falta um lote RESERVED.
+  - **PR #10 (Circular, com migration):** ainda NÃO validado; deixado para depois do pitch.
+- **ESP32 do Victor:** voltou a mandar leituras às 15h de 07/11. Antes disso, nada chegava desde 07:21.
 - **Revisar a fala e os slides** (`presentation/`): eles ainda citam o histórico SIMULATED do seed ("carimbo roxo no histórico"). Desde 06/11 o histórico é só do sensor.
 - Ensaiar uma vez a contingência `pnpm bancada --cenario palco --inicio-em 5` com o BI e a Sala abertos. Não use `--sensores VAZAO` com a ponte `pnpm mqtt` ligada.
 - Montar o backup de palco: simulação identificada, prints, vídeo offline e cabo HDMI.
