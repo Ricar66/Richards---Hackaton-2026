@@ -3,13 +3,13 @@ import { getDb } from "@/lib/db";
 import { auditRecord } from "@/modules/audit/infrastructure/audit-record";
 import type { LiveChannel } from "@/modules/realtime/domain/live-event";
 import { notifyLive } from "@/modules/realtime/infrastructure/notify-event";
-export type DeviceOccurrenceKind = "UNUSUAL_FLOW" | "TEMPERATURE_EXCURSION";
+export type DeviceOccurrenceKind = "UNUSUAL_FLOW" | "TEMPERATURE_EXCURSION" | "MANUAL";
 export type OpenDeviceOccurrenceInput = {
   kind: DeviceOccurrenceKind; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   organizationId: string; siteId: string; deviceId: string;
   /** Código do dispositivo para o aviso ao vivo; ausente, é buscado na mesma transação. */
   deviceCode?: string;
-  source: "DEVICE" | "SIMULATED"; title: string; description: string; suspectedLiters?: number | null;
+  source: "DEVICE" | "SIMULATED" | "MANUAL"; title: string; description: string; suspectedLiters?: number | null;
   eventNote: string; actor: string; evidence: Record<string, Prisma.InputJsonValue | null>;
 };
 export type OpenDeviceOccurrenceResult = { created: boolean; occurrenceId: string };

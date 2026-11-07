@@ -36,6 +36,16 @@ Leia ANTES de atuar: docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.
 - QR SVG contém a URL http://187.77.229.205:8090/plateia; ao trocar host regerar SVG e editar convite no mesmo commit.
 - Nenhum build, teste físico ou carga de 70 clientes foi validado nesta sessão; main intacta.
 
+## Handoff 07/11/2026 — Água em escolas, auditoria de uso e doações sanitárias (somente develop)
+- Guia normativo, hipóteses e limitações: `docs/ESCOLAS_AGUA_E_DOACOES_LEGAIS.md`.
+- Nova API GET `/api/monitoring/fixture-activity`: janela fixa 72h, somente telemetria física `DEVICE`, cobertura temporal verificada e sensor fisicamente online. Simulado nunca entra na análise.
+- A ausência de fluxo só pode sugerir inspeção após confirmação HUMANA de sensor exclusivo/calibrado e de uso esperado; nem fluxo nem ausência diagnosticam entupimento.
+- Nova API POST `/api/monitoring/fixture-inspections`: operador solicita vistoria `MANUAL`, backend recalcula dados, registra auditoria e bloqueia duplicata ativa. É uma ação humana, não um alarme automático.
+- `/monitoramento`, `/dispositivos` e centro de controle destacam o caso de escolas. Volume noturno e custo estimado são observação/cenário, não vazamento ou economia comprovados.
+- Doações: a API exige origem do alimento, checklist sanitário, responsável e cargo/habilitação declarada. Lotes de buffet exposto seguem bloqueados no MVP por cautela; a lei não estabelece proibição universal.
+- Testes criados em `tests/fixture-activity.test.ts`, `tests/integration/fixture-activity.test.ts`, `tests/integration/fixture-inspection.test.ts` e alterações anteriores de doações. Necessário rodar `pnpm test`, `pnpm test:integration`, `pnpm typecheck` e `pnpm build` em checkout real. **Ainda não executados por esta sessão**.
+- Nunca fazer merge para `main` ou publicar no VPS sem revisão, ensaio físico, evidência e aprovação.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

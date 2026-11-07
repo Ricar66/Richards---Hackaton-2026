@@ -64,6 +64,14 @@ flowchart LR
   B4 --> R
 ```
 
+### Novo caso de uso: escolas, descargas e instalações
+
+O RICHARDS agora oferece uma **auditoria exploratória de 72 horas para pontos de consumo de água** em `/monitoramento` e `/dispositivos`. Ela apresenta dados físicos `DEVICE`, cobertura de leituras, último fluxo mensurável, volume na madrugada e no fim de semana. Ao selecionar um sensor **dedicado e calibrado** e declarar que havia uso esperado, a ausência de fluxo suficiente permite **abrir uma vistoria MANUAL** com trilha de auditoria.
+
+**Atenção:** não se pode afirmar que uma descarga não foi usada ou está entupida apenas porque o sensor não registrou fluxo: o ponto pode estar isolado, ser compartilhado, ter sensor inadequado ou não haver ocupação. Sem comunicação confiável, a análise é bloqueada. Nenhuma inspeção é aberta automaticamente.
+
+No mesmo painel, uma calculadora estima exposição financeira de um cenário de fluxo contínuo e, com filtro `source=DEVICE`, o valor indicativo do **volume noturno medido** usando tarifa informada pelo usuário. Isso não representa perda ou economia comprovada. [Critérios técnicos e normativos](docs/ESCOLAS_AGUA_E_DOACOES_LEGAIS.md).
+
 ## Telas
 
 | | |

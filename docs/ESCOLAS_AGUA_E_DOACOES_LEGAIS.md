@@ -18,3 +18,12 @@ Fontes:
 - https://www2.camara.leg.br/legin/fed/lei/2025/lei-15224-30-setembro-2025-798048-publicacaooriginal-176570-pl.html
 - https://www.al.sp.gov.br/repositorio/legislacao/lei/2003/lei-11575-25.11.2003.html
 - https://www.crn3.org.br/noticia/crn-3-destaca-conquista-com-prorrogacao-da-portaria-cvs-no-32026
+
+## 07/11/2026 — Auditoria de ausência de acionamento com evidência
+- Telas `/monitoramento` e `/dispositivos`: painel de 72 horas por sensor de vazão, somente `DEVICE`, independente dos filtros de origem.
+- Cobertura: pelo menos 85% dos blocos de 10 minutos e 2 ou mais leituras por bloco em média, com comunicação atual `ONLINE`. Sem sinal ou com lacunas nunca é tratado como falta de uso.
+- Detecção de amostra de fluxo: limiar exploratório 0,2 L/min (não garante detectar pequenas vazões; exige calibração e validação do Victor). "Fluxo observado" não significa acionamento nem uso humano confirmado.
+- Operador precisa declarar **sensor dedicado e calibrado** e **uso esperado no período**. Sem essas declarações, nenhuma sugestão de vistoria baseada em 72h deve ser operacionalizada.
+- Quando ambas declarações estiverem presentes e o sistema tiver 72h sem fluxo registrado com cobertura adequada, é possível solicitar uma ocorrência `MANUAL` de inspeção. Backend recomputa a elegibilidade, deduplica pelo mesmo sensor + tipo + origem e grava ator, proveniência `DEVICE`, parâmetros da observação e data na auditoria. Não é diagnóstico automático de entupimento.
+- Valor noturno: apenas litros medidos na madrugada × tarifa ilustrativa (com `source=DEVICE`), não custo comprovado de vazamento; comparar faturas e períodos iguais após intervenção para alegar economia.
+- Horários escolares, feriados, recesso e ocupação não são inferidos automaticamente: precisam ser configurados ou verificados por pessoa. Extensão futura: cadastro persistente de pontos, escala, calendário escolar, sensibilidade, sensores de nível/transbordamento.

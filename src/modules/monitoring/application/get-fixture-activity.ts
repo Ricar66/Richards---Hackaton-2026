@@ -14,6 +14,7 @@ type ActivityRow = {
   coveredBuckets: number;
   flowSamples: number;
   lastFlowAt: Date | null;
+  lastDeviceReadingAt: Date | null;
   nightLiters: number;
   weekendLiters: number;
 };
@@ -61,6 +62,7 @@ export async function getFixtureActivity(
       COUNT(DISTINCT floor(extract(epoch from tr."capturedAt") / 600))::int AS "coveredBuckets",
       COUNT(*) FILTER (WHERE tr."flowLpm" >= ${FLOW_EVENT_THRESHOLD_LPM})::int AS "flowSamples",
       MAX(tr."capturedAt") FILTER (WHERE tr."flowLpm" >= ${FLOW_EVENT_THRESHOLD_LPM}) AS "lastFlowAt",
+      MAX(tr."capturedAt") AS "lastDeviceReadingAt",
       COALESCE(SUM(tr."deltaLiters") FILTER (
         WHERE EXTRACT(HOUR FROM tr."capturedAt" AT TIME ZONE ${TIME_ZONE}) BETWEEN 0 AND 5
       ), 0)::float8 AS "nightLiters",
@@ -79,7 +81,12 @@ export async function getFixtureActivity(
     generatedAt: now.toISOString(), windowHours: FIXTURE_WINDOW_HOURS,
     items: devices.map(device => {
       const r = byId.get(device.id);
-      const connectivity = deviceConnectivity(device.state, device.lastSeenAt, now);
+      const deviceConnectivityNow = deviceConnectivity(device.state, device.lastSeenAt, now);
+      // Um simulador pode atualizar lastSeenAt do mesmo Device: só leitura DEVICE recente valida telemetria física.
+      const lastPhysicalAt = r?.lastDeviceReadingAt?.getTime() ?? null;
+      const physicallyFresh = lastPhysicalAt !== null && now.getTime() - lastPhysicalAt >= 0 &&
+        now.getTime() - lastPhysicalAt <= 120_000;
+      const connectivity = deviceConnectivityNow === "ONLINE" && !physicallyFresh ? "OFFLINE" : deviceConnectivityNow;
       const evidence = {
         connectivity, samples: r?.samples ?? 0, coveredBuckets: r?.coveredBuckets ?? 0,
         flowSamples: r?.flowSamples ?? 0,
