@@ -254,6 +254,10 @@ docs/                  contratos, decisões, roteiros, modelo de dados e imagens
 presentation/          kit de pitch (slides, fala, roteiro de palco)
 ```
 
+## Dossiê de avaliação Senac 2026
+
+A documentação da equipe sobre impacto social, viabilidade, inovação, UX e pitch está em [**docs/avaliacao-hackathon-2026**](docs/avaliacao-hackathon-2026/README.md). A [atualização sobre escolas, água, vistorias e doações](docs/avaliacao-hackathon-2026/00_LEIA_AQUI_ATUALIZACAO_2026-11-07.md) diferencia código implementado, hipóteses financeiras e evidências ainda pendentes. Os materiais originais vieram do [dossiê da Bruna](https://github.com/brunamed96/Richards-Hackathon-2026-Avaliacao), preservados em sua organização original.
+
 ## Documentação
 
 | Documento | Conteúdo |

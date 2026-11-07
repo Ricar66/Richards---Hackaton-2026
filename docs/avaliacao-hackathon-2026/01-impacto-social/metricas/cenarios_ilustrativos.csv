@@ -1,0 +1,5 @@
+cenario,tipo,formula,pressupostos,resultado,unidade,status
+fluxo_escola_30_dias,hipotetico,1*60*24*30,1 L/min por 24h ao dia durante 30 dias,43200,L,nao_medido
+custo_fluxo_escola,hipotetico,43.2*10,tarifa linear de BRL 10 por m3 apenas ilustrativa,432,BRL,nao_medido
+perda_alimento_evitavel,hipotetico,1*15*26,1 kg por dia BRL 15 por kg por 26 dias,390,BRL,nao_medido
+destinacao_potencial,hipotetico,100*2*26,100 negocios 2 kg adequados e recebidos por dia durante 26 dias,5200,kg,nao_medido
