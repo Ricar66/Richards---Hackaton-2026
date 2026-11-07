@@ -19,6 +19,9 @@ try {
     await page.waitForSelector('.twin-expand');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: sem rolagem horizontal`);
     assert.ok(await page.$$eval('.inst', list => list.every(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth; })), `${width}: cartões dentro da largura`);
+    assert.equal(await page.$$eval('.instrument-twin', list => list.length), 2, 'dois instrumentos adicionais');
+    assert.ok(await page.$$eval('.instrument-twin', list => list.every(e => { const r = e.getBoundingClientRect(), p = e.closest('.inst').getBoundingClientRect(); return r.width > 0 && r.height >= 45 && r.left >= p.left && r.right <= p.right; })), `${width}: modelos dentro dos cartões`);
+    assert.ok(await page.$$eval('.instrument-twin', list => list.every(e => e.dataset.instrumentMode === 'svg')), 'opção 2D vale para todos os instrumentos');
     await page.click('.twin-expand'); await page.waitForSelector('[role="dialog"]');
     const fit = await page.$eval('[role="dialog"]', panel => {
       const bounds = panel.getBoundingClientRect();
