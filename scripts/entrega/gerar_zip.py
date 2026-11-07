@@ -131,7 +131,13 @@ def generate(args: argparse.Namespace) -> Path:
                 continue
             dest = route(info.filename)
             if dest:
-                add(files, dest, source.read(info))
+                data = source.read(info)
+                if info.filename == "presentation/README.md":
+                    data = data.replace(b"[render_slides.py](render_slides.py)", b"render_slides.py (historico, fora do pacote)")
+                    data = data.replace("[peças vetoriais SVG](slides/)".encode(), "peças vetoriais SVG (histórico, fora do pacote)".encode())
+                add(files, dest, data)
+            if info.filename == "presentation/CHECKLIST_VICTOR_IOT.md":
+                add(files, "01_APRESENTACAO/CHECKLIST_VICTOR_IOT.md", source.read(info))
             # Preserva os caminhos relativos usados pelo README e pelos roteiros.
             # Somente documentação versionada; arquivos operacionais da VPS ficam fora.
             if allowed_name(info.filename) and (
@@ -224,7 +230,7 @@ def generate(args: argparse.Namespace) -> Path:
     if dirty:
         print("AVISO: alteracoes locais nao commitadas nao entraram no ZIP.")
     if not args.final:
-        print("PREVIA: falta anexar o PDF e PPTX aprovados e gerar novamente com --final.")
+        print("PREVIA: revisar anexos e evidencias; gerar --final somente apos aprovacao da main.")
     return target
 
 def main() -> None:
