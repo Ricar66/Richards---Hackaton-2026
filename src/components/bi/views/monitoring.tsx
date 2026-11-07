@@ -85,7 +85,7 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
         <KpiTile label="Custo hipotético" icon={<Gauge size={15} />} value={exposure?.estimatedCostBRL ?? null} digits={2} unit=" R$"
           foot="Cálculo linear com tarifa informada · não é fatura nem economia comprovada" />
       </div>
-      <p className="info-note">Exemplo inicial: 1 L/min continuamente por 24 h, durante 30 dias = 43,2 m³. R$ 10/m³ é apenas tarifa ilustrativa; substitua pela tarifa efetiva de água e esgoto da fatura. A cobrança real pode ter faixas e componentes adicionais. Só inspeção confirma defeito.</p>
+      <p className="info-note">Exemplo inicial: 1 L/min continuamente por 24 h, durante 30 dias = 43,2 m³. R$ 10/m³ é apenas tarifa ilustrativa; substitua pela tarifa efetiva de água e esgoto da fatura. A cobrança real pode ter faixas e componentes adicionais. Só inspeção confirma defeito. <b>Atenção:</b> 1 L/min pode estar abaixo do limiar padrão de alerta (ex.: 1,5 L/min), dependendo do sensor. Ajustes exigem calibração e teste físico.</p>
       <p className="muted-text small"><b>Vaso entupido:</b> medidor de vazão não detecta obstrução com segurança. Exige inspeção e, para alerta automático de transbordamento, sensor adicional de nível/presença de água.</p>
     </Panel>
 
