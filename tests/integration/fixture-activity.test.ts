@@ -13,7 +13,7 @@ test("sem amostras reais: no data, não uma descarga inativa", async () => {
   assert.equal(x.items.length, 1);
   assert.equal(x.items[0].deviceCode, DEVICE_CODE);
   assert.equal(x.items[0].source, "DEVICE");
-  assert.equal(x.items[0].state, "INSUFFICIENT_DATA");
+  assert.equal(x.items[0].state, "NO_SIGNAL", "sem leitura física recente não existe base para avaliar uso");
 });
 
 test("72h de amostras zeradas DEVICE permitem análise; simulação não conta", async () => {
@@ -57,4 +57,15 @@ test("simulação pode marcar dispositivo ONLINE, mas não provar que o sensor f
     capturedAt: new Date(now.getTime() - 15_000), flowLpm: 0, deltaLiters: 0,
   } });
   assert.equal((await getFixtureActivity({}, now)).items[0].state, "NO_SIGNAL");
+});
+
+test("uma leitura física recente isolada não permite declarar ausência de uso", async () => {
+  const now = new Date();
+  await db().device.update({ where: { id: DEMO_DEVICE_ID }, data: { lastSeenAt: now } });
+  await db().telemetryReading.create({ data: {
+    deviceId: DEMO_DEVICE_ID, bootId: "fixture-short", sequence: 1, source: "DEVICE",
+    capturedAt: new Date(now.getTime() - 15_000), flowLpm: 0, deltaLiters: 0,
+  } });
+  const x = await getFixtureActivity({}, now);
+  assert.equal(x.items[0].state, "INSUFFICIENT_DATA");
 });
