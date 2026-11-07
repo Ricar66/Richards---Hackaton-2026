@@ -50,3 +50,13 @@ test("cada etapa da doação exige a declaração humana correspondente",()=>{
  assert.doesNotThrow(()=>DonationWorkflow.assertDetails('DELIVERED',{receivedBy:'Ana Lima'}));
  assert.throws(()=>DonationWorkflow.assertTransition('DELIVERED','CANCELLED',true,true),/Transição inválida/);
 });
+
+test("triagem sanitária exige origem, cargo/habilitação e checklist via domínio", () => {
+  const approved = { verifiedBy: "Ana Souza", foodOrigin: "WHOLE_PRODUCE" as const,
+    reviewerQualification: "Responsável técnico", inspectionOk: true, conservationOk: true,
+    validityOk: true, transportOk: true };
+  assert.doesNotThrow(() => DonationWorkflow.assertDetails("AVAILABLE", approved));
+  assert.throws(() => DonationWorkflow.assertDetails("AVAILABLE", { ...approved, transportOk: false }), /verificações/);
+  assert.throws(() => DonationWorkflow.assertDetails("AVAILABLE", { ...approved, foodOrigin: "PLATE_LEFTOVERS" }), /Restos de prato/);
+  assert.throws(() => DonationWorkflow.assertDetails("AVAILABLE", { ...approved, foodOrigin: "BUFFET_EXPOSED" }), /buffet exposto/);
+});

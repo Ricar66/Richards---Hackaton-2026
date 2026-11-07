@@ -11,7 +11,21 @@ import { useLiveVersion } from "./live-stream";
 type Recipient = { id: string; name: string; city: string };
 const STEP_TITLE: Partial<Record<DonationStatus, string>> = { PENDING_REVIEW: "Registrar verificação humana", AVAILABLE: "Reservar para uma instituição", RESERVED: "Confirmar a entrega" };
 const ACTION_LABEL: Record<string, string> = { CREATED: "Lote cadastrado", AVAILABLE: "Verificado e disponível", RESERVED: "Reservado", DELIVERED: "Entrega confirmada", CANCELLED: "Cancelado" };
-const CHECKS = ["Inspeção visual sem sinais de deterioração", "Conservação e temperatura adequadas ao tipo de alimento", "Validade e embalagem conferidas"];
+const CHECKS = [
+  "Inspeção visual sem sinais de deterioração",
+  "Tempo e temperatura de conservação compatíveis com o alimento",
+  "Validade, integridade e embalagem conferidas (quando aplicável)",
+  "Transporte e entrega terão acondicionamento sanitário adequado",
+];
+const ORIGIN_OPTIONS = [
+  { value: "WHOLE_PRODUCE", label: "Frutas, verduras ou legumes íntegros" },
+  { value: "SEALED_PACKAGED", label: "Industrializado lacrado, dentro da validade" },
+  { value: "UNSERVED_PREPARATION", label: "Preparado na cozinha, ainda não servido" },
+  { value: "BUFFET_EXPOSED", label: "Buffet / balcão exposto — requer avaliação específica" },
+  { value: "PLATE_LEFTOVERS", label: "Restos de prato — não são doáveis" },
+  { value: "UNKNOWN", label: "Origem desconhecida — manter em revisão" },
+] as const;
+const SAFE_ORIGINS = new Set(["WHOLE_PRODUCE", "SEALED_PACKAGED", "UNSERVED_PREPARATION"]);
 
 async function json<T>(res: Response): Promise<T> { const body = await res.json(); if (!res.ok) throw new Error(body.error || "Operação recusada"); return body as T; }
 
@@ -22,6 +36,8 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
   const [recipients, setRecipients] = useState<Recipient[] | null>(null);
   const [version, setVersion] = useState(0);
   const [who, setWho] = useState("");
+  const [foodOrigin, setFoodOrigin] = useState("");
+  const [qualification, setQualification] = useState("");
   const [checks, setChecks] = useState<boolean[]>(CHECKS.map(() => false));
   const [recipientId, setRecipientId] = useState("");
   const [note, setNote] = useState("");
@@ -56,11 +72,11 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
     return () => { document.removeEventListener("keydown", onKey); opener?.focus(); };
   }, []);
 
-  async function send(payload: Record<string, string>, msg: string) {
+  async function send(payload: Record<string, string | boolean>, msg: string) {
     setBusy(true); setActionError("");
     try {
       await json(await fetch(`/api/donations/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }));
-      setWho(""); setNote(""); setReason(""); setCancelling(false); setChecks(CHECKS.map(() => false));
+      setWho(""); setNote(""); setReason(""); setFoodOrigin(""); setQualification(""); setCancelling(false); setChecks(CHECKS.map(() => false));
       setVersion(v => v + 1); onChanged(msg);
     } catch (e) { setActionError(e instanceof Error ? e.message : "Falha na operação"); }
     finally { setBusy(false); }
@@ -68,9 +84,13 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
 
   const status = d?.status as DonationStatus | undefined;
   const open = status === "PENDING_REVIEW" || status === "AVAILABLE" || status === "RESERVED";
-  const ok = status === "PENDING_REVIEW" ? who.trim().length >= 3 && checks.every(Boolean) : status === "AVAILABLE" ? !!recipientId : status === "RESERVED" ? who.trim().length >= 3 : false;
+  const ok = status === "PENDING_REVIEW" ? who.trim().length >= 3 && qualification.trim().length >= 3 && SAFE_ORIGINS.has(foodOrigin) && checks.every(Boolean) : status === "AVAILABLE" ? !!recipientId : status === "RESERVED" ? who.trim().length >= 3 : false;
   function advance() {
-    if (status === "PENDING_REVIEW") void send({ status: "AVAILABLE", verifiedBy: who.trim(), note: [`Checklist declarado: ${CHECKS.join("; ")}`, note.trim()].filter(Boolean).join(" · ") }, "Verificação registrada: lote disponível");
+    if (status === "PENDING_REVIEW") void send({
+      status: "AVAILABLE", verifiedBy: who.trim(), foodOrigin, reviewerQualification: qualification.trim(),
+      inspectionOk: checks[0], conservationOk: checks[1], validityOk: checks[2], transportOk: checks[3],
+      note: note.trim(),
+    }, "Triagem documentada: lote disponível");
     if (status === "AVAILABLE") void send({ status: "RESERVED", recipientId, note: note.trim() }, "Lote reservado para a instituição");
     if (status === "RESERVED") void send({ status: "DELIVERED", receivedBy: who.trim(), note: note.trim() }, "Entrega confirmada: kg entram no impacto");
   }
@@ -97,11 +117,19 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
         {open && !cancelling && <div className="step-form">
           <h3 className="drawer-section">{STEP_TITLE[status]}</h3>
           {status === "PENDING_REVIEW" && <>
+            <label className="field-label" htmlFor="don-origin">Origem do alimento (obrigatória)</label>
+            <select id="don-origin" value={foodOrigin} onChange={e => setFoodOrigin(e.target.value)}>
+              <option value="">Selecione a origem real</option>
+              {ORIGIN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {foodOrigin && !SAFE_ORIGINS.has(foodOrigin) && <p className="form-error">Esta origem permanece em revisão no MVP. Não significa proibição universal para todo buffet; exija avaliação sanitária local. Restos de prato não podem ser destinados à doação.</p>}
             <fieldset className="checks"><legend className="field-label">Declaração da pessoa responsável</legend>
               {CHECKS.map((c, i) => <label key={c}><input type="checkbox" checked={checks[i]} onChange={e => setChecks(xs => xs.map((x, j) => j === i ? e.target.checked : x))} />{c}</label>)}
             </fieldset>
             <label className="field-label" htmlFor="don-who">Nome de quem verificou</label>
-            <input id="don-who" value={who} onChange={e => setWho(e.target.value)} maxLength={120} placeholder="Ex.: Paula Mendes, nutricionista" />
+            <input id="don-who" value={who} onChange={e => setWho(e.target.value)} maxLength={120} placeholder="Nome do responsável pela verificação" />
+            <label className="field-label" htmlFor="don-role">Cargo ou habilitação do responsável</label>
+            <input id="don-role" value={qualification} onChange={e => setQualification(e.target.value)} maxLength={120} placeholder="Ex.: nutricionista, CRN informado no registro" />
           </>}
           {status === "AVAILABLE" && <>
             <label className="field-label" htmlFor="don-rec">Instituição receptora</label>
@@ -123,7 +151,7 @@ export function DonationDrawer({ id, onClose, onChanged }: { id: string; onClose
             </button>
             <button className="btn ghost" disabled={busy} onClick={() => setCancelling(true)}><Ban size={15} /> Cancelar lote</button>
           </div>
-          {status === "PENDING_REVIEW" && <p className="muted-text small">O RICHARDS registra quem declarou a verificação; não certifica a segurança do alimento.</p>}
+          {status === "PENDING_REVIEW" && <p className="muted-text small">O RICHARDS registra origem, checklist e responsável com cargo/habilitação; não certifica o alimento. A legislação exige responsável habilitado nas hipóteses aplicáveis e verificação das normas sanitárias locais.</p>}
         </div>}
         {open && cancelling && <div className="step-form">
           <h3 className="drawer-section">Cancelar lote</h3>

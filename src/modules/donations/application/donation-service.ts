@@ -57,7 +57,13 @@ export class DonationService {
   async transition(id: string, input: DonationTransitionInput, actor: string) {
     const db = getDb();
     const next = input.status;
-    const details: DonationStepDetails = { verifiedBy: clean(input.verifiedBy), recipientId: clean(input.recipientId), receivedBy: clean(input.receivedBy), reason: clean(input.reason) };
+    const details: DonationStepDetails = {
+      verifiedBy: clean(input.verifiedBy), recipientId: clean(input.recipientId),
+      receivedBy: clean(input.receivedBy), reason: clean(input.reason),
+      foodOrigin: input.foodOrigin, reviewerQualification: clean(input.reviewerQualification),
+      inspectionOk: input.inspectionOk, conservationOk: input.conservationOk,
+      validityOk: input.validityOk, transportOk: input.transportOk,
+    };
     const old = await db.donationBatch.findFirst({ where: { id, organizationId: DEMO_ORG_ID }, include: { recipient: { select: { name: true } } } });
     if (!old) throw new Error("NOT_FOUND");
     const verified = Boolean(old.safetyVerifiedAt) || (next === "AVAILABLE" && (details.verifiedBy?.length ?? 0) >= 3);
@@ -81,6 +87,9 @@ export class DonationService {
       await tx.auditEvent.create({ data: auditRecord({ organizationId: DEMO_ORG_ID, entity: "DonationBatch", entityId: id, action: next, actor, metadata: {
         from: old.status,
         verifiedBy: next === "AVAILABLE" ? details.verifiedBy ?? null : null,
+        ...(next === "AVAILABLE" ? { foodOrigin: details.foodOrigin, reviewerQualification: details.reviewerQualification,
+          sanitaryChecklist: { inspectionOk: details.inspectionOk, conservationOk: details.conservationOk,
+            validityOk: details.validityOk, transportOk: details.transportOk } } : {}),
         recipientId: recipient?.id ?? null, recipientName: recipient?.name ?? null,
         receivedBy: next === "DELIVERED" ? details.receivedBy ?? null : null,
         reason: next === "CANCELLED" ? details.reason ?? null : null,
@@ -101,7 +110,7 @@ export class DonationService {
     const audit = await db.auditEvent.findMany({ where: { organizationId: DEMO_ORG_ID, entity: "DonationBatch", entityId: id }, orderBy: { at: "asc" } });
     const text = (m: Record<string, unknown>, a: string) => {
       const s = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : null);
-      const parts = [a === "CREATED" && typeof m.weightKg === "number" ? `${m.weightKg} kg` : null, s("verifiedBy") && `verificado por ${s("verifiedBy")}`, s("recipientName") && `para ${s("recipientName")}`, s("receivedBy") && `recebido por ${s("receivedBy")}`, s("reason") && `motivo: ${s("reason")}`, s("note")];
+      const parts = [a === "CREATED" && typeof m.weightKg === "number" ? `${m.weightKg} kg` : null, s("verifiedBy") && `verificado por ${s("verifiedBy")}`, s("reviewerQualification") && `cargo/habilitação: ${s("reviewerQualification")}`, s("foodOrigin") && `origem: ${s("foodOrigin")}`, s("recipientName") && `para ${s("recipientName")}`, s("receivedBy") && `recebido por ${s("receivedBy")}`, s("reason") && `motivo: ${s("reason")}`, s("note")];
       return parts.filter(Boolean).join(" · ") || null;
     };
     return {

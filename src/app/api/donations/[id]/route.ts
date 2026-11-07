@@ -3,9 +3,15 @@ import { z } from 'zod';
 import { actorFrom } from '@/lib/actor';
 import { apiError, databaseUnavailable } from '@/lib/http';
 import { DonationService } from '@/modules/donations/application/donation-service';
-import { DonationRuleError } from '@/modules/donations/domain/donation-workflow';
+import { DonationRuleError, FOOD_ORIGINS } from '@/modules/donations/domain/donation-workflow';
 const text=(max:number)=>z.string().max(max).optional();
-const schema=z.object({status:z.enum(['AVAILABLE','RESERVED','DELIVERED','CANCELLED']),verifiedBy:text(120),recipientId:text(64),receivedBy:text(120),reason:text(300),note:text(500)});
+const schema=z.object({
+ status:z.enum(['AVAILABLE','RESERVED','DELIVERED','CANCELLED']),verifiedBy:text(120),
+ recipientId:text(64),receivedBy:text(120),reason:text(300),note:text(500),
+ foodOrigin:z.enum(FOOD_ORIGINS).optional(),reviewerQualification:text(120),
+ inspectionOk:z.boolean().optional(),conservationOk:z.boolean().optional(),
+ validityOk:z.boolean().optional(),transportOk:z.boolean().optional(),
+});
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 export async function GET(_req:NextRequest,{params}:{params:Promise<{id:string}>}){
