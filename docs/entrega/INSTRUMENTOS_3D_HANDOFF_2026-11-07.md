@@ -33,3 +33,44 @@ NÃO EXECUTADO nesta revisão: renderer WebGL dos instrumentos, pixel/layout/int
 8. Registrar screenshots e resultados antes de sair de rascunho. Não fazer merge em main nem publicar VPS sem autorização. Rollback imediato: `?3d=0`.
 
 Proposta adicional trazida durante este trabalho: [RICHARDS Circular](../propostas/RICHARDS_CIRCULAR.md), apenas roadmap e cenário ilustrativo. Não há módulo Circular implementado neste PR.
+
+## Aceite executado por Claude — 07/11/2026, tarde
+
+**Ambiente:**
+- máquina: notebook Tracbel, Chrome 156 headless;
+- GPU real: Intel(R) Graphics, ANGLE Direct3D11;
+- dados: `next start` local na porta 3100, banco de teste `*_test`, bancada virtual (tudo SIMULATED);
+- base: develop `95511de` + este PR.
+
+| Verificação | Resultado |
+|---|---|
+| install, generate, typecheck, lint e build | PASSOU |
+| Unitários | PASSOU 155/155 |
+| Integração (Postgres de teste) | PASSOU 116/116 |
+| E2E das jornadas | PASSOU 36/36 |
+| `instruments-scene.mjs` (SwiftShader, só no harness) | PASSOU nos dois instrumentos |
+| `twin-responsive.mjs` | PASSOU 7/7 depois das correções abaixo. O teste agora também confere os rótulos da viagem (até 2 linhas e sem sobreposição) |
+| Ensaio na GPU real | PASSOU 16/16 (detalhes abaixo) |
+| Capturas durante a bancada (temperatura contando e em alarme, balança instável e com lote pendente; telão e celular 390) | PASSOU depois das correções abaixo |
+| Projetor do evento, celulares físicos (iOS/Safari, Android), zoom de texto e rotação real | **NÃO EXECUTADO** |
+
+**Ensaio na GPU real:**
+- **Abertura:** com 3D automático, o cano e os dois instrumentos ficam em 3D em cerca de 2,2 s, com 3 canvas. Com `?3d=0`, 0 canvas.
+- **Desempenho:** com a água correndo e os 3 contextos, 60 fps, p50 16,7 ms, p95 16,8 ms, máximo 16,9 ms.
+- **Imobilidade:** sem dado novo, os instrumentos ficam parados (imagem idêntica com o CSS congelado), antes e depois da bancada.
+- **Estados:** temperatura sustentada e balança com lote de 6 kg aparecem SIMULADAS e em 3D.
+- **Perda de contexto da balança:** só ela vai ao 2D (motivo `lost`); o cano e a temperatura seguem em 3D.
+- **Liga/desliga:** 10 ciclos terminam com 3 canvas. Heap JS de 11,3 para 11,0 MB.
+- **Celular 390×844 (DPR 3):** o contexto dos instrumentos só nasce ao rolar até eles (1 canvas antes, 3 depois), sem rolagem horizontal.
+- **Recaídas para o 2D:** "reduzir movimento", sem WebGL e GPU desligada deixam tudo em 2D, com 0 canvas.
+- **Rede e erros:** 0 pedidos externos e 0 erros de JavaScript.
+
+**Correções feitas no aceite (`stage.css`, `twin-responsive.mjs`):**
+1. **Abaixo de 640 px, os rótulos da Viagem quebravam letra por letra** (por exemplo "p o n t e / A P I").
+   - Causa: o rótulo é absoluto dentro de um nó de largura ~0. Com `overflow-wrap: anywhere`, a largura disponível era ~0.
+   - Correção: `width: max-content`.
+   - Prova de mutação: sem a correção, o teste falha (4, 9 e 5 linhas); com ela, passa.
+2. **Em 360 px, "dispositivo" e "ponte / API" se encostavam.** Agora o 2º e o 4º rótulo ficam acima da linha.
+3. **No telão, com a ocorrência de temperatura aberta,** o termômetro fica compacto e a etiqueta "3D · sob demanda" ficava por cima dele. A etiqueta agora some só nesse estado.
+
+**Observação:** no telão, o termômetro 3D é pequeno, sobretudo com alarme. Os números grandes continuam sendo a leitura principal; o instrumento é ilustrativo.

@@ -251,6 +251,8 @@
 .stage .temp-has-alarm .temp-layout { flex: 0 1 65px; }
 .stage .temp-has-alarm .temp-layout .big2 { font-size: calc(var(--u) * 4.3); }
 .stage .temp-has-alarm .temp-layout .hum { font-size: calc(var(--u) * 2.7); }
+/* Com alarme o termômetro fica compacto no telão: a etiqueta de modo cobriria o próprio modelo. */
+.stage .temp-has-alarm .instrument-temperature .instrument-mode { display: none; }
 .stage .instrument-fallback, .stage .instrument-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .stage .instrument-fallback { transition: opacity 180ms; }
 .stage .instrument-canvas { opacity: 0; pointer-events: none; }
@@ -399,7 +401,10 @@
   .stage .trip-id { font-size: 12px; overflow-wrap: anywhere; }
   .stage .trip-track { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 95px auto; min-height: 160px; margin: 0 20px; gap: 8px; }
   .stage .trip-track > .trip-node, .stage .trip-rail, .stage .trip-rider { top: 28px; }
-  .stage .trip-node em { max-width: 62px; white-space: normal; overflow-wrap: anywhere; text-align: center; }
+  /* O nó tem largura ~0 e o rótulo é absoluto dentro dele: sem `width: max-content` a largura disponível é ~0 e cada letra cai numa linha. */
+  .stage .trip-node em { width: max-content; max-width: 62px; white-space: normal; overflow-wrap: anywhere; text-align: center; }
+  /* Nós a ~72 px: rótulos alternados (2º e 4º acima da linha) para "dispositivo" e "ponte / API" não se encostarem. */
+  .stage .trip-node:nth-of-type(2) em, .stage .trip-node:nth-of-type(4) em { top: auto; bottom: calc(100% + 6px); }
   .stage .trip-seg { position: static; grid-row: 2; transform: none; white-space: normal; text-align: center; font-size: 11px; }
   .stage .trip-seg b { font-size: 13px; }
 }

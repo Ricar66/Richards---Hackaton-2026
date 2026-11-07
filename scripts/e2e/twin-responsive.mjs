@@ -22,6 +22,11 @@ try {
     assert.equal(await page.$$eval('.instrument-twin', list => list.length), 2, 'dois instrumentos adicionais');
     assert.ok(await page.$$eval('.instrument-twin', list => list.every(e => { const r = e.getBoundingClientRect(), p = e.closest('.inst').getBoundingClientRect(); return r.width > 0 && r.height >= 45 && r.left >= p.left && r.right <= p.right; })), `${width}: modelos dentro dos cartões`);
     assert.ok(await page.$$eval('.instrument-twin', list => list.every(e => e.dataset.instrumentMode === 'svg')), 'opção 2D vale para todos os instrumentos');
+    // Regressão de 07/11: no celular os rótulos da viagem quebravam letra por letra (largura ~0).
+    const tripLines = await page.$$eval('.trip-node em', list => list.map(e => Math.round(e.getBoundingClientRect().height / (parseFloat(getComputedStyle(e).fontSize) * 1.25))));
+    assert.ok(tripLines.length === 5 && tripLines.every(n => n <= 2), `${width}: rótulos da viagem em até 2 linhas (linhas: ${tripLines.join(', ')})`);
+    const tripOverlap = await page.$$eval('.trip-node em', list => { const r = list.map(e => e.getBoundingClientRect()); return r.some((a, i) => r.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1)); });
+    assert.ok(!tripOverlap, `${width}: rótulos da viagem não se sobrepõem`);
     await page.click('.twin-expand'); await page.waitForSelector('[role="dialog"]');
     const fit = await page.$eval('[role="dialog"]', panel => {
       const bounds = panel.getBoundingClientRect();
