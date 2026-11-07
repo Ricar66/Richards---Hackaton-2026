@@ -1,0 +1,6 @@
+# Opcional. Não modifica o deploy ativo; revisar migração antes de ativar.
+# docker compose -f docker-compose.yml -f compose.circular.yml up -d --build web
+services:
+  web:
+    environment:
+      CIRCULAR_ENABLED: ${CIRCULAR_ENABLED:-false}
