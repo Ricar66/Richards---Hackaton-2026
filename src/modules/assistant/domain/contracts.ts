@@ -7,7 +7,7 @@ export const toolArguments = {
   operation_summary: z.object({ range: z.enum(["24h", "7d", "30d"]), source: z.enum(["ALL", "DEVICE", "SIMULATED", "MANUAL"]) }).strict(),
   active_occurrences: z.object({}).strict(),
   occurrence_evidence: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) }).strict(),
-  product_help: z.object({ topic: z.enum(["produto", "agua", "alimentos", "iot", "limites"]) }).strict(),
+  product_help: z.object({ topic: z.enum(["produto", "agua", "mapa", "iot", "limites"]) }).strict(),
 };
 export type ToolName = keyof typeof toolArguments;
 /** Não guardar ou enviar acidentalmente chaves coladas na conversa. Não é um detector universal de dados pessoais. */

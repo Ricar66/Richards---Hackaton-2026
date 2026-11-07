@@ -125,6 +125,6 @@ export function Footnote({ data }: { data: DashboardDTO }) {
   return <footer className="meta-foot">
     <span>Gerado {dateBR(data.generatedAt)} · {state === "live" ? "stream ao vivo: refeito no servidor a cada mudança relevante" : "stream fora: consulta automática a cada 15 s"}</span>
     <span>{data.provenance.samples} leituras · origem: {PROVENANCE_LABEL[data.provenance.label]}</span>
-    <span>Volume observado não é economia comprovada · ocorrência não é vazamento confirmado</span>
+    <span>Volume observado não é economia comprovada · ocorrência não é vazamento confirmado. Medidores em série podem sobrepor volumes; filtre um sensor para analisar sua medição.</span>
   </footer>;
 }

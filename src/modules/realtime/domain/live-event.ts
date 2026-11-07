@@ -142,3 +142,10 @@ export function parseLiveEvent(raw: string): LiveEvent | null {
 /** Quadros de controle da rota SSE (não passam pelo banco). */
 export type LiveHello = { serverTime: string; listening: boolean };
 export type LiveHeartbeat = { serverTime: string; listening: boolean };
+
+/** Eventos retirados podem ser decodificados do histórico, mas não publicados na operação atual. */
+export function isWaterEvent(e:LiveEvent):boolean{
+ if(e.type==="reading.created"||e.type==="message.rejected"||e.type==="resync")return true;
+ if(e.type==="occurrence.opened"||e.type==="occurrence.status")return e.kind!=="TEMPERATURE_EXCURSION";
+ return false;
+}

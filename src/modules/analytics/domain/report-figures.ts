@@ -9,6 +9,6 @@ export function reportFigures(data: Pick<DashboardDTO, "kpis">) {
     ["Ocorrências ativas agora", String(k.activeOccurrences)],
     ["Resolvidas no período", String(k.resolvedInPeriod)],
     ["Tempo médio até resolução", durationBR(k.avgResolutionMin)],
-    ["Alimentos entregues", `${numBR(k.deliveredKg)} kg`],
+    ["Sensores comunicando", `${k.devicesOnline} de ${k.devices}`],
   ] as const;
 }

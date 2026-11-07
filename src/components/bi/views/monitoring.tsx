@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import { LiveSensorTiles } from "../live-sensors";
 import { FixtureActivityPanel } from "../fixture-activity-panel";
 import { Activity, Droplets, Gauge, MoonStar } from "lucide-react";
 import { estimateContinuousFlow } from "@/modules/monitoring/domain/water-loss-estimate";
@@ -55,7 +54,7 @@ export function Monitoring({ initial }: { initial: DashboardDTO }) {
     <GlobalFilters data={data} />
     <StaleBanner since={stale} />
     <ProvenanceBanner p={data.provenance} />
-    <LiveSensorTiles />
+
     <FixtureActivityPanel siteId={data.filter.siteId} deviceId={data.filter.deviceId} />
     <div className="kpi-grid">
       <KpiTile label="Volume observado" icon={<Droplets size={15} />} value={k.observedLiters} unit=" L" foot="soma das leituras do recorte">

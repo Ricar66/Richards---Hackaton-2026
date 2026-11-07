@@ -24,18 +24,18 @@ export async function scanNotifications(now = new Date()) {
     const rows = await db.$queryRaw<{ id: string; occurrenceId: string; action: string; at: Date; title: string; source: string; status: string }[]>`
       SELECT e.id,e."occurrenceId",e.action,e.at,o.title,o.source::text,o.status::text
       FROM "OccurrenceEvent" e JOIN "Occurrence" o ON o.id=e."occurrenceId"
-      WHERE o."organizationId"=${DEMO_ORG_ID} AND e.at >= ${sub.linkedAt}
+      WHERE o."organizationId"=${DEMO_ORG_ID} AND e.at >= ${sub.linkedAt} AND o.kind::text<>'TEMPERATURE_EXCURSION'
         AND e.action IN ('CREATED','ACKNOWLEDGED','RESOLVED','DISMISSED')
         AND (${sub.includeSimulated} OR o.source::text <> 'SIMULATED')
         AND NOT EXISTS (SELECT 1 FROM "NotificationDelivery" n WHERE n."dedupeKey"=${sub.id} || ':event:' || e.id)
       ORDER BY e.at,e.id LIMIT 100`;
     for (const e of rows) {
       // Textos são template determinístico; origem e instante nunca vêm da IA. Não incluir nota/autor/recebedor.
-      await enqueueDelivery(sub.id, `${sub.id}:event:${e.id}`, "OCCURRENCE", { text: `${actionLabel[e.action]} · ${e.source === "SIMULATED" ? "SIMULADO" : e.source}\n${e.title.slice(0,180)}\nRegistrado em ${clock(e.at)}.\nSuspeita exige verificação humana. Consulte a evidência e o estado atual no BI.`, path: `/ocorrencias?oc=${encodeURIComponent(e.occurrenceId)}` }, now);
+      await enqueueDelivery(sub.id, `${sub.id}:event:${e.id}`, "OCCURRENCE", { occurrenceId:e.occurrenceId, text: `${actionLabel[e.action]} · ${e.source === "SIMULATED" ? "SIMULADO" : e.source}\n${e.title.slice(0,180)}\nRegistrado em ${clock(e.at)}.\nSuspeita exige verificação humana. Consulte a evidência e o estado atual no BI.`, path: `/ocorrencias?oc=${encodeURIComponent(e.occurrenceId)}` }, now);
     }
-    const pending = await db.occurrence.findMany({ where: { organizationId: DEMO_ORG_ID, status: "OPEN", openedAt: { gte: sub.linkedAt, lte: new Date(now.getTime()-c.ASSISTANT_ESCALATION_MINUTES*60000) }, ...(sub.includeSimulated ? {} : { source: { not: "SIMULATED" as const } }) }, take: 100 });
+    const pending = await db.occurrence.findMany({ where: { organizationId: DEMO_ORG_ID, kind:{not:"TEMPERATURE_EXCURSION"}, status: "OPEN", openedAt: { gte: sub.linkedAt, lte: new Date(now.getTime()-c.ASSISTANT_ESCALATION_MINUTES*60000) }, ...(sub.includeSimulated ? {} : { source: { not: "SIMULATED" as const } }) }, take: 100 });
     for (const o of pending) await enqueueDelivery(sub.id, `${sub.id}:escalation:${o.id}`, "ESCALATION", { occurrenceId: o.id, text: `Lembrete de investigação · ${o.source === "SIMULATED" ? "SIMULADO" : o.source}\n${o.title.slice(0,180)}\nAberta há pelo menos ${c.ASSISTANT_ESCALATION_MINUTES} minutos e ainda sem investigação assumida no momento da checagem.`, path: `/ocorrencias?oc=${encodeURIComponent(o.id)}` }, now);
-    const devices = await db.device.findMany({ where: { organizationId: DEMO_ORG_ID }, take: 100 });
+    const devices = await db.device.findMany({ where: { organizationId: DEMO_ORG_ID, kind:"FLOW" }, take: 100 });
     for (const d of devices) if (deviceConnectivity(d.state, d.lastSeenAt, now) === "OFFLINE" && d.lastSeenAt) {
       const lastReading = await db.telemetryReading.findFirst({ where: { deviceId: d.id }, orderBy: { receivedAt: "desc" }, select: { source: true } });
       if (lastReading?.source === "SIMULATED" && !sub.includeSimulated) continue;
@@ -59,10 +59,10 @@ export async function deterministicSummary(includeSimulated = false) {
   const lines=["Resumo · últimas 24 h · origens separadas"];
   for(const source of sources){
     const result=await executeAssistantTool("operation_summary",{range:"24h",source});
-    const d=result.data as {generatedAt:string;kpis:{observedLiters:number|null;activeOccurrences:number;deliveredKg:number}};
-    lines.push(`\n${source==="SIMULATED"?"SIMULADO":source} · consulta ${clock(new Date(d.generatedAt))}\nVolume observado: ${d.kpis.observedLiters===null?"sem dados":`${d.kpis.observedLiters.toLocaleString("pt-BR")} L`}\nOcorrências ativas: ${d.kpis.activeOccurrences}\nKg entregues: ${d.kpis.deliveredKg.toLocaleString("pt-BR")}`);
+    const d=result.data as {generatedAt:string;kpis:{observedLiters:number|null;activeOccurrences:number;devicesOnline:number}};
+    lines.push(`\n${source==="SIMULATED"?"SIMULADO":source} · consulta ${clock(new Date(d.generatedAt))}\nVolume observado: ${d.kpis.observedLiters===null?"sem dados":`${d.kpis.observedLiters.toLocaleString("pt-BR")} L`}\nOcorrências ativas: ${d.kpis.activeOccurrences}`);
   }
-  lines.push("\nObservado não significa economizado. Apenas entregas confirmadas entram nos kg. Sem estimativa de economia.");
+  lines.push("\nObservado não significa economizado. Sem estimativa de economia.");
   return lines.join("\n");
 }
 
@@ -81,9 +81,12 @@ export async function deliverOne(api: Pick<TelegramApi,"send">, now = new Date()
   const db = getDb(), sub = await db.telegramSubscription.findFirst({ where: { id: row.subscriptionId, organizationId: DEMO_ORG_ID, active: true } });
   const p = row.payload as Payload;
   let valid = !!sub;
-  if (valid && row.kind === "ESCALATION") valid = !!await db.occurrence.findFirst({ where: { id: p.occurrenceId, organizationId: DEMO_ORG_ID, status: "OPEN" } });
+  if(valid&&row.kind==="OCCURRENCE")valid=!!p.occurrenceId&&!!await db.occurrence.findFirst({where:{id:p.occurrenceId,organizationId:DEMO_ORG_ID,kind:{not:"TEMPERATURE_EXCURSION"}}});
+  if(valid&&row.kind==="SUMMARY")p.text=await deterministicSummary(sub!.includeSimulated);
+  if(valid&&!["OCCURRENCE","ESCALATION","OFFLINE","SUMMARY"].includes(row.kind))valid=false;
+  if (valid && row.kind === "ESCALATION") valid = !!await db.occurrence.findFirst({ where: { id: p.occurrenceId, organizationId: DEMO_ORG_ID, kind:{not:"TEMPERATURE_EXCURSION"}, status: "OPEN" } });
   if (valid && row.kind === "OFFLINE") {
-    const d = await db.device.findFirst({ where: { id: p.deviceId, organizationId: DEMO_ORG_ID } });
+    const d = await db.device.findFirst({ where: { id: p.deviceId, organizationId: DEMO_ORG_ID, kind:"FLOW" } });
     valid = !!d && d.lastSeenAt?.toISOString() === p.lastSeen && deviceConnectivity(d.state,d.lastSeenAt,new Date()) === "OFFLINE";
   }
   const where = { id: row.id, leaseToken: row.token };

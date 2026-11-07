@@ -1,3 +1,4 @@
+import { waterDashboard } from "@/modules/analytics/domain/water-projection";
 import { getDashboard } from "@/modules/analytics/application/get-dashboard";
 import { parseAnalyticsFilter } from "@/modules/analytics/domain/analytics-filter";
 import { getOccurrenceDetail } from "@/modules/monitoring/application/get-occurrence-detail";
@@ -18,10 +19,10 @@ export async function executeAssistantTool(name: string, raw: unknown): Promise<
     const { range, source } = toolArguments.operation_summary.parse(raw);
     const d = await getDashboard(parseAnalyticsFilter(new URLSearchParams({ range, source })));
     // Whitelist: não enviar recebedor, verificador, notas, e-mail ou tokens para o modelo.
-    return { data: { generatedAt: d.generatedAt, period: d.filter, provenance: d.provenance, kpis: d.kpis, devices: d.devices.map(x => ({ code: x.code, kind: x.kind, lastSeen: x.lastSeen, connectivity: x.connectivity, samples: x.samples, liters: x.liters, minFlowLpm: x.minFlowLpm, continuousSeconds: x.continuousSeconds })) }, source: { label: `BI · ${range} · ${source}`, href: `/?range=${range}&source=${source}` } };
+    return { data: { generatedAt: d.generatedAt, period: d.filter, provenance: d.provenance, kpis: waterDashboard(d).kpis, devices: d.devices.map(x => ({ code: x.code, kind: x.kind, lastSeen: x.lastSeen, connectivity: x.connectivity, samples: x.samples, liters: x.liters, minFlowLpm: x.minFlowLpm, continuousSeconds: x.continuousSeconds })) }, source: { label: `BI · ${range} · ${source}`, href: `/?range=${range}&source=${source}` } };
   }
   if (key === "active_occurrences") {
-    const rows = await getDb().occurrence.findMany({ where: { organizationId: DEMO_ORG_ID, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, orderBy: { openedAt: "desc" }, take: 30, select: { id: true, title: true, kind: true, severity: true, status: true, source: true, openedAt: true, device: { select: { code: true } } } });
+    const rows = await getDb().occurrence.findMany({ where: { organizationId: DEMO_ORG_ID, kind: {not:"TEMPERATURE_EXCURSION"}, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, orderBy: { openedAt: "desc" }, take: 30, select: { id: true, title: true, kind: true, severity: true, status: true, source: true, openedAt: true, device: { select: { code: true } } } });
     return { data: { generatedAt: new Date().toISOString(), limit: 30, occurrences: rows }, source: { label: "Ocorrências ativas · até 30", href: "/ocorrencias" } };
   }
   const { id } = toolArguments.occurrence_evidence.parse(raw);
