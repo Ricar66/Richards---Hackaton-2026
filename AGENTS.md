@@ -27,6 +27,15 @@
 ## Ao terminar uma etapa
 Relate: arquivos modificados, resumo do diff, contratos/migrações, comandos executados e resultados, como demonstrar, riscos conhecidos, o que falta. Se faltar acesso a uma ferramenta/dependência, não apresente a etapa como validada.
 
+## Atualização 07/11/2026 — plateia QR + IoT (develop, NÃO main)
+Leia ANTES de atuar: docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.
+- /plateia e /api/plateia/stream são públicos e SOMENTE leitura; /convite é protegido. Nunca enviar eventos privados brutos.
+- 70 visitantes é alvo de teste, não capacidade comprovada. Limite de código: 110 SSE por processo. Ensaio: scripts/plateia-carga.mjs.
+- Gatilho balança MQTT: 1,5 kg por 6s, célula nominal 5 kg, calibrar/tarar carga TOTAL.
+- Temperatura/umidade/peso no BI e plateia são eventos EFÊMEROS, sem histórico. Lotes só PENDING_REVIEW.
+- QR SVG contém a URL http://187.77.229.205:8090/plateia; ao trocar host regerar SVG e editar convite no mesmo commit.
+- Nenhum build, teste físico ou carga de 70 clientes foi validado nesta sessão; main intacta.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

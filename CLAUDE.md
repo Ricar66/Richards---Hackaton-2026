@@ -16,3 +16,7 @@ Responda e escreva sempre em português.
 - **Nunca** abrir `/api/live/stream`, APIs administrativas ou o BI sem autenticação; não enviar eventos internos brutos à plateia.
 - **Não** mesclar `develop` em `main` sem typecheck, lint, testes, validação física e carga real de 70 conexões; VPS publica `main` sem auto deploy.
 - Registre resultados com PASSOU/FALHOU/NÃO EXECUTADO, sem inventar logs.
+
+**Handoff obrigatório de 07/11/2026:** @docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md
+
+Preserve a leitura pública isolada da Basic Auth do BI e execute testes antes de propor merge na main.
