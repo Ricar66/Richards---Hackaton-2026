@@ -33,6 +33,11 @@ TECH_DOCS = {
     "docs/ARQUITETURA.md", "docs/CONTRATO_IOT.md", "docs/DADOS_REAIS.md",
     "docs/ROTEIRO_DEMO.md",
 }
+BANK_DOCS = {
+    "docs/ARQUITETURA.md": "ARQUITETURA_ATUAL.md",
+    "docs/agua/ESCOPO.md": "ESCOPO_HIDRICO.md",
+    "docs/agua/CHECKLIST_AVALIACAO.md": "CHECKLIST_AVALIACAO.md",
+}
 PITCH_DOCS = {
     "presentation/FALA_5MIN40.md", "presentation/ROTEIRO_PALCO.md",
     "presentation/PLANO_FINAL.md", "presentation/README.md",
@@ -138,6 +143,8 @@ def generate(args: argparse.Namespace) -> Path:
                     data = data.replace(b"[render_slides.py](render_slides.py)", b"render_slides.py (historico, fora do pacote)")
                     data = data.replace("[peças vetoriais SVG](slides/)".encode(), "peças vetoriais SVG (histórico, fora do pacote)".encode())
                 add(files, dest, data)
+            if info.filename in BANK_DOCS:
+                add(files, "04_MATERIAL_DA_BANCA/" + BANK_DOCS[info.filename], source.read(info))
             if info.filename == "presentation/CHECKLIST_VICTOR_IOT.md":
                 add(files, "01_APRESENTACAO/CHECKLIST_VICTOR_IOT.md", source.read(info))
             iot_copies = {
