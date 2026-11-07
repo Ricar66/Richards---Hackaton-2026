@@ -46,7 +46,7 @@ services:
       MQTT_TOPIC: ${MQTT_TOPIC:-richards/comercio/telemetria}
       MQTT_BRIDGE_USER: ${MQTT_USERNAME:-richards-ponte}
       MQTT_BRIDGE_PASSWORD: ${MQTT_PASSWORD:-}
-      MQTT_DEVICE_USER: ${MQTT_DEVICE_USER:-hortifruti_01}
+      MQTT_DEVICE_USER: ${MQTT_DEVICE_USER:-agua_01}
       MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD:-}
     ports:
       - "${MQTT_BIND_ADDR:-127.0.0.1}:1883:1883"
@@ -68,7 +68,7 @@ services:
       MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       MQTT_TOPIC: ${MQTT_TOPIC:-richards/comercio/telemetria}
       MQTT_REQUIRE_DEVICE_TOPIC: "true"   # o broker só deixa o dispositivo escrever em <tópico>/<dispositivo_id>
-      MQTT_DEVICE_ALIASES: ${MQTT_DEVICE_ALIASES:-hortifruti_01=RICHARDS-FLOW-001}
+      MQTT_DEVICE_ALIASES: ${MQTT_DEVICE_ALIASES:-agua_01=RICHARDS-FLOW-001}
       MQTT_SIMULATED_SENSORS: ${MQTT_SIMULATED_SENSORS:-VAZAO}
       MQTT_DEAD_LETTER: /data/carta-morta.ndjson
     volumes:

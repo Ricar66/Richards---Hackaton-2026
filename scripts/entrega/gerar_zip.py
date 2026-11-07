@@ -37,7 +37,7 @@ PITCH_DOCS = {
     "presentation/FALA_5MIN40.md", "presentation/ROTEIRO_PALCO.md",
     "presentation/PLANO_FINAL.md", "presentation/README.md",
 }
-BLOCKED_PARTS = {".git", ".next", "node_modules", "__pycache__", ".venv", "venv", "dist", "backup", "backups", ".e2e", "coverage", "export", "exports"}
+BLOCKED_PARTS = {".git", ".next", "node_modules", "__pycache__", ".venv", "venv", "dist", "backup", "backups", ".e2e", "coverage", "export", "exports", "archive", "historico"}
 BLOCKED_NAMES = {".env", ".env.local", ".env.production", ".env.vps.local", "secrets.h", "credentials.json", "credenciais.env", "id_rsa", "id_ed25519"}
 BLOCKED_SUFFIX = {".pem", ".pfx", ".p12", ".key", ".db", ".sqlite", ".sqlite3", ".dump", ".bak", ".log", ".ndjson", ".pcap"}
 EVIDENCE_SUFFIX = {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".mp4", ".txt", ".csv"}
@@ -66,7 +66,7 @@ def allowed_name(path: str) -> bool:
 def route(path: str) -> str | None:
     if not allowed_name(path):
         return None
-    if path in ROOT_FILES or path.startswith(CODE_DIRS) or path in TECH_DOCS or path.startswith("docs/dados/"):
+    if path in ROOT_FILES or path.startswith(CODE_DIRS) or path in TECH_DOCS or path.startswith("docs/agua/"):
         return "02_CODIGO/RICHARDS_PLATFORM/" + path
     if path.startswith("presentation/imagens/") and path.endswith((".webp", ".png", ".jpg", ".jpeg")):
         return "01_APRESENTACAO/imagens/" + PurePosixPath(path).name
@@ -76,7 +76,7 @@ def route(path: str) -> str | None:
         return "01_APRESENTACAO/" + PurePosixPath(path).name
     if path == "presentation/CHECKLIST_VICTOR_IOT.md":
         return "03_IOT_E_TESTES/CHECKLIST_VICTOR_IOT.md"
-    if path.startswith("docs/entrega/"):
+    if path == "docs/agua/HANDOFF_CLAUDE.md":
         return "04_MATERIAL_DA_BANCA/" + PurePosixPath(path).name
     return None
 
@@ -113,6 +113,8 @@ def generate(args: argparse.Namespace) -> Path:
         raise RuntimeError("Execute no clone completo do RICHARDS.")
     branch = git("branch", "--show-current").decode().strip()
     sha = git("rev-parse", "HEAD").decode().strip()
+    if args.final and not (root / "presentation/agua/APROVADA.md").is_file():
+        raise RuntimeError("O pivô hídrico exige nova apresentação produzida, revisada e aprovada. O deck antigo é histórico.")
     if args.final and branch != "main":
         raise RuntimeError("Entrega FINAL apenas na branch main validada. Atual: " + branch)
     dirty = git("status", "--porcelain", "--untracked-files=no").decode().strip()
@@ -148,10 +150,8 @@ def generate(args: argparse.Namespace) -> Path:
             # Preserva os caminhos relativos usados pelo README e pelos roteiros.
             # Somente documentação versionada; arquivos operacionais da VPS ficam fora.
             if allowed_name(info.filename) and (
-                info.filename.startswith("docs/")
-                or info.filename.startswith("docs/FASE_")
-                or info.filename in PITCH_DOCS
-                or info.filename.startswith("presentation/imagens/")
+                info.filename in TECH_DOCS or info.filename.startswith("docs/agua/")
+                or info.filename.startswith("docs/assistente/") or info.filename in PITCH_DOCS
                 or info.filename == "presentation/CHECKLIST_VICTOR_IOT.md"
             ):
                 copy = "02_CODIGO/RICHARDS_PLATFORM/" + info.filename
@@ -190,7 +190,7 @@ def generate(args: argparse.Namespace) -> Path:
     intro = (
         "# RICHARDS Intelligence - Entrega Senac 2026\n\n"
         "Versao: " + sha[:12] + " | Branch: " + branch + " | Modo: " + mode + "\n\n"
-        "01_APRESENTACAO: imagens oficiais, roteiro de fala e arquivos PDF/PPTX se fornecidos.\n\n"
+        "01_APRESENTACAO: roteiro hídrico atual; novo deck visual/PDF/PPTX pendente de produção e aprovação.\n\n"
         "02_CODIGO: abra RICHARDS_PLATFORM/README.md para Docker, API e testes.\n\n"
         "03_IOT_E_TESTES: contrato da bancada e checklist do Victor.\n\n"
         "04_MATERIAL_DA_BANCA: resumo, roteiro, riscos e controle do 3D.\n\n"
