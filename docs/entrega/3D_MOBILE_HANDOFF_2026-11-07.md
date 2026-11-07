@@ -34,6 +34,48 @@ Ambiente Node 24.22.1, pnpm 10.16.1, Next 16.4.4:
 
 Não anunciar fotorrealismo, 100% de compatibilidade, FPS ou aprovação de responsividade com base em typecheck/build/testes de geometria. A inspeção visual e a matriz abaixo são critérios de aceite pendentes antes de liberar para a banca.
 
+## Aceite executado por Claude — 07/11/2026, tarde
+
+**Ambiente:**
+- máquina: notebook Tracbel, Windows 11, Chrome 156.0.8078.75 headless;
+- GPU real: Intel(R) Graphics, ANGLE Direct3D11;
+- dados: `next start` local na porta 3100, banco de teste `*_test`, dados SIMULATED do seed e da bancada virtual;
+- base: a branch com a develop integrada (`dd5c811`, depois `57cdd0a`). O único conflito foi a MEMORIA: as duas seções foram mantidas.
+
+| Verificação | Resultado |
+|---|---|
+| install, generate, typecheck, lint e build | PASSOU |
+| Unitários | PASSOU 146/146 |
+| Integração (Postgres de teste) | PASSOU 116/116 |
+| E2E das jornadas | PASSOU 36/36 |
+| `twin-scene.mjs` (shader real em SwiftShader, só no harness) | PASSOU: pausa, zero, sem leitura, pulso sem fluxo, enquadramentos, resize e dispose |
+| `twin-responsive.mjs` | PASSOU 7/7: 320×568, 360×640, 390×844, 768×1024, 844×390, 1920×1080 e movimento reduzido |
+| Inspeção visual das capturas | PASSOU, com as observações abaixo |
+| Ensaio na GPU real | PASSOU 22/22 (detalhes abaixo) |
+| Projetor do evento, celulares físicos (iOS/Safari, Android), zoom de texto e rotação real | **NÃO EXECUTADO** |
+
+**Ensaio na GPU real, 1920×1080:**
+- **Abertura:** sem parâmetro, o 3D entra sozinho em cerca de 1,0 s. Com `?3d=0`, fica no SVG e sem canvas.
+- **Desempenho com a água correndo:** 60 fps, p50 16,7 ms, p95 16,9 ms, máximo 18,5 ms. DPR 1, nível 0, 39 draw calls, 76.498 triângulos na cena inteira.
+- **Pausa:** a tecla P para o desenho em até 250 ms e o retomar volta a mover.
+- **Ampliar:** usa o mesmo canvas, com um contexto só. Isométrica e Inspeção funcionam. Esc fecha e devolve o foco ao botão.
+- **Alarme:** halo e anel em `pulse`.
+- **Perda de contexto:** volta ao 3D em 353 ms, num canvas novo. A 2ª perda fica no SVG (motivo `lost`).
+- **Liga/desliga:** 10 ciclos, com ampliação no meio, terminam com 1 canvas. Heap JS de 9,0 para 9,9 MB.
+- **Sem leitura recente:** canvas WebGL idêntico em 600 ms (comparado com o halo CSS congelado).
+- **Origem:** a leitura SIMULATED aparece identificada ao lado do gêmeo ("BANCADA VIRTUAL · SIMULADO").
+- **Recaídas para o SVG:** "reduzir movimento", sem WebGL e GPU desligada caem no SVG mesmo com o 3D automático.
+- **Rede e erros:** 0 pedidos externos e 0 erros de JavaScript.
+
+**Observações (P3, não bloqueiam):**
+1. O diagnóstico (tecla D) continua mostrando o último p50/p95 depois que o laço para; a água está de fato parada.
+2. Em 1920×1080, com a faixa de pausa visível, o cabeçalho corta o local ("Mer...") e o cartão Hoje corta "Conectivida...".
+3. Na paisagem 844×390, a inspeção mostra o gêmeo pequeno, com muito espaço vazio.
+4. O HTML do harness `twin-scene` não tem `<meta charset>`, então o título sai com acentos quebrados. É só o harness.
+5. O C1 do E2E (PDF × prévia) falhou uma vez e passou na repetição, com o mesmo código: a janela de 24 h desliza entre a prévia e o PDF.
+
+**Risco que fica:** o 3D automático nunca rodou no projetor do evento. Rollback imediato: `/ao-vivo?3d=0` ou a tecla 3, que grava a escolha no navegador.
+
 ## Claude — concluir o aceite visual
 
 1. Ler AGENTS/MEMORIA, conferir HEADs e preservar mudanças concorrentes. PR #6 já está na base; conservar as atualizações dos dois trabalhos ao resolver eventual conflito futuro de documentação.
