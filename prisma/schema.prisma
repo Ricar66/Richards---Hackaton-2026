@@ -78,6 +78,8 @@ model Organization {
   donations  DonationBatch[]
   missions   Mission[]
   audit      AuditEvent[]
+  circularBatches CircularBatch[]
+  circularPartners CircularPartner[]
 }
 model User {
   id             String @id @default(cuid())
@@ -89,6 +91,7 @@ model User {
   createdAt      DateTime @default(now())
 }
 model Site {
+  circularBatches CircularBatch[]
   id String @id @default(cuid())
   organizationId String
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -171,6 +174,7 @@ model RecipientOrganization {
   donations DonationBatch[]
 }
 model DonationBatch {
+  circularOrigin CircularBatch?
   id String @id @default(cuid())
   organizationId String
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -189,6 +193,115 @@ model DonationBatch {
   createdAt DateTime @default(now())
   missions Mission[]
   @@index([organizationId, status, createdAt(sort: Desc)])
+}
+
+enum CircularOrigin {
+  PREPARATION
+  KITCHEN_UNSERVED
+  BUFFET
+  PLATE
+  UNKNOWN
+}
+enum CircularMaterial {
+  PLANT_ONLY
+  MIXED_FOOD
+  ANIMAL_FATS
+  UNKNOWN
+}
+enum CircularMethod {
+  COMPOSTING
+  BIODIGESTION
+  DISPOSAL
+}
+enum CircularStatus {
+  REGISTERED
+  RESIDUE
+  DONATION_REFERRED
+  SCHEDULED
+  COLLECTED
+  RECEIVED
+  EVIDENCED
+  CANCELLED
+}
+enum CircularEvidenceKind {
+  RECEIPT
+  TREATMENT
+  DISPOSAL
+}
+model CircularPartner {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  name String
+  city String
+  source DataSource
+  methods CircularMethod[]
+  materials CircularMaterial[]
+  authorizationReference String
+  reviewedBy String
+  reviewedAt DateTime @default(now())
+  reviewExpiresAt DateTime
+  active Boolean @default(true)
+  batches CircularBatch[]
+  @@index([organizationId, source, active])
+}
+model CircularBatch {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  siteId String
+  site Site @relation(fields: [siteId], references: [id])
+  requestKey String
+  requestHash String
+  description String
+  weightKg Decimal @db.Decimal(12, 3)
+  origin CircularOrigin
+  material CircularMaterial
+  reason String
+  source DataSource
+  occurredAt DateTime
+  status CircularStatus @default(REGISTERED)
+  version Int @default(0)
+  reviewedBy String?
+  reviewNote String?
+  reviewedAt DateTime?
+  partnerId String?
+  partner CircularPartner? @relation(fields: [partnerId], references: [id])
+  partnerSnapshot Json?
+  method CircularMethod?
+  scheduledAt DateTime?
+  collectedKg Decimal @default(0) @db.Decimal(12, 3)
+  receivedKg Decimal @default(0) @db.Decimal(12, 3)
+  confirmedKg Decimal @default(0) @db.Decimal(12, 3)
+  firstCollectedAt DateTime?
+  firstReceivedAt DateTime?
+  donationBatchId String? @unique
+  donationBatch DonationBatch? @relation(fields: [donationBatchId], references: [id])
+  cancelReason String?
+  createdAt DateTime @default(now())
+  evidence CircularEvidence[]
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, source, createdAt])
+}
+model CircularEvidence {
+  id String @id @default(cuid())
+  batchId String
+  batch CircularBatch @relation(fields: [batchId], references: [id])
+  requestKey String
+  requestHash String
+  kind CircularEvidenceKind
+  weightKg Decimal @db.Decimal(12, 3)
+  eventAt DateTime
+  documentReference String
+  reviewedBy String
+  mime String
+  fileSize Int
+  sha256 String
+  content Bytes
+  createdAt DateTime @default(now())
+  @@unique([batchId, requestKey])
+  @@unique([batchId, kind, sha256])
+  @@index([batchId, createdAt])
 }
 // Expansão preparada: encaminhar incidentes e coletas como missões.
 // CRUD e atribuições ficam fora do MVP de hackathon.
