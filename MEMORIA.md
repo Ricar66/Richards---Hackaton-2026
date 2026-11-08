@@ -1,5 +1,16 @@
 ## ESTADO ATUAL — 07/11/2026, noite (depois do pitch): rumo ao Empreenda 2027
 
+### Revisão de maquetes de 08/11 — branch `feat/architectural-water-models`, PR para develop
+
+Pedido do Ricardo: aprofundar o realismo dos quatro modelos. Base develop `7f150dd`, main conferida `6205113`; main/VPS/banco real preservados. Guia completo e evidências: [`docs/empreenda/MAQUETES_3D_2026-11-08.md`](docs/empreenda/MAQUETES_3D_2026-11-08.md).
+
+- Envoltória arquitetônica com janelas em altura completa e corte por direção da câmera; Inspeção/Volume/Superior, foco, nomes recolhíveis, tela cheia com mesmo canvas e enquadramento que considera viewport/barra de comandos.
+- Quinze peças testáveis sem GPU (`fixture-model.ts`): cubas côncavas, marcenaria, tanque reforçado, louças e chuveiro detalhados. Relevo/rugosidade locais; vegetação ramificada e detalhes de obra.
+- Volume reúne andares a 3 m; inspeção mantém afastamento. Novo RASCUNHO do prédio abre vão central de 2,34 m e muda hidrômetros para sua lateral; plantas salvas não são reescritas e corredores antigos estreitos não recebem a escada ilustrativa. Nenhum contrato/migration novo.
+- Preservados fonte simulada, SVG, pausa/redução de movimento e orçamento; só ponto vinculado pode mostrar fluxo. Fora do viewport, para o laço; nível 1 desliga AO e reduz DPR. Sem dependência nova.
+- **PASSOU nesta revisão:** 198 unitários, 130 integração em PG18.6 temporário, Prisma generate, typecheck, lint, build e bundle da prévia local.
+- **NÃO EXECUTADO:** aceite GPU/browser/mobile/projetor desta revisão. Chromium encerra antes de abrir página; `map-models.mjs` registra zero checks visuais. Não anunciar fotorrealismo, FPS ou responsividade universal com base nos testes geométricos. `node scripts/e2e/map-models.mjs --serve` abre ensaio SIMULADO local, sem API/banco; o modo sem `--serve` tenta Chrome e gera relatório/capturas. Validar também `/mapa` completo antes de integrar.
+
 **Leia isto antes das seções abaixo; elas são o histórico.**
 
 - **Escopo voltou ao modelo anterior (decisão do Ricardo, 07/11):** água, temperatura, balança e doações exatamente como estavam até `29cb92f`.
