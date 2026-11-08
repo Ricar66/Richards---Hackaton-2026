@@ -12,3 +12,23 @@
 /* aspect-ratio + min-height alargava o quadro além da tela em 360 px; no celular a altura é explícita. */
 .hyd-3d-wrap{width:100%;max-width:100%}
 @media(max-width:650px){.hyd-3d-wrap{aspect-ratio:auto;min-height:0;height:clamp(240px,74vw,360px)}}
+
+/* Maquete 3D (08/11): barra de pavimentos e câmera, etiqueta de pavimento, rótulo compacto e dica de navegação. */
+.hyd-3d-tools{position:absolute;left:10px;right:10px;top:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;pointer-events:none;z-index:3}
+.hyd-3d-tools>*{pointer-events:auto}
+.hyd-3d-cam{margin-left:auto}
+.hyd-3d-floors,.hyd-3d-cam{display:flex;flex-wrap:wrap;gap:2px;background:#0a1820e0;border:1px solid #2a4750;border-radius:9px;padding:3px;box-shadow:0 6px 18px #0006}
+.hyd-3d-floors button,.hyd-3d-cam button{min-height:32px;min-width:32px;padding:0 9px;border:0;border-radius:6px;background:transparent;color:#cfe3e8;font:600 12px var(--font-ui,system-ui);display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;white-space:nowrap}
+.hyd-3d-floors button:hover,.hyd-3d-cam button:hover{background:#16303a}
+.hyd-3d-floors button[aria-pressed="true"],.hyd-3d-cam button[aria-pressed="true"]{background:#1d4a3f;color:#8af3d2}
+.hyd-3d-floors button:focus-visible,.hyd-3d-cam button:focus-visible{outline:2px solid #8af3d2;outline-offset:1px}
+.hyd-3d-hint{position:absolute;left:10px;bottom:8px;margin:0;font:10px var(--mono,monospace);letter-spacing:.04em;color:#8aa6ae;background:#0a1820cc;padding:3px 7px;border-radius:5px;pointer-events:none}
+.hyd-3d-floor{position:absolute;transform:translate(-100%,-50%);font:700 10.5px var(--font-ui,system-ui);letter-spacing:.08em;text-transform:uppercase;color:#d7e9ee;background:#0a1820e6;border:1px solid #2f5059;padding:3px 7px;border-radius:5px;white-space:nowrap}
+.hyd-3d-node.mini{padding:3px;gap:0}.hyd-3d-node.mini span{display:none}
+.hyd-floor-pick{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px}
+.hyd-floor-pick button{min-height:34px;padding:0 12px;border-radius:8px;border:1px solid #2a4750;background:#0d1f26;color:#cfe3e8;font:600 12.5px var(--font-ui,system-ui);cursor:pointer}
+.hyd-floor-pick button[aria-pressed="true"]{background:#1d4a3f;border-color:#2f7e68;color:#8af3d2}
+@media(max-width:650px){.hyd-3d-hint{display:none}.hyd-3d-tools{left:6px;right:6px;top:6px}.hyd-3d-floors button,.hyd-3d-cam button{min-height:30px;min-width:30px;padding:0 7px;font-size:11px}.hyd-3d-floor{font-size:9px}}
+.hyd-3d-wrap.tall{aspect-ratio:1100/820}
+@media(max-width:650px){.hyd-3d-wrap.tall{aspect-ratio:auto;height:clamp(320px,104vw,480px)}}
+.hyd-3d-node.dot{width:12px;height:12px;padding:0;gap:0;transform:translate(-50%,-50%);background:var(--node);border:2px solid #0a1a22;box-shadow:0 0 0 1px var(--node),0 2px 6px #0008}.hyd-3d-node.dot b,.hyd-3d-node.dot span{display:none}

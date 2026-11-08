@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { TwinBoundary } from "@/components/stage/twin-boundary";
 import { twinCapability } from "@/components/stage/stage-logic";
 import { probeWebGL } from "@/components/stage/three/webgl-probe";
-import type { WaterLayout } from "@/modules/water-map/domain/layout";
+import { floorsOf, type WaterLayout } from "@/modules/water-map/domain/layout";
 import type { MapNodeView, MapSceneStats } from "./three/map-scene";
 import type { Map3DFail } from "./map-3d";
 
@@ -29,7 +29,8 @@ export function Map3DSlot({ layout, nodes, simulated, selected, still, onSelect,
   const [stats, setStats] = useState<MapSceneStats | null>(null);
   const reason: Reason | null = failed ?? (probe && probe !== "ok" ? probe as Reason : null);
   if (reason) return <div className="hyd-3d-fallback">{fallback}<p className="hyd-mode" role="status">Perspectiva vetorial · 3D indisponível ({REASON[reason]})</p></div>;
-  return <div className="hyd-3d-wrap" data-map-mode={ready ? "3d" : "loading"}>
+  // Vários pavimentos: quadro mais alto (a pilha de andares é alta e estreita).
+  return <div className={`hyd-3d-wrap${floorsOf(layout).length > 1 ? " tall" : ""}`} data-map-mode={ready ? "3d" : "loading"}>
     {probe === "ok" && <TwinBoundary onFail={() => setFailed("error")}>
       <Map3D layout={layout} nodes={nodes} simulated={simulated} selected={selected} still={still} onSelect={onSelect}
         onReady={() => setReady(true)} onFail={setFailed} onStats={setStats} />

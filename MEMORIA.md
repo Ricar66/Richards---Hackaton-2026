@@ -44,6 +44,17 @@
     - **Proxy:** libera só `^/p/[a-f0-9]{32}$` em GET/HEAD. Gaveta, QR (`/api/donations/[id]/passport-qr`), etiqueta (`/etiqueta/[id]`) e APIs seguem privados.
     - **QR:** `uqr` 0.1.3 (MIT, zero dependências, só no servidor). Endereço: `RICHARDS_PUBLIC_URL` ou o host de quem abriu o BI; localhost gera aviso, porque celular não abre.
     - **Validado:** unitários 179/179, integração 130/130, E2E 38/38 (B6 abre sem senha num contexto anônimo, B7), ensaio visual 10/10 em 390 e 1280. **NÃO EXECUTADO:** celular físico lendo a etiqueta impressa e impressora de etiqueta real.
+  - **Fase 3, parte A feita (08/11), maquete 3D realista no `/mapa`** (pedido do Ricardo: "água em vários pontos, em 3D realista, casa, prédio…"):
+    - **Planta humanizada em metros:** piso de madeira, porcelanato, azulejo, grama, paver e concreto (texturas geradas em código), paredes cortadas na altura do peito com portas, móveis por tipo de cômodo e louças por tipo de ponto.
+    - **Quatro modelos:** Casa (12 × 7,6 m, 9 pontos); Comércio (mercadinho com padaria, 18 × 11,4 m, com lavatório exclusivo de mãos no preparo); **Prédio** (novo: térreo, 3 andares × 2 aptos, cobertura com caixa d'água e **um hidrômetro por apartamento**); Obra (lajes, betoneira, lava-rodas).
+    - **Campos novos na planta (opcionais; plantas salvas continuam válidas):** `rooms[].type`, `rooms[].floor`, `nodes[].fixture`, `nodes[].floor`; tipo `BUILDING`. Sem migração (a planta é JSON).
+    - **Código:** domínio em `src/modules/water-map/domain/layout.ts`; planejador PURO e testado em `src/components/water-map/three/site-plan.ts` (portas, paredes, poses, canos, móveis); construtor three em `three/map-scene.ts`; rótulos sem encavalar em `label-layout.ts`.
+    - **Regras mantidas:** água só corre (no cano e saindo da torneira) com medidor vinculado e leitura recente > 0; pausa e reduzir movimento congelam; sombra calculada uma vez; desenha sob demanda; orçamento de quadro → volta à perspectiva 2D.
+    - **Navegação:** arrastar gira, Ctrl + roda aproxima (a roda sozinha rola a página), botões +/−/vista inicial; no toque, "Explorar 3D" liga o giro. Prédio: "Prédio inteiro" (andares separados a 4,4 m) ou um pavimento; a planta 2D também filtra por pavimento ("↕ prumada").
+    - **Armadilha:** `PCFSoftShadowMap` foi REMOVIDO no three 0.186 (vira `PCFShadowMap` com aviso). Use `PCFShadowMap` + `shadow.radius`.
+    - **Validado:** unitários 191/191, integração 130/130, E2E 38/38, ensaio na GPU Intel 15/15 (4 modelos, água correndo com bancada SIMULADA a 57–59 fps, p95 16,8 ms, pausa, reduzir movimento, giro, celular 390, 0 erros). **NÃO EXECUTADO:** projetor, celular físico e aparelhos sem GPU dedicada além deste notebook.
+    - **Banco local do notebook (08/11):** aplicadas as migrações aditivas pendentes (assistant_telegram, water_map, cold_chain, food_passport), com backup antes em `E:\CraftOps\backups\richards\notebook-antes-maquete-20261108T143748Z.dump`.
+    - **Próximo (parte B):** equipamentos de frio na maquete do comércio, coloridos pela situação na RDC 216, com o registro de 30 dias ao clicar.
 
 ## Atualização 07/11/2026 — plateia QR + IoT (develop, NÃO main)
 Leia ANTES de atuar: docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.
