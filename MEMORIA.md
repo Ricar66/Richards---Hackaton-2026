@@ -24,7 +24,10 @@
   - **URLs mortas:** o QR (`public/qr-plateia.svg`) e o `/convite` ainda apontam para `http://187.77.229.205:8090/plateia`, que não existe mais. Regerar quando houver um endereço novo.
 - **Vídeos do pitch:** ficou só o RICHARDS v1, de 06/11 à noite (`reels-gpt6-astra/media/richards`, `public/richards/{app,120,180}`, `out/richards/{120,180}`). O v2 e o v3 foram para a Lixeira do Windows.
 - **Banco local do notebook:** em 07/11 às 17:23 recebeu por engano 25 leituras SIMULATED e 1 UNUSUAL_FLOW SIMULATED aberta. A bancada da versão só água ignorava `--ajuda`; a bancada restaurada trata as opções corretamente. Limpeza: `pnpm dados:limpar-simulados --apagar`, com backup antes e só com autorização.
-- **Próximo passo:** preparar o RICHARDS para o Empreenda 2027 (pitch, validação física com o Victor, hospedagem nova).
+- **Próximo passo:** preparar o RICHARDS para o Empreenda Senac 2027.
+  - **Estratégia, regras e fontes:** [`docs/empreenda/ESTRATEGIA_EMPREENDA_2027.md`](docs/empreenda/ESTRATEGIA_EMPREENDA_2027.md).
+  - **Tese:** o registro de temperatura (RDC 216, item 4.8.18) é a garantia sanitária que torna o excedente doável (Lei 15.224/2025, art. 14, §1º), e a água entra no mesmo kit.
+  - **Riscos de elegibilidade:** matrícula no Senac SP na mesma categoria; "ideia ainda não implementada". Confirmar com a Comissão Organizadora.
 
 ## Atualização 07/11/2026 — plateia QR + IoT (develop, NÃO main)
 Leia ANTES de atuar: docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.
