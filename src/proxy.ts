@@ -36,6 +36,9 @@ export function proxy(req:NextRequest){
  // plateia, e o Safari pode abrir a caixa de senha por causa de um sub-recurso (sonda de 07/11).
  if ((path === '/plateia' || path === '/qr-plateia.svg' || path === '/icon.svg')
    && (req.method === 'GET' || req.method === 'HEAD')) return forward(req,null);
+ // Passaporte do Alimento: só a página do token exato (32 hex, 128 bits), só leitura. Nenhuma API do lote é liberada;
+ // a página monta no servidor o recorte público (src/modules/donations/application/passport-service.ts).
+ if (/^\/p\/[a-f0-9]{32}$/.test(path) && (req.method === 'GET' || req.method === 'HEAD')) return forward(req,null);
  const blocked=rejectCrossSiteWrite(req);if(blocked)return blocked;
  // Fail-closed: só AUTH_MODE="none" explícito desliga a senha (variável ausente ou com erro de digitação mantém a proteção).
  if(process.env.AUTH_MODE==='none') {

@@ -4,10 +4,28 @@ export class DonationRuleError extends Error {}
 /** O que a pessoa responsável declara em cada etapa (texto livre, registrado na auditoria). */
 export const FOOD_ORIGINS = ["WHOLE_PRODUCE", "SEALED_PACKAGED", "UNSERVED_PREPARATION", "BUFFET_EXPOSED", "PLATE_LEFTOVERS", "UNKNOWN"] as const;
 export type FoodOrigin = typeof FOOD_ORIGINS[number];
+/** Texto da origem como aparece na triagem e no Passaporte do Alimento. */
+export const FOOD_ORIGIN_LABEL: Record<FoodOrigin, string> = {
+  WHOLE_PRODUCE: "Frutas, verduras ou legumes íntegros",
+  SEALED_PACKAGED: "Industrializado lacrado, dentro da validade",
+  UNSERVED_PREPARATION: "Preparado na cozinha, ainda não servido",
+  BUFFET_EXPOSED: "Buffet ou balcão exposto",
+  PLATE_LEFTOVERS: "Restos de prato",
+  UNKNOWN: "Origem desconhecida",
+};
+/** O checklist que a pessoa responsável declara na triagem (o mesmo texto vai para a auditoria e para o passaporte). */
+export const SANITARY_CHECKS = [
+  { key: "inspectionOk", label: "Inspeção visual sem sinais de deterioração" },
+  { key: "conservationOk", label: "Tempo e temperatura de conservação compatíveis com o alimento" },
+  { key: "validityOk", label: "Validade, integridade e embalagem conferidas (quando aplicável)" },
+  { key: "transportOk", label: "Transporte e entrega terão acondicionamento sanitário adequado" },
+] as const;
 export type DonationStepDetails = {
   verifiedBy?: string; recipientId?: string; receivedBy?: string; reason?: string;
   foodOrigin?: FoodOrigin; reviewerQualification?: string;
   inspectionOk?: boolean; conservationOk?: boolean; validityOk?: boolean; transportOk?: boolean;
+  /** Equipamento de onde o alimento saiu; null = declarado que não estava em equipamento monitorado. */
+  originEquipmentId?: string | null;
 };
 const filled = (s: string | undefined, min: number) => (s?.trim().length ?? 0) >= min;
 

@@ -1,0 +1,23 @@
+/* Etiqueta do lote: preto no branco (impressora térmica e jato de tinta), 100 × 60 mm. Prefixo lbl- (CSS global). */
+.lbl{min-height:100dvh;padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;background:#0b171b;color:#eafff8;font-family:var(--font-body),system-ui,sans-serif}
+.lbl-actions{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:520px;text-align:center}
+.lbl-print{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:10px;border:0;background:#63ebbf;color:#08382c;font-weight:750;font-size:15px;cursor:pointer}
+.lbl-print:focus-visible{outline:3px solid #b6f5de;outline-offset:2px}
+.lbl-warn{margin:0;padding:10px 12px;border-radius:10px;background:#2c2010;border:1px solid #6d5634;color:#ffe2bf;font-size:14px}
+.lbl-card{width:100mm;max-width:100%;min-height:60mm;display:grid;grid-template-columns:38mm minmax(0,1fr);gap:4mm;align-items:center;padding:4mm;background:#fff;color:#071217;border-radius:2mm;box-sizing:border-box}
+.lbl-qr{display:block;width:100%;height:auto;image-rendering:pixelated}
+.lbl-info{display:flex;flex-direction:column;gap:1mm;min-width:0}
+.lbl-info small{font-size:7.5pt;letter-spacing:.14em;text-transform:uppercase;font-weight:800}
+.lbl-kg{font-size:20pt;line-height:1;font-weight:850;letter-spacing:-.02em}
+.lbl-info p{margin:0;font-size:8pt;line-height:1.25;overflow-wrap:anywhere}
+.lbl-desc{font-weight:650}
+.lbl-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9pt!important;font-weight:800;letter-spacing:.1em}
+.lbl-sim{font-weight:800;border:1px solid #071217;padding:.5mm 1mm;width:max-content;max-width:100%}
+.lbl-hint{font-size:7pt!important;margin-top:1mm!important}
+@media print{
+  @page{size:100mm 60mm;margin:0}
+  body:has(.lbl){background:#fff}
+  .lbl{min-height:0;padding:0;background:#fff}
+  .lbl-actions{display:none}
+  .lbl-card{border-radius:0;width:100mm;height:60mm}
+}

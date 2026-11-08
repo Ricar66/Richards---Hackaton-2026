@@ -80,3 +80,18 @@ test("assistente e vinculação Telegram continuam protegidos; nunca são parte 
  for(const path of ["/assistente","/api/assistant/telegram","/api/assistant/chat"])
   assert.equal(proxy(req(path)).status,401);
 });
+
+test("passaporte do alimento: só /p/<32 hex> em GET/HEAD; API do lote, QR e etiqueta continuam do operador", () => {
+  const token = "0123456789abcdef0123456789abcdef";
+  for (const method of ["GET", "HEAD"]) {
+    const r = proxy(req(`/p/${token}`, { method }));
+    assert.ok(passed(r), method);
+    assert.equal(forwardedActor(r), null);
+  }
+  // Formato errado, maiúscula, curto, longo, subcaminho ou listagem: tudo fecha (não vira porta para outras rotas).
+  for (const path of ["/p", "/p/", `/p/${token.toUpperCase()}`, `/p/${token.slice(1)}`, `/p/${token}0`, `/p/${token}/x`, `/p/../api/donations`, "/p/abc"])
+    assert.equal(proxy(req(path)).status, 401, path);
+  assert.equal(proxy(req(`/p/${token}`, { method: "POST", headers: { "content-type": "application/json" } })).status, 401);
+  for (const path of ["/api/donations/x", "/api/donations/x/passport-qr", "/api/donations/x/cold-evidence", "/api/cold-chain/equipments", "/etiqueta/x"])
+    assert.equal(proxy(req(path)).status, 401, `${path} continua privado`);
+});

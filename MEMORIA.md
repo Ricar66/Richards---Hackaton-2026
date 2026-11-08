@@ -35,6 +35,15 @@
     - A ponte MQTT grava 1 leitura por minuto por equipamento (`MQTT_TEMP_PERSIST_SECONDS`) e toda virada de faixa, de forma idempotente.
     - Tempo na faixa conta só o período com dado; buraco nunca é "na faixa".
     - O seed cadastra "Estoque · bancada (DHT11)" como AMBIENTE até 28 °C: o DHT11 mede a sala, não uma geladeira.
+  - **Fase 2 feita (08/11), Passaporte do Alimento:** página PÚBLICA `/p/<token>`, aberta pelo QR da etiqueta do lote.
+    - **Dados:** migração aditiva `20261108130000_food_passport`. O lote ganha `passportToken` (128 bits, hex, nasce com o lote) e `originEquipmentId` (declarado na triagem). Lote antigo: botão "Emitir passaporte" na gaveta (auditado `PASSPORT_ISSUED`).
+    - **Triagem:** a gaveta exige o equipamento de origem (ou "não estava em equipamento monitorado") e mostra a temperatura dele desde 24 h antes da pesagem ANTES do checklist. O que o responsável viu vai para a auditoria (`coldEvidence`), calculado no servidor.
+    - **Página pública:** veredito em uma linha, carimbos da jornada, temperatura do equipamento (24 h antes da pesagem até a entrega/cancelamento ou agora, teto de 7 dias), triagem com checklist e Lei 15.224, art. 14, §1º, destino. Cancelado diz "não distribua nem consuma".
+    - **Privacidade (testada com mutação):** nunca saem quem recebeu, notas, motivo do cancelamento, operador, ids e o nome completo de quem atestou (só "Paula M."). Cargo/habilitação sai como foi escrito (a gaveta avisa).
+    - **Honestidade do gráfico:** eixo = janela inteira, linha quebra em buraco (> 10 min), fora da faixa pela regra da norma; "% na faixa" só fica verde com cobertura ≥ 80% e sem excursão. Lote simulado usa só série simulada.
+    - **Proxy:** libera só `^/p/[a-f0-9]{32}$` em GET/HEAD. Gaveta, QR (`/api/donations/[id]/passport-qr`), etiqueta (`/etiqueta/[id]`) e APIs seguem privados.
+    - **QR:** `uqr` 0.1.3 (MIT, zero dependências, só no servidor). Endereço: `RICHARDS_PUBLIC_URL` ou o host de quem abriu o BI; localhost gera aviso, porque celular não abre.
+    - **Validado:** unitários 179/179, integração 130/130, E2E 38/38 (B6 abre sem senha num contexto anônimo, B7), ensaio visual 10/10 em 390 e 1280. **NÃO EXECUTADO:** celular físico lendo a etiqueta impressa e impressora de etiqueta real.
 
 ## Atualização 07/11/2026 — plateia QR + IoT (develop, NÃO main)
 Leia ANTES de atuar: docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.
@@ -496,6 +505,9 @@ As branches `feat/fase-*` existem só na máquina de desenvolvimento e já estã
 - **`git checkout -- arquivo` não restaura arquivo novo (fora do git).** Em teste de mutação, copie o arquivo antes e restaure da cópia.
 - **Mapa sem protótipo (`Object.create(null)`) não é `deepEqual` a `{}`.** Compare `{ ...mapa }`.
 - **`python -` e heredoc de `node -` travam o terminal da IA.** Escreva o script num arquivo.
+- **Puppeteer: `goto` numa rota com Basic Auth sem senha lança `ERR_INVALID_AUTH_CREDENTIALS`** em vez de devolver o 401. Para provar que uma rota segue fechada, use `fetch` no próprio script (E2E B7).
+- **Ler `innerText` logo depois do `goto` numa troca de página pode vir vazio**, mesmo com o HTML do servidor completo. Espere um seletor da página nova antes de ler.
+- **Captura `fullPage` reinicia a animação CSS** (os carimbos do passaporte saem invisíveis). Capture com `prefers-reduced-motion: reduce` ou espere a animação e capture só a janela.
 
 
 ## Revisão incremental da entrega (06/11/2026)

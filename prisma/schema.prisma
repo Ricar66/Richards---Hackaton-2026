@@ -177,6 +177,7 @@ model ColdEquipment {
   active         Boolean              @default(true)
   createdAt      DateTime             @default(now())
   readings       TemperatureReading[]
+  donations      DonationBatch[]
 
   @@index([organizationId, active])
   @@index([sensorDeviceId])
@@ -259,23 +260,28 @@ model RecipientOrganization {
 }
 
 model DonationBatch {
-  id               String                 @id @default(cuid())
-  organizationId   String
-  organization     Organization           @relation(fields: [organizationId], references: [id])
-  recipientId      String?
-  recipient        RecipientOrganization? @relation(fields: [recipientId], references: [id])
-  description      String
-  weightKg         Decimal                @db.Decimal(12, 3)
-  status           DonationStatus         @default(PENDING_REVIEW)
-  source           DataSource             @default(MANUAL)
-  safetyVerifiedBy String?
-  safetyVerifiedAt DateTime?
-  receivedAt       DateTime?
+  id                String                 @id @default(cuid())
+  organizationId    String
+  organization      Organization           @relation(fields: [organizationId], references: [id])
+  recipientId       String?
+  recipient         RecipientOrganization? @relation(fields: [recipientId], references: [id])
+  description       String
+  weightKg          Decimal                @db.Decimal(12, 3)
+  status            DonationStatus         @default(PENDING_REVIEW)
+  source            DataSource             @default(MANUAL)
+  safetyVerifiedBy  String?
+  safetyVerifiedAt  DateTime?
+  receivedAt        DateTime?
   // Pessoa da instituição que confirmou o recebimento (obrigatória para DELIVERED desde a Fase 4).
-  receivedBy       String?
-  cancelReason     String?
-  createdAt        DateTime               @default(now())
-  missions         Mission[]
+  receivedBy        String?
+  cancelReason      String?
+  createdAt         DateTime               @default(now())
+  missions          Mission[]
+  /// Equipamento onde o alimento estava guardado, declarado na triagem: o passaporte anexa a série de temperatura dele.
+  originEquipmentId String?
+  originEquipment   ColdEquipment?         @relation(fields: [originEquipmentId], references: [id])
+  /// Passaporte do Alimento: token aleatório (128 bits, hex) da página pública /p/<token>. Sem token, sem página.
+  passportToken     String?                @unique
 
   @@index([organizationId, status, createdAt(sort: Desc)])
 }

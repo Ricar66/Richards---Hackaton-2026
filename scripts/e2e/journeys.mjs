@@ -188,9 +188,14 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     await page.select("#don-origin", "PLATE_LEFTOVERS");
     const unsafeBlocked = await verifyDisabled();
     await page.select("#don-origin", "WHOLE_PRODUCE");
+    // Passaporte (08/11): sem equipamento de origem declarado a triagem não sai; escolhido, a evidência aparece antes do checklist valer.
+    const noEquipBlocked = await verifyDisabled();
+    await page.waitForFunction(() => document.querySelectorAll("#don-equip option").length > 2, { timeout: 10000 });
+    await page.select("#don-equip", await page.$$eval("#don-equip option", os => os[1].value));
+    const evidence = await page.waitForFunction(() => /na faixa|Sem leitura gravada/.test(document.querySelector(".don-evidence")?.innerText ?? ""), { timeout: 10000 }).then(() => true, () => false);
     await clickButton(".drawer", "Registrar verificação");
-    check("B2 triagem exige origem segura, responsável com cargo e checklist (bloqueado antes e com restos de prato) e libera o lote",
-      blocked && unsafeBlocked && await waitText("Reservar para uma instituição"), `antes=${blocked} restos de prato=${unsafeBlocked}`);
+    check("B2 triagem exige origem segura, equipamento de origem, responsável com cargo e checklist (bloqueado antes, com restos de prato e sem equipamento) e libera o lote",
+      blocked && unsafeBlocked && noEquipBlocked && evidence && await waitText("Reservar para uma instituição"), `antes=${blocked} restos de prato=${unsafeBlocked} sem equipamento=${noEquipBlocked} evidência=${evidence}`);
     await page.waitForFunction(() => document.querySelectorAll("#don-rec option").length > 1, { timeout: 10000 });
     const institutions = await page.$$eval("#don-rec option", os => os.length - 1);
     await page.select("#don-rec", await page.$$eval("#don-rec option", os => os[os.length - 1].value));
@@ -200,6 +205,25 @@ export async function runJourneys({ base, project, chromePath, outDir, auth, dev
     await clickButton(".drawer", "Confirmar entrega");
     check("B4 entrega confirmada com quem recebeu; trilha com 4 etapas", await waitText("Este lote conta nos kg entregues") && (await page.$$(".drawer .timeline li")).length === 4);
     await page.screenshot({ path: shot("j-doacao.png") });
+    // Passaporte do Alimento: aberto SEM senha (contexto anônimo, como o celular de quem escaneia a etiqueta).
+    const passportUrl = await page.$eval(".don-passport a[href*='/p/']", a => a.href).catch(() => "");
+    const qrOk = await page.$eval(".don-pass-row img", img => img.complete && img.naturalWidth > 0).catch(() => false);
+    const anon = await browser.createBrowserContext();
+    try {
+      const pub = await anon.newPage();
+      await pub.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+      const res = passportUrl ? await pub.goto(passportUrl, { waitUntil: "domcontentloaded" }) : null;
+      const pt = res ? await pub.evaluate(() => document.body.innerText) : "";
+      const noScroll = res ? await pub.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1) : false;
+      check("B6 passaporte público abre sem senha (200), mostra entrega, instituição e 'Paula M.', sem o nome completo nem quem recebeu; sem rolagem lateral no celular",
+        res?.status() === 200 && /doação entregue/i.test(pt) && pt.includes("Paula M.") && !pt.includes("Mendes") && !pt.includes("Seu Jorge") && noScroll && qrOk,
+        `status=${res?.status()} qr=${qrOk} scroll=${noScroll}`);
+      await pub.screenshot({ path: shot("j-passaporte-390.png"), fullPage: true });
+      const bad = await pub.goto(passportUrl.replace(/[a-f0-9]{6}$/, "000000"), { waitUntil: "domcontentloaded" });
+      // Sem navegador: navegar até um 401 com Basic Auth faz o Chrome lançar ERR_INVALID_AUTH_CREDENTIALS em vez de devolver o status.
+      const apis = await Promise.all(["/api/donations/x", "/api/donations/x/passport-qr", `/etiqueta/x`].map(async p => (await fetch(new URL(p, passportUrl))).status));
+      check("B7 token desconhecido dá 404; API do lote, QR e etiqueta seguem fechados sem senha", bad?.status() === 404 && apis.every(s => s === 401), `token=${bad?.status()} privadas=${apis.join(",")}`);
+    } finally { await anon.close(); await page.bringToFront(); }
     await page.keyboard.press("Escape");
     await page.waitForFunction(b => [...document.querySelectorAll(".kpi")].find(k => k.innerText.includes("Kg entregues"))?.querySelector(".kpi-value")?.innerText.replace(/\s+/g, " ").trim() !== b, { timeout: 20000 }, kgBefore).catch(() => {});
     check("B5 KPI de kg entregues soma o lote entregue", (await kpi("Kg entregues")) !== kgBefore, `${kgBefore} → ${await kpi("Kg entregues")}`);

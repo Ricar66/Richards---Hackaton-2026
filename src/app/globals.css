@@ -800,3 +800,17 @@ select option { background: var(--surface); color: var(--ink); }
 .cc-note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
 @media (max-width: 960px) { .cc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .cc-grid { grid-template-columns: minmax(0, 1fr); } .cc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cc-now b { font-size: 34px; } }
+
+/* Passaporte do Alimento na gaveta do lote (08/11): evidência de temperatura na triagem e o QR do lote. */
+.don-evidence { display: flex; gap: 8px; align-items: flex-start; margin: 2px 0 4px; padding: 10px 12px; border-radius: 10px; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line-2); }
+.don-evidence > svg { flex: none; margin-top: 2px; }
+.don-evidence > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.don-evidence small { color: var(--muted); font-size: 12px; }
+.don-evidence.ok { color: var(--ok); background: var(--ok-soft); border-color: var(--ok-line); }
+.don-evidence.ok span, .don-evidence.warn span { color: var(--ink); }
+.don-evidence.warn { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
+.don-passport { margin-top: 4px; }
+.don-pass-row { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; }
+.don-pass-row img { display: block; width: 112px; height: 112px; border-radius: 8px; background: #fff; image-rendering: pixelated; }
+.don-pass-row .btn-row { flex-wrap: wrap; }
+@media (max-width: 420px) { .don-pass-row { grid-template-columns: 1fr; } }

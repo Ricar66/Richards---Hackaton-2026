@@ -4,6 +4,8 @@ import { actorFrom } from '@/lib/actor';
 import { apiError, databaseUnavailable } from '@/lib/http';
 import { DonationService } from '@/modules/donations/application/donation-service';
 import { DonationRuleError, FOOD_ORIGINS } from '@/modules/donations/domain/donation-workflow';
+import { passportPath } from '@/modules/donations/domain/passport';
+import { publicBaseUrl } from '@/lib/public-url';
 const text=(max:number)=>z.string().max(max).optional();
 const schema=z.object({
  status:z.enum(['AVAILABLE','RESERVED','DELIVERED','CANCELLED']),verifiedBy:text(120),
@@ -11,12 +13,15 @@ const schema=z.object({
  foodOrigin:z.enum(FOOD_ORIGINS).optional(),reviewerQualification:text(120),
  inspectionOk:z.boolean().optional(),conservationOk:z.boolean().optional(),
  validityOk:z.boolean().optional(),transportOk:z.boolean().optional(),
+ // Equipamento de origem declarado na triagem; null = não estava em equipamento monitorado.
+ originEquipmentId:z.string().max(64).nullable().optional(),
 });
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
-export async function GET(_req:NextRequest,{params}:{params:Promise<{id:string}>}){
+export async function GET(req:NextRequest,{params}:{params:Promise<{id:string}>}){
  const {id}=await params;
- try{return NextResponse.json(await new DonationService().detail(id),{headers:{'Cache-Control':'no-store'}})}
+ try{const d=await new DonationService().detail(id);
+  return NextResponse.json({...d,passportUrl:d.passportToken?publicBaseUrl(req.headers)+passportPath(d.passportToken):null},{headers:{'Cache-Control':'no-store'}})}
  catch(e){if(e instanceof Error&&e.message==='NOT_FOUND')return apiError(404,'NOT_FOUND','Lote não encontrado');console.error('donation detail',e);return databaseUnavailable()}
 }
 export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}){
