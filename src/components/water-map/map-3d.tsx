@@ -38,10 +38,17 @@ export default function Map3D({ layout, nodes, simulated, selected, still, onSel
   const [toolbarHeight, setToolbarHeight] = useState(56);
   const [screenMessage, setScreenMessage] = useState("");
   const [visible, setVisible] = useState(true);
+  // "Superior" isola sozinho o pavimento do ponto (as lajes se escondem umas às outras). Esse isolamento é
+  // AUTOMÁTICO: ao voltar a Inspeção/Volume, o prédio inteiro volta. Pavimento escolhido no botão é do operador.
+  const [autoFloor, setAutoFloor] = useState(false);
   // Ponto escolhido (na lista ou na maquete) em outro pavimento: a vista de um pavimento só vai até ele.
   // Só na TROCA de seleção; depois disso o operador escolhe o pavimento livremente.
   const [prevSel, setPrevSel] = useState(selected);
-  if (prevSel !== selected) {
+  // Modelo novo começa no prédio inteiro: o pavimento do modelo anterior não vale para o próximo.
+  const [prevKind, setPrevKind] = useState(layout.kind);
+  if (prevKind !== layout.kind) {
+    setPrevKind(layout.kind); setPrevSel(selected); setFloor("all"); setAutoFloor(false);
+  } else if (prevSel !== selected) {
     setPrevSel(selected);
     const node = layout.nodes.find(n => n.id === selected);
     if (node && floor !== "all" && floorOf(node) !== floor) setFloor(floorOf(node));
@@ -93,9 +100,11 @@ export default function Map3D({ layout, nodes, simulated, selected, still, onSel
 
   const chooseCamera = (preset: CameraPreset) => {
     // De cima, as lajes escondem umas às outras. Inspeciona o pavimento do ponto selecionado.
-    if (preset === "top" && shownFloor === "all" && floors.length > 1) setFloor(floorOf(layout.nodes.find(n => n.id === selected) ?? {}));
+    if (preset === "top" && shownFloor === "all" && floors.length > 1) { setFloor(floorOf(layout.nodes.find(n => n.id === selected) ?? {})); setAutoFloor(true); }
+    else if (preset !== "top" && autoFloor) { setFloor("all"); setAutoFloor(false); }
     setCamera(preset);
   };
+  const pickFloor = (f: FloorMode) => { setAutoFloor(false); setFloor(f); };
   const focus = () => {
     const f = floorOf(layout.nodes.find(n => n.id === selected) ?? {});
     if (floors.length > 1 && shownFloor !== f) { focusPending.current = true; setFloor(f); }
@@ -151,8 +160,8 @@ export default function Map3D({ layout, nodes, simulated, selected, still, onSel
         <button type="button" aria-pressed={camera === "top"} onClick={() => chooseCamera("top")} title="Ver o pavimento por cima">Superior</button>
       </div>
       {floors.length > 1 && <div className="hyd-3d-floors" role="group" aria-label="Pavimento na maquete">
-        <button type="button" aria-pressed={shownFloor === "all"} onClick={() => setFloor("all")}>Prédio inteiro</button>
-        {floors.map(f => <button key={f} type="button" aria-pressed={shownFloor === f} onClick={() => setFloor(f)}>{floorLabel(layout, f).replace(" pavimento", " pav.")}</button>)}
+        <button type="button" aria-pressed={shownFloor === "all"} onClick={() => pickFloor("all")}>Prédio inteiro</button>
+        {floors.map(f => <button key={f} type="button" aria-pressed={shownFloor === f} onClick={() => pickFloor(f)}>{floorLabel(layout, f).replace(" pavimento", " pav.")}</button>)}
       </div>}
       <div className="hyd-3d-cam" role="group" aria-label="Câmera da maquete">
         {coarse() && <button type="button" aria-pressed={interactive} onClick={() => setInteractive(v => !v)} title={interactive ? "Voltar a rolar a página" : "Girar e aproximar com o dedo"}><Hand size={14} aria-hidden="true" />{interactive ? "Rolar página" : "Explorar 3D"}</button>}
@@ -160,7 +169,7 @@ export default function Map3D({ layout, nodes, simulated, selected, still, onSel
         <button type="button" onClick={() => scene.current?.zoom(1.25)} aria-label="Afastar"><Minus size={14} aria-hidden="true" /></button>
         <button type="button" onClick={focus} disabled={!selected} aria-label="Focar ponto selecionado" title="Focar ponto selecionado"><Crosshair size={16} aria-hidden="true" /></button>
         <button type="button" aria-pressed={labelsDetailed} onClick={() => setLabelsDetailed(v => !v)} aria-label="Mostrar nomes na maquete" title="Mostrar nomes na maquete"><Tags size={16} aria-hidden="true" /></button>
-        <button type="button" onClick={() => { setCamera("inspection"); scene.current?.resetView(); }} aria-label="Vista inicial"><RotateCcw size={14} aria-hidden="true" /></button>
+        <button type="button" onClick={() => { chooseCamera("inspection"); scene.current?.resetView(); }} aria-label="Vista inicial"><RotateCcw size={14} aria-hidden="true" /></button>
         <button type="button" onClick={expand} aria-label="Alternar tela cheia da maquete" title="Tela cheia"><Maximize size={16} aria-hidden="true" /></button>
       </div>
     </div>

@@ -9,7 +9,10 @@ import puppeteer from 'puppeteer-core';
 import { out, prepareMapPreview } from './map-preview.mjs';
 
 const { html } = await prepareMapPreview();
-const server = createServer((req, res) => { if (req.url !== '/' && req.url !== '/index.html') { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(html); });
+const server = createServer((req, res) => {
+  // O navegador pede o ícone sozinho; sem isso, o 404 entraria como "erro de JavaScript" do ensaio.
+  if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
+  if (req.url !== '/' && req.url !== '/index.html') { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(html); });
 await new Promise((ok, fail) => { server.once('error', fail); server.listen(0, '127.0.0.1', ok); });
 const origin = `http://127.0.0.1:${server.address().port}`;
 if (process.argv.includes('--serve')) {
@@ -41,10 +44,17 @@ if (process.argv.includes('--serve')) {
     report.gpu = await page.evaluate(() => { const gl = document.querySelector('canvas').getContext('webgl2'), ext = gl.getExtension('WEBGL_debug_renderer_info'); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'não exposta'; });
     const check = name => report.checks.push({ name, status: 'PASSOU' });
     const shot = async name => { const file = `${name}.png`; await page.$('.qa-wrap').then(el => el.screenshot({ path: resolve(out, file) })); report.screenshots.push(file); };
-    for (const kind of ['HOUSE', 'COMMERCE', 'BUILDING', 'CONSTRUCTION']) {
+    // Ligar/desligar isMobile ou hasTouch RECARREGA a página no Puppeteer, e a prévia volta à Casa.
+    // Depois de cada troca de tela, espera a cena e escolhe o modelo de novo (antes, o 390 media sempre a Casa).
+    const choose = async kind => {
+      await page.waitForFunction(() => window.__mapQA?.ready || window.__mapQA?.failure, { timeout: 20000 });
       await page.click(`[data-kind="${kind}"]`);
-      await page.waitForFunction(k => window.__mapQA.kind === k, {}, kind);
+      await page.waitForFunction(k => window.__mapQA.kind === k && window.__mapQA.ready, {}, kind);
       await pause(700);
+      assert.equal(await page.evaluate(() => window.__mapQA.kind), kind, `modelo ${kind} na tela`);
+    };
+    for (const kind of ['HOUSE', 'COMMERCE', 'BUILDING', 'CONSTRUCTION']) {
+      await choose(kind);
       assert.equal(await page.$$eval('canvas', els => els.length), 1, 'um único canvas após trocar modelo');
       assert.equal(await page.evaluate(() => window.__mapQA.failure), '');
       await shot(`${kind}-inspection-desktop`);
@@ -52,20 +62,31 @@ if (process.argv.includes('--serve')) {
         await page.$$eval('.hyd-3d-presets button', (els, label) => els.find(el => el.textContent === label).click(), name);
         await pause(350);
         assert.equal(await page.evaluate(() => window.__mapQA.failure), '');
+        if (name !== 'Inspeção') await shot(`${kind}-${name === 'Volume' ? 'volume' : 'top'}-desktop`);
+      }
+      if (kind === 'BUILDING' || kind === 'CONSTRUCTION') {
+        // Superior isola o pavimento sozinho; a volta à Inspeção devolve o prédio inteiro.
+        assert.equal(await page.$eval('.hyd-3d-floors button', b => b.getAttribute('aria-pressed')), 'true', 'Inspeção depois de Superior volta ao prédio inteiro');
       }
       check(`${kind}: troca, três enquadramentos e um canvas`);
       if (kind === 'BUILDING' || kind === 'CONSTRUCTION') {
         await page.click('.hyd-3d-floors button'); await pause(350); await shot(`${kind}-all-floors`);
       }
       await page.setViewport({ width: 390, height: 1000, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
-      await pause(400);
+      await choose(kind);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'sem rolagem horizontal em 390');
       const selected = await page.$eval('.hyd-3d-node.sel', el => { const r = el.getBoundingClientRect(), host = el.closest('.hyd-3d').getBoundingClientRect(); return r.left >= host.left && r.right <= host.right && r.top >= host.top && r.bottom <= host.bottom; });
       assert.ok(selected, 'rótulo selecionado cabe no quadro');
       await shot(`${kind}-mobile-390`); check(`${kind}: retrato 390, rótulo dentro do quadro`);
       await page.setViewport({ width: 1440, height: 1100, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
     }
-    await page.click('[data-kind="HOUSE"]'); await pause(700);
+    // Pavimento escolhido num modelo não vaza para o próximo: modelo novo começa no prédio inteiro.
+    await choose('BUILDING');
+    await page.$$eval('.hyd-3d-floors button', bs => bs[2].click()); await pause(350);
+    await choose('CONSTRUCTION');
+    assert.equal(await page.$eval('.hyd-3d-floors button', b => b.getAttribute('aria-pressed')), 'true', 'modelo novo no prédio inteiro');
+    check('Superior/troca de modelo não deixam um pavimento isolado por engano');
+    await choose('HOUSE');
     const delta = async () => { const before = await page.evaluate(() => window.__draws); await pause(550); return (await page.evaluate(() => window.__draws)) - before; };
     assert.equal(await delta(), 0); check('Sem medidor: renderer não mantém laço contínuo');
     await page.select('[aria-label="Fixture de telemetria"]', 'flow'); await pause(700);

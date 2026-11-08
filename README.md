@@ -74,7 +74,7 @@ No mesmo painel, uma calculadora estima exposição financeira de um cenário de
 
 ## Telas
 
-O **Mapa hidráulico** (`/mapa`) tem quatro maquetes: casa, comércio, prédio e obra. A vista 3D oferece **Inspeção**, **Volume**, **Superior**, foco no ponto, nomes opcionais e tela cheia. Os modelos continuam ilustrativos, com escala aproximada; cada leitura pertence somente ao medidor vinculado. [Alterações, testes e ensaio local das maquetes](docs/empreenda/MAQUETES_3D_2026-11-08.md). O aceite visual desta revisão ainda está pendente.
+O **Mapa hidráulico** (`/mapa`) tem quatro maquetes: casa, comércio, prédio e obra. A vista 3D oferece **Inspeção**, **Volume**, **Superior**, foco no ponto, nomes opcionais e tela cheia. Os modelos continuam ilustrativos, com escala aproximada; cada leitura pertence somente ao medidor vinculado. [Alterações, testes e ensaio local das maquetes](docs/empreenda/MAQUETES_3D_2026-11-08.md). Aceite em GPU integrada (Intel) feito em 08/11; celular físico e projetor ainda não foram ensaiados.
 
 | | |
 |---|---|
