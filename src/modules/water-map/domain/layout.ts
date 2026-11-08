@@ -101,10 +101,11 @@ export function template(kind: WaterLayout["kind"]): WaterLayout {
     const nodes: N[] = [["Hidrômetro geral", "SUPPLY", "HYDROMETER", .08, .90], ["Caixa d'água superior", "JUNCTION", "WATER_TANK", .50, .50, 4]];
     const edges: [number, number][] = [[0, 1]];
     for (const f of [1, 2, 3]) {
-      rooms.push([`Apto ${f}01`, "APARTMENT", .03, .05, .43, .90, f], [`Apto ${f}02`, "APARTMENT", .54, .05, .43, .90, f]);
+      // Vão central de 2,34 m: circulação/escada de maquete e hidrômetros sem ocupar os apartamentos.
+      rooms.push([`Apto ${f}01`, "APARTMENT", .03, .05, .38, .90, f], [`Apto ${f}02`, "APARTMENT", .59, .05, .38, .90, f]);
       for (const [a, side] of [[1, -1], [2, 1]] as const) {
         const meter = nodes.length;
-        nodes.push([`Hidrômetro ${f}0${a}`, "JUNCTION", "HYDROMETER", .50, a === 1 ? .18 : .34, f]);
+        nodes.push([`Hidrômetro ${f}0${a}`, "JUNCTION", "HYDROMETER", .46, a === 1 ? .18 : .34, f]);
         nodes.push([`Pia ${f}0${a}`, "OUTLET", "KITCHEN_SINK", .5 + side * .40, .09, f], [`Chuveiro ${f}0${a}`, "OUTLET", "SHOWER", .5 + side * .10, .10, f]);
         edges.push([1, meter], [meter, meter + 1], [meter, meter + 2]);
       }
