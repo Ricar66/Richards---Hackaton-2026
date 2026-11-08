@@ -220,8 +220,9 @@ export function pipeRoute(a: Pose, b: Pose): P3[] {
 export type Mat =
   | "fabric" | "fabricDark" | "wood" | "woodDark" | "woodLight" | "white" | "steel" | "black" | "stone" | "rug" | "mattress" | "pillow"
   | "plant" | "bark" | "pot" | "cardboard" | "rackOrange" | "rackBlue" | "concrete" | "brick" | "sand" | "net" | "container"
-  | "p0" | "p1" | "p2" | "p3" | "p4" | "p5" | "fruitR" | "fruitO" | "fruitG" | "tile" | "glass";
-export type Item = { shape: "box" | "cyl" | "sphere" | "cone"; mat: Mat; x: number; y: number; z: number; sx: number; sy: number; sz: number; ry?: number };
+  | "p0" | "p1" | "p2" | "p3" | "p4" | "p5" | "fruitR" | "fruitO" | "fruitG" | "tile" | "glass" | "figure";
+/** "person": figura de maquete (corpo e cabeça na cor neutra; `mat` diferente de "figure" pinta o capacete). */
+export type Item = { shape: "box" | "cyl" | "sphere" | "cone" | "person"; mat: Mat; x: number; y: number; z: number; sx: number; sy: number; sz: number; ry?: number };
 
 function rng(seed: string) {
   let h = 2166136261;
@@ -256,6 +257,14 @@ export function furnish(i: FloorPlanInput): Item[] {
     items.push({ shape: "cyl", mat: "pot", x, y: 0.2, z, sx: 0.36, sy: 0.4, sz: 0.36 });
     items.push({ shape: "sphere", mat: "plant", x, y: 0.62, z, sx: 0.55, sy: 0.6, sz: 0.55 });
   });
+  /** Pessoas de maquete (escala humana, como nas maquetes de arquitetura): até `n`, em pontos livres sorteados. */
+  const people = (n: number, area: Rect = i.rect, helmet: Mat = "figure") => {
+    let placed = 0;
+    for (let t = 0; t < 40 && placed < n; t++) {
+      const x = area.x0 + 0.5 + rand() * Math.max(0.01, area.x1 - area.x0 - 1), z = area.z0 + 0.5 + rand() * Math.max(0.01, area.z1 - area.z0 - 1), ry = rand() * Math.PI * 2;
+      if (place(0.24, 0.24, x, z, () => items.push({ shape: "person", mat: helmet, x, y: 0, z, sx: 1, sy: 1, sz: 1, ry }))) placed++;
+    }
+  };
   /** Bancada de módulos de 60 cm ao longo da parede do fundo, pulando onde há louça. */
   const counterRun = (mats: [Mat, Mat], from: number, to: number, depth = 0.6, h = 0.9) => {
     for (let x = from; x + 0.6 <= to + 1e-6; x += 0.6) {
@@ -408,6 +417,9 @@ export function furnish(i: FloorPlanInput): Item[] {
       break;
     }
   }
+  // Escala humana depois dos móveis, nos espaços que sobraram (obra: capacete laranja).
+  const pop: Partial<Record<RoomType, number>> = { SALES: 4, LOBBY: 1, LIVING: 1, KITCHEN: i.kind === "COMMERCE" ? 1 : 0, OUTDOOR: i.kind === "COMMERCE" ? 2 : 1, SITE: floorOf(i.room) === 0 ? 2 : 1, APARTMENT: rand() > 0.5 ? 1 : 0 };
+  if (pop[i.type]) people(pop[i.type]!, i.rect, i.type === "SITE" || (i.type === "OUTDOOR" && i.kind === "CONSTRUCTION") ? "rackOrange" : "figure");
   return items;
 }
 

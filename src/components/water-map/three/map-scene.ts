@@ -8,16 +8,21 @@
  * - Orçamento de quadro igual ao gêmeo da Sala: nível 1 reduz o DPR, nível 2 desiste e a tela volta à perspectiva 2D.
  */
 import {
-  ACESFilmicToneMapping, Box3, BoxGeometry, BufferGeometry, CanvasTexture, ClampToEdgeWrapping, Color, ConeGeometry, CurvePath,
-  CylinderGeometry, DirectionalLight, DoubleSide, Euler, Float32BufferAttribute, Group, HemisphereLight, LineBasicMaterial, LineCurve3,
-  LineSegments, Material, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PCFShadowMap, PerspectiveCamera,
+  Box3, BoxGeometry, BufferGeometry, CanvasTexture, CapsuleGeometry, ClampToEdgeWrapping, Color, ConeGeometry, CurvePath,
+  CylinderGeometry, DirectionalLight, DoubleSide, Euler, Float32BufferAttribute, Group, HalfFloatType, HemisphereLight, LineBasicMaterial, LineCurve3,
+  LineSegments, Material, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, NeutralToneMapping, NoBlending, Object3D, PCFShadowMap, PerspectiveCamera,
   PlaneGeometry, PMREMGenerator, QuadraticBezierCurve3, Quaternion, RepeatWrapping, RingGeometry, Scene, SphereGeometry, SRGBColorSpace,
-  Texture, TorusGeometry, TubeGeometry, Vector3, WebGLRenderer,
+  Texture, TorusGeometry, TubeGeometry, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { budgetRestart, budgetStart, frameBudgetStep, median, type BudgetState } from "@/components/stage/stage-logic";
 import { floorOf, type Fixture, type WaterLayout } from "@/modules/water-map/domain/layout";
 import { FIXTURE_DEPTH, FIXTURE_WIDTH, FOOTPRINT, floorY, planSite, SLAB_T, WALL_H, type FloorMat, type Mat } from "./site-plan";
@@ -170,6 +175,39 @@ class Batch {
     this.parts.clear();
   }
 }
+/**
+ * Oclusão de ambiente (GTAO do próprio three) com cache. A geometria da maquete é parada: o AO só muda com a câmera,
+ * o tamanho ou a planta. Nos quadros em que só a água anda, reaproveita o AO já calculado e refaz só a mistura.
+ * Canos em raio-x, água e anéis ficam na camada 1, fora das normais e da profundidade do AO (não "sujam" o piso).
+ */
+class CachedGTAO extends GTAOPass {
+  dirty = true;
+  private quad = new FullScreenQuad();
+  render(renderer: WebGLRenderer, writeBuffer: WebGLRenderTarget, readBuffer: WebGLRenderTarget, deltaTime: number, maskActive: boolean) {
+    if (this.dirty) {
+      const mask = this.camera.layers.mask;
+      this.camera.layers.set(0);
+      super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+      this.camera.layers.mask = mask;
+      this.dirty = false;
+      return;
+    }
+    const auto = renderer.autoClear;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    renderer.autoClear = false;
+    this.copyMaterial.uniforms.tDiffuse.value = readBuffer.texture; this.copyMaterial.blending = NoBlending;
+    this.quad.material = this.copyMaterial; this.quad.render(renderer);
+    this.blendMaterial.uniforms.intensity.value = this.blendIntensity; this.blendMaterial.uniforms.tDiffuse.value = this.pdRenderTarget.texture;
+    this.quad.material = this.blendMaterial; this.quad.render(renderer);
+    renderer.autoClear = auto;
+  }
+  dispose() { this.quad.dispose(); super.dispose(); }
+}
+const OVERLAY = 1;
+/** Faixa da rua na frente do lote (calçada + pista), em metros. */
+const STREET = 4.6;
+const overlay = <T extends Object3D>(o: T): T => { o.layers.set(OVERLAY); return o; };
+
 const M4 = (x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) =>
   new Matrix4().compose(new Vector3(x, y, z), new Quaternion().setFromEuler(new Euler(rx, ry, rz)), new Vector3(sx, sy, sz));
 
@@ -189,7 +227,8 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   let dpr = Math.min(window.devicePixelRatio || 1, host.clientWidth < 600 ? 1.25 : 1.5);
   renderer.setPixelRatio(dpr);
   renderer.setClearColor(0x000000, 0);
-  renderer.toneMapping = ACESFilmicToneMapping;
+  // Khronos PBR Neutral: mantém a cor real dos materiais (ACES escurece e dessatura madeira e tecido).
+  renderer.toneMapping = NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.shadowMap.enabled = true;
@@ -214,6 +253,16 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   scene.add(sun, sun.target);
 
   const camera = new PerspectiveCamera(32, 1, 0.1, 400);
+  camera.layers.enable(OVERLAY);
+  // Pós-processamento (tudo do próprio three, sem dependência nova): MSAA 4x, AO com cache e saída com tom/cor.
+  const composer = new EffectComposer(renderer, new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples: 4 }));
+  const renderPass = new RenderPass(scene, camera);
+  const ao = new CachedGTAO(scene, camera, 1, 1);
+  ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.3, thickness: 1.2, scale: 1, samples: 16 });
+  ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, radiusExponent: 1, rings: 2, samples: 16 });
+  ao.blendIntensity = 0.95;
+  const outputPass = new OutputPass();
+  composer.addPass(renderPass); composer.addPass(ao); composer.addPass(outputPass);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = false;
   controls.enableZoom = false;               // zoom só com Ctrl/⌘ + roda ou pelos botões: a roda continua rolando a página
@@ -234,6 +283,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     container: std("#2f6fae", 0.55, 0.3), p0: std("#e04b3a", 0.6), p1: std("#f0b431", 0.6), p2: std("#3a8fd9", 0.6), p3: std("#48b06a", 0.6), p4: std("#9a5bb5", 0.6), p5: std("#f4f2ec", 0.6),
     fruitR: std("#d23a2c", 0.5), fruitO: std("#f08a26", 0.5), fruitG: std("#7cb342", 0.55), tile: std("#e9eeee", 0.3),
     glass: std("#cfeaf3", 0.05, 0, { transparent: true, opacity: 0.22, depthWrite: false }),
+    figure: std("#ece8e0", 0.85),
   };
   const F = {
     ceramic: std("#f8f8f6", 0.22), chrome: std("#eef2f4", 0.12, 1), basinIn: std("#dfe5e7", 0.2), bronze: std("#a37b3c", 0.35, 0.8),
@@ -241,9 +291,10 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     valveRed: std("#d33b2c", 0.5), valveBlue: std("#2f72c4", 0.5), hose: std("#2f8d3a", 0.6), orange: std("#ef7a1d", 0.5, 0.2), drain: std("#5c666b", 0.4, 0.7),
   };
   const wallMat = std("#efebe4", 0.92), capMat = std("#33424a", 0.7), slabMat = std("#cfccc4", 0.9), plinthMat = std("#0f1e25", 0.95), edgeMat = std("#9aa3a6", 0.9);
-  const pipeMat = new MeshBasicMaterial({ color: "#8fd3ec", transparent: true, opacity: 0.62, depthTest: false, depthWrite: false });
+  const asphalt = std("#3b4044", 0.95), sidewalk = std("#c9c5bc", 0.9), laneMat = std("#f2efe6", 0.6), frameMat = std("#5b666b", 0.45, 0.6);
+  const pipeMat = new MeshBasicMaterial({ color: "#8fd3ec", transparent: true, opacity: 0.5, depthTest: false, depthWrite: false });
   const guideMat = new LineBasicMaterial({ color: "#5b7b86", transparent: true, opacity: 0.45 });
-  const shared = new Set<{ dispose(): void }>([...Object.values(ftex), ...Object.values(floorMats), ...Object.values(D), ...Object.values(F), wallMat, capMat, slabMat, plinthMat, edgeMat, pipeMat, guideMat]);
+  const shared = new Set<{ dispose(): void }>([...Object.values(ftex), ...Object.values(floorMats), ...Object.values(D), ...Object.values(F), wallMat, capMat, slabMat, plinthMat, edgeMat, pipeMat, guideMat, asphalt, sidewalk, laneMat, frameMat]);
   const stripe = stripeTexture(), water = waterTexture();
   shared.add(stripe); shared.add(water);
 
@@ -364,8 +415,16 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     const group = (f: number) => { let g = floorGroups.get(f); if (!g) { g = new Group(); floorGroups.set(f, g); root.add(g); } return g; };
 
     // Base da maquete (placa escura sob o térreo) e laje de cada pavimento.
-    const plinth = own(new RoundedBoxGeometry(fp.w + 1.6, 0.32, fp.d + 1.6, 2, 0.12));
-    const base = new Mesh(plinth, plinthMat); base.position.y = -SLAB_T - 0.16; base.receiveShadow = true; group(0).add(base);
+    // Base da maquete com a rua na frente do lote (calçada de 1,2 m, meio-fio e pista de 3 m com faixa tracejada).
+    const plinth = own(new RoundedBoxGeometry(fp.w + 1.6, 0.32, fp.d + 1.6 + STREET, 2, 0.12));
+    const base = new Mesh(plinth, plinthMat); base.position.set(0, -SLAB_T - 0.16, STREET / 2); base.receiveShadow = true; group(0).add(base);
+    {
+      const z0 = fp.d / 2 + 0.8, top = -SLAB_T, W = fp.w + 1.4;
+      batch(0).add(new BoxGeometry(W, 0.05, 1.2), sidewalk, M4(0, top + 0.025, z0 + 0.6));
+      batch(0).add(new BoxGeometry(W, 0.07, 0.1), sidewalk, M4(0, top + 0.035, z0 + 1.25));
+      batch(0).add(new BoxGeometry(W, 0.012, 3.0), asphalt, M4(0, top + 0.006, z0 + 2.8));
+      for (let x = -W / 2 + 0.6; x < W / 2 - 0.6; x += 2.2) batch(0).add(new BoxGeometry(1.1, 0.004, 0.1), laneMat, M4(x + 0.55, top + 0.014, z0 + 2.8));
+    }
     for (const f of p.floors) {
       const y = floorY(f);
       floorAnchors.set(f, new Vector3(-fp.w / 2 - 0.35, y + 0.05, 0));
@@ -394,10 +453,25 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       roomAnchors.set(r.id, { v: new Vector3(r.rect.x0 + 0.25, floorY(r.floor) + 0.05, r.rect.z0 + 0.32), floor: r.floor });
     }
     // Paredes cortadas na altura do peito, com a "tampa" escura do corte (padrão de planta humanizada).
+    // Parede EXTERNA (um lado dentro de cômodo coberto, o outro fora) com 1,8 m ou mais ganha janela: peitoril a 0,9 m,
+    // vidro e caixilho até o corte.
+    const indoor = (f: number, x: number, z: number) => p.rooms.some(r => r.floor === f && r.type !== "OUTDOOR" && r.type !== "SITE" && x > r.rect.x0 && x < r.rect.x1 && z > r.rect.z0 && z < r.rect.z1);
+    const SILL = 0.9;
     for (const w of p.walls) {
       const sx = w.x1 - w.x0, sz = w.z1 - w.z0, cx = (w.x0 + w.x1) / 2, cz = (w.z0 + w.z1) / 2, y = floorY(w.floor);
-      batch(w.floor).add(new BoxGeometry(sx, WALL_H, sz), wallMat, M4(cx, y + WALL_H / 2, cz));
+      const alongX = sx >= sz, len = alongX ? sx : sz, t = alongX ? sz : sx, off = t / 2 + 0.2;
+      const a = alongX ? indoor(w.floor, cx, cz - off) : indoor(w.floor, cx - off, cz), b = alongX ? indoor(w.floor, cx, cz + off) : indoor(w.floor, cx + off, cz);
       batch(w.floor).add(new BoxGeometry(sx + 0.002, 0.02, sz + 0.002), capMat, M4(cx, y + WALL_H + 0.01, cz));
+      if (a === b || len < 1.8) { batch(w.floor).add(new BoxGeometry(sx, WALL_H, sz), wallMat, M4(cx, y + WALL_H / 2, cz)); continue; }
+      const win = Math.min(1.6, len * 0.55), up = WALL_H - SILL;
+      const piece = (along: number, height: number, at: number, yc: number, mat: Material, thick = t) =>
+        batch(w.floor).add(alongX ? new BoxGeometry(along, height, thick) : new BoxGeometry(thick, height, along), mat, alongX ? M4(cx + at, y + yc, cz) : M4(cx, y + yc, cz + at));
+      piece(len, SILL, 0, SILL / 2, wallMat);
+      const side = (len - win) / 2;
+      piece(side, up, -(win + side) / 2, SILL + up / 2, wallMat); piece(side, up, (win + side) / 2, SILL + up / 2, wallMat);
+      piece(win, up - 0.02, 0, SILL + up / 2, D.glass, 0.012);
+      piece(win + 0.06, 0.03, 0, SILL + 0.015, frameMat, t + 0.05);
+      piece(0.03, up, 0, SILL + up / 2, frameMat, 0.04);
     }
     // Folha da porta aberta a 90° (portas comuns; a entrada larga do salão fica livre).
     for (const d of p.doors) if (d.width <= 1.05) {
@@ -407,14 +481,24 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       else batch(d.floor).add(new BoxGeometry(d.width - 0.05, h, 0.04), D.woodLight, M4(d.x + inward * (d.width / 2), y + h / 2, d.z - d.width / 2 + 0.03));
     }
     // Móveis.
-    const unit = { sphere: new SphereGeometry(0.5, 14, 10), cone: new ConeGeometry(0.5, 1, 20) };
+    // Móveis: cantos arredondados nos estofados e marcenaria (produto de gôndola e tapete ficam retos e leves).
+    const SOFT: ReadonlySet<Mat> = new Set(["fabric", "fabricDark", "mattress", "pillow", "wood", "woodDark", "woodLight", "white", "stone", "container", "cardboard"]);
+    const unit = { sphere: new SphereGeometry(0.5, 14, 10), cone: new ConeGeometry(0.5, 1, 20), body: new CapsuleGeometry(0.15, 0.78, 4, 12), head: new SphereGeometry(0.115, 14, 10), helmet: new SphereGeometry(0.125, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2) };
     for (const { floor, item: it } of p.items) {
-      const y = floorY(floor) + it.y, mat = D[it.mat];
-      if (it.shape === "box") batch(floor).add(new BoxGeometry(it.sx, it.sy, it.sz), mat, M4(it.x, y, it.z, 0, it.ry ?? 0));
-      else if (it.shape === "cyl") batch(floor).add(new CylinderGeometry(it.sx / 2, it.sx / 2, it.sy, 16), mat, M4(it.x, y, it.z, it.ry ? Math.PI / 2 : 0, 0, 0));
-      else batch(floor).add(unit[it.shape], mat, M4(it.x, y, it.z, 0, 0, 0, it.sx, it.sy, it.sz));
+      const y = floorY(floor) + it.y, mat = D[it.mat], small = Math.min(it.sx, it.sy, it.sz);
+      if (it.shape === "box") {
+        const geo = SOFT.has(it.mat) && small > 0.06 ? new RoundedBoxGeometry(it.sx, it.sy, it.sz, 2, Math.min(0.035, small * 0.25)) : new BoxGeometry(it.sx, it.sy, it.sz);
+        batch(floor).add(geo, mat, M4(it.x, y, it.z, 0, it.ry ?? 0)); geo.dispose();
+      } else if (it.shape === "cyl") batch(floor).add(new CylinderGeometry(it.sx / 2, it.sx / 2, it.sy, 16), mat, M4(it.x, y, it.z, it.ry ? Math.PI / 2 : 0, 0, 0));
+      else if (it.shape === "person") {
+        // Figura de maquete (~1,65 m): corpo, cabeça e, na obra, capacete laranja.
+        const fy = floorY(floor);
+        batch(floor).add(unit.body, D.figure, M4(it.x, fy + 0.6, it.z, 0, it.ry ?? 0, 0, 1.08, 1, 0.72));
+        batch(floor).add(unit.head, D.figure, M4(it.x, fy + 1.47, it.z));
+        if (it.mat !== "figure") batch(floor).add(unit.helmet, D[it.mat], M4(it.x, fy + 1.5, it.z));
+      } else batch(floor).add(unit[it.shape], mat, M4(it.x, y, it.z, 0, 0, 0, it.sx, it.sy, it.sz));
     }
-    unit.sphere.dispose(); unit.cone.dispose();
+    for (const g of Object.values(unit)) g.dispose();
 
     // Louças e o que é dinâmico em cada ponto (anel de estado, LED do sensor, água).
     const ringGeo = own(new RingGeometry(0.42, 0.5, 48)), alertGeo = own(new RingGeometry(0.56, 0.64, 48)), selGeo = own(new RingGeometry(0.5, 0.56, 48));
@@ -427,11 +511,11 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       const toWorldPt = (v: Vector3) => v.clone().applyMatrix4(place);
       const scale = Math.max(0.7, Math.max(FIXTURE_WIDTH[pose.fixture], FIXTURE_DEPTH[pose.fixture]) / 0.9);
       const ring = own(new MeshBasicMaterial({ color: COLORS.none, transparent: true, opacity: 0.5, depthWrite: false }));
-      const ringMesh = new Mesh(ringGeo, ring); ringMesh.rotation.x = -Math.PI / 2; ringMesh.position.set(pose.x, y + 0.012, pose.z); ringMesh.scale.setScalar(scale); g.add(ringMesh);
+      const ringMesh = overlay(new Mesh(ringGeo, ring)); ringMesh.rotation.x = -Math.PI / 2; ringMesh.position.set(pose.x, y + 0.012, pose.z); ringMesh.scale.setScalar(scale); g.add(ringMesh);
       const alertMat = own(new MeshBasicMaterial({ color: COLORS.warn, transparent: true, opacity: 0.9, side: DoubleSide, depthWrite: false }));
-      const alert = new Mesh(alertGeo, alertMat); alert.rotation.x = -Math.PI / 2; alert.position.set(pose.x, y + 0.014, pose.z); alert.scale.setScalar(scale); alert.visible = false; g.add(alert);
+      const alert = overlay(new Mesh(alertGeo, alertMat)); alert.rotation.x = -Math.PI / 2; alert.position.set(pose.x, y + 0.014, pose.z); alert.scale.setScalar(scale); alert.visible = false; g.add(alert);
       const selMat = own(new MeshBasicMaterial({ color: COLORS.select, transparent: true, opacity: 0.95, side: DoubleSide, depthWrite: false }));
-      const select = new Mesh(selGeo, selMat); select.rotation.x = -Math.PI / 2; select.position.set(pose.x, y + 0.016, pose.z); select.scale.setScalar(scale * 1.08); select.visible = false; g.add(select);
+      const select = overlay(new Mesh(selGeo, selMat)); select.rotation.x = -Math.PI / 2; select.position.set(pose.x, y + 0.016, pose.z); select.scale.setScalar(scale * 1.08); select.visible = false; g.add(select);
       let led: MeshBasicMaterial | null = null;
       if (n.deviceId) {
         const s = toWorldPt(model.sensor);
@@ -447,11 +531,11 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
         const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * len * 5);
         const tex = own(water.clone()); tex.needsUpdate = true;
         const mat = own(new MeshBasicMaterial({ color: COLORS.water, map: tex, transparent: true, opacity: 0.85, depthWrite: false }));
-        const mesh = new Mesh(geo, mat);
+        const mesh = overlay(new Mesh(geo, mat));
         mesh.position.copy(a).add(b).multiplyScalar(0.5);
         mesh.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), a.clone().sub(b).normalize());
         mesh.visible = false; mesh.renderOrder = 3; g.add(mesh);
-        const splash = new Mesh(splashGeo, mat); splash.rotation.x = -Math.PI / 2; splash.position.copy(b).add(new Vector3(0, 0.004, 0)); mesh.attach(splash);
+        const splash = overlay(new Mesh(splashGeo, mat)); splash.rotation.x = -Math.PI / 2; splash.position.copy(b).add(new Vector3(0, 0.004, 0)); mesh.attach(splash);
         streams.push({ mesh, tex, mat, phase: 0 });
       }
       nodeParts.set(n.id, { ring, ringMesh, led, alert, select, anchor: new Vector3(pose.x, y + model.top + 0.3, pose.z), floor: f, streams });
@@ -475,10 +559,10 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
         } else path.add(new LineCurve3(cur, q.clone()));
       }
       const len = path.getLength(), segs = Math.max(16, Math.round(len * 10));
-      const tube = new Mesh(own(new TubeGeometry(path, segs, 0.035, 10, false)), pipeMat); tube.renderOrder = 4; root.add(tube);
+      const tube = overlay(new Mesh(own(new TubeGeometry(path, segs, 0.024, 8, false)), pipeMat)); tube.renderOrder = 4; root.add(tube);
       const tex = own(stripe.clone()); tex.needsUpdate = true; tex.repeat.set(Math.max(1, len * 1.6), 1);
       const mat = own(new MeshBasicMaterial({ color: COLORS.flow, map: tex, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false }));
-      const sleeve = new Mesh(own(new TubeGeometry(path, segs, 0.052, 10, false)), mat); sleeve.visible = false; sleeve.renderOrder = 5; root.add(sleeve);
+      const sleeve = overlay(new Mesh(own(new TubeGeometry(path, segs, 0.04, 10, false)), mat)); sleeve.visible = false; sleeve.renderOrder = 5; root.add(sleeve);
       const fa = floorOf(layout.nodes.find(n => n.id === pipe.from)!), fb = floorOf(layout.nodes.find(n => n.id === pipe.to)!);
       edgeParts.push({ from: pipe.from, to: pipe.to, floors: [fa, fb], pipe: tube, sleeve, mat, tex, phase: 0 });
     }
@@ -573,7 +657,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     camera.position.copy(home.position); controls.target.copy(home.target); controls.update();
     camera.near = Math.max(0.05, dist / 200); camera.far = dist * 20; camera.updateProjectionMatrix();
     // Sombra: luz do sol enquadra a cena inteira (todos os pavimentos), calculada uma vez.
-    const all = new Box3().setFromObject(root), c = all.getCenter(new Vector3()), r = all.getSize(new Vector3()).length() / 2;
+    const all = visibleBox(), c = all.getCenter(new Vector3()), r = all.getSize(new Vector3()).length() / 2;
     sun.position.copy(c).add(new Vector3(-0.55, 1, 0.45).normalize().multiplyScalar(r * 2)); sun.target.position.copy(c);
     const sc = sun.shadow.camera; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 0.1; sc.far = r * 4; sc.updateProjectionMatrix();
     renderer.shadowMap.needsUpdate = true;
@@ -582,10 +666,11 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   const fit = () => {
     const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight);
     renderer.setSize(w, h, false);
+    composer.setPixelRatio(dpr); composer.setSize(w, h); ao.dirty = true;
     camera.aspect = w / h; camera.updateProjectionMatrix();
   };
 
-  const draw = () => { if (!disposed && state.visible && document.visibilityState === "visible") { renderer.render(scene, camera); cb.onFrame?.(); } };
+  const draw = () => { if (!disposed && state.visible && document.visibilityState === "visible") { composer.render(); cb.onFrame?.(); } };
   const wantsLoop = () => !disposed && state.visible && !state.still && document.visibilityState === "visible" && moving();
   const tick = (now: number) => {
     const dtMs = last ? Math.max(0, now - last) : 16.7;
@@ -602,7 +687,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       s.phase = (s.phase + stripeSpeed(state.nodes[id]?.flowLpm ?? null) * 1.6 * dt) % 1;
       s.tex.offset.y = s.phase;
     }
-    renderer.render(scene, camera);
+    composer.render();
     deltas.push(dtMs); if (deltas.length > 90) deltas.shift();
     if (now - lastBudgetAt > 500) {
       lastBudgetAt = now;
@@ -624,7 +709,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   function stopLoop() { if (!raf) return; raf = false; renderer.setAnimationLoop(null); }
   const refresh = () => { if (wantsLoop()) startLoop(); else { stopLoop(); draw(); } };
 
-  controls.addEventListener("change", () => { if (!raf) draw(); cb.onView?.(); });
+  controls.addEventListener("change", () => { ao.dirty = true; if (!raf) draw(); cb.onView?.(); });
   const zoom = (factor: number) => {
     const dir = camera.position.clone().sub(controls.target);
     const len = Math.min(controls.maxDistance, Math.max(controls.minDistance, dir.length() * factor));
@@ -669,6 +754,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       canvas.style.touchAction = state.interactive ? "none" : "pan-y";
       canvas.style.cursor = state.interactive ? "grab" : "default";
       applyLook();
+      ao.dirty = true;
       refresh();
       if (refit) cb.onView?.();
     },
@@ -697,6 +783,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       (envRT.texture as Texture).dispose();
       envRT.dispose();
       sun.shadow.map?.dispose();
+      ao.dispose(); outputPass.dispose(); renderPass.dispose(); composer.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       canvas.remove();
