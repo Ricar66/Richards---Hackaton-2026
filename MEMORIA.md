@@ -1,6 +1,42 @@
-## ESTADO ATUAL — 07/11/2026, noite (depois do pitch): rumo ao Empreenda 2027
+## ESTADO ATUAL — 08/11/2026: rumo ao Empreenda 2027
 
-### Revisão de maquetes de 08/11 — PR #12 (Codex), validado pelo Claude e integrado à develop
+### ONDE PARAMOS — 08/11/2026, fim da sessão (retome por aqui)
+
+- **Git:**
+  - Pasta local no branch `feat/architectural-water-models`: é o PR #12 do Codex, com as correções do Claude.
+  - O PR está em **RASCUNHO e NÃO foi integrado**. `develop` = `7f150dd` e `main` = `6205113`, ambas intocadas.
+  - A VPS continua desmontada.
+- **Decisão pendente do Ricardo:** marcar o PR #12 como pronto e integrá-lo à `develop`.
+  - O Claude tentou comentar os resultados e marcar como pronto. A permissão automática **bloqueou**: ação no GitHub que não foi pedida com todas as letras.
+  - Para destravar, peça: "pode marcar o PR #12 como pronto e mesclar na develop".
+  - O texto do comentário são os resultados do guia `docs/empreenda/MAQUETES_3D_2026-11-08.md`, seção "Aceite na GPU".
+- **Depois do merge:**
+  - `git fetch` e `git checkout develop && git pull --ff-only`;
+  - `pnpm build`;
+  - repetir os dois ensaios abaixo.
+- **Ensaios para repetir** (só em máquina com placa de vídeo):
+  - `node scripts/e2e/map-models.mjs` (17 verificações; prévia sem banco, `--serve` só abre a prévia);
+  - `node scripts/e2e/map-app-rehearsal.mjs` (24 verificações; aplicação completa com bancada SIMULADA). **Zera o banco de TESTE** e recusa qualquer banco que não termine em `_test`.
+- **Ver a maquete localmente:** `pnpm build` e depois `node node_modules/next/dist/bin/next start -p 3001`. Abra <http://localhost:3001/mapa>, com o login do `.env`. A porta 3000 é do Remotion.
+- **Ressalva visual (P2):** no celular, a etiqueta "TÉRREO" fica em parte sob o rótulo do ponto selecionado.
+- **Em aberto (P1):**
+  - **Sintoma:** em 1 de 4 rodadas do `map-app-rehearsal.mjs`, a maquete ficou 1 s sem desenhar logo depois de sair da tela cheia, com a água correndo. Não reproduziu nas outras três; a última deu 24/24.
+  - **Suspeita:** o `IntersectionObserver` na saída da tela cheia.
+  - **Detalhes:** guia das maquetes, "Em aberto (P1): N12 intermitente".
+  - **Também corrigido:** o N13 do ensaio, que falhava por comparar capturas com hash exato.
+- **Próximo passo do roteiro:**
+  - **Fase 3, parte B:** equipamentos de frio (`ColdEquipment`) na maquete do comércio, coloridos pela situação na RDC 216, com o registro de 30 dias ao clicar.
+  - Depois, Placar de impacto e Relatório de 1 clique.
+- **Na pasta e fora do git, sem autor conhecido. Não mexer sem o Ricardo:**
+  - `src/admin/run-dados-reais.ts`: só 3 linhas em branco no fim;
+  - `presentation/qr/`: 3 PNGs do QR da plateia, de 07/11. Devem apontar para o endereço da VPS que já não existe; confira antes de usar.
+- **Pendências do Ricardo:**
+  - revogar o token do `@Richardshack_bot` no BotFather;
+  - conferir o gasto da chave OpenAI;
+  - confirmar a elegibilidade no Empreenda;
+  - autorizar (ou não) a limpeza das leituras SIMULATED gravadas por engano no banco local em 07/11 (`pnpm dados:limpar-simulados --apagar`, com backup antes).
+
+### Revisão de maquetes de 08/11 — PR #12 (Codex), validado pelo Claude; aguardando merge na develop
 
 Pedido do Ricardo: aprofundar o realismo dos quatro modelos. Base develop `7f150dd`, main conferida `6205113`; main/VPS/banco real preservados. Guia completo e evidências: [`docs/empreenda/MAQUETES_3D_2026-11-08.md`](docs/empreenda/MAQUETES_3D_2026-11-08.md).
 
