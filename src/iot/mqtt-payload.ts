@@ -30,6 +30,8 @@ export type MqttBridgeConfig = {
   /** Intervalo declarado do firmware; só é usado para o volume da primeira leitura ou depois de um buraco. */
   sampleSeconds: number;
   tempLimitC: number; tempSeconds: number;
+  /** Série da cadeia do frio: no máximo uma leitura gravada por equipamento a cada N segundos (mais toda virada de faixa). */
+  tempPersistSeconds: number;
   scaleMinKg: number; scaleStableSeconds: number;
   /**
    * Tópico por dispositivo (`<topic>/<dispositivo_id>`): com a ACL do broker (`pattern write <topic>/%u`), um equipamento
@@ -84,6 +86,7 @@ export function loadMqttConfig(env: Env = process.env): MqttBridgeConfig {
     sampleSeconds: number(env, "MQTT_SAMPLE_SECONDS", 2, 0.5, 60),
     tempLimitC: number(env, "MQTT_TEMP_LIMIT_C", 28, -20, 80),
     tempSeconds: number(env, "MQTT_TEMP_SECONDS", 30, 1, 3600),
+    tempPersistSeconds: number(env, "MQTT_TEMP_PERSIST_SECONDS", 60, 5, 3600),
     scaleMinKg: number(env, "MQTT_SCALE_MIN_KG", 1.5, 0.1, 500),
     scaleStableSeconds: number(env, "MQTT_SCALE_STABLE_SECONDS", 6, 1, 600),
     requireDeviceTopic,

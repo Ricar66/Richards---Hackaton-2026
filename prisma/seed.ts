@@ -22,6 +22,12 @@ async function main() {
     apiKeyHash: createHash("sha256").update(secret).digest("hex"), minFlowLpm: 1.5, continuousSeconds: 30,
   } });
   await db.user.upsert({ where: { email: "operador@richards.local" }, update: {}, create: { organizationId: DEMO_ORG_ID, name: "Operador Demo", email: "operador@richards.local", role: "OWNER" } });
+  // Cadeia do frio (cadastro-base, sem leitura): o DHT11 da bancada mede o AMBIENTE, não uma geladeira. Faixa do
+  // estabelecimento até 28 °C (a RDC 216 não fixa número para ambiente). Geladeiras reais entram com sonda própria.
+  await db.coldEquipment.upsert({ where: { code: "RICHARDS-AMB-001" }, update: {}, create: {
+    organizationId: DEMO_ORG_ID, siteId: DEMO_SITE_ID, code: "RICHARDS-AMB-001", label: "Estoque · bancada (DHT11)",
+    kind: "AMBIENT", maxC: 28, sensorDeviceId: DEMO_DEVICE_ID, sensorChannel: "TEMP",
+  } });
   if (!demo) {
     console.log("RICHARDS seed pronta: só o cadastro-base (empresa, unidade, sensor e operador). Nenhum dado fictício; o histórico vem do sensor.");
     return;

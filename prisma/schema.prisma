@@ -21,6 +21,15 @@ enum DeviceKind {
   TEMPERATURE
 }
 
+/// Equipamento da cadeia do frio/quente (RDC 216/2004, itens 4.8.15 e 4.8.16).
+enum ColdKind {
+  REFRIGERATOR
+  FREEZER
+  COLD_ROOM
+  HOT_HOLDING
+  AMBIENT
+}
+
 enum DeviceState {
   ONLINE
   OFFLINE
@@ -90,6 +99,7 @@ model Organization {
   donations             DonationBatch[]
   missions              Mission[]
   audit                 AuditEvent[]
+  coldEquipments        ColdEquipment[]
 }
 
 model User {
@@ -103,14 +113,15 @@ model User {
 }
 
 model Site {
-  id             String        @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
   name           String
   description    String?
   devices        Device[]
   occurrences    Occurrence[]
   hydraulicMap   HydraulicMap?
+  coldEquipments ColdEquipment[]
 }
 
 /// Planta hidráulica da unidade (esquema sem escala). Versão + bloqueio da unidade evitam sobrescrita entre abas.
@@ -141,8 +152,50 @@ model Device {
   continuousSeconds         Int                @default(30)
   readings                  TelemetryReading[]
   occurrences               Occurrence[]
+  coldEquipments            ColdEquipment[]
 
   @@index([organizationId, kind])
+}
+
+/// Geladeira, freezer, câmara fria, balcão quente ou estoque ambiente monitorado. A faixa vem do tipo (RDC 216);
+/// limites próprios só valem se forem mais rigorosos (ver src/modules/cold-chain/domain/cold-chain.ts).
+model ColdEquipment {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  siteId         String
+  site           Site                 @relation(fields: [siteId], references: [id])
+  code           String               @unique
+  label          String
+  kind           ColdKind
+  minC           Float?
+  maxC           Float?
+  /// Sensor que mede este equipamento e o canal no JSON do firmware (ex.: "TEMP", "TEMP_2").
+  sensorDeviceId String?
+  sensorDevice   Device?              @relation(fields: [sensorDeviceId], references: [id])
+  sensorChannel  String               @default("TEMP")
+  active         Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  readings       TemperatureReading[]
+
+  @@index([organizationId, active])
+  @@index([sensorDeviceId])
+}
+
+/// Série gravada da temperatura (registro da RDC 216, item 4.8.18). Uma por minuto e toda virada de faixa.
+/// A chave (equipamento, captura, origem) torna a retentativa da ponte idempotente.
+model TemperatureReading {
+  id           String        @id @default(cuid())
+  equipmentId  String
+  equipment    ColdEquipment @relation(fields: [equipmentId], references: [id])
+  source       DataSource
+  temperatureC Decimal       @db.Decimal(6, 2)
+  humidityPct  Decimal?      @db.Decimal(5, 1)
+  capturedAt   DateTime
+  receivedAt   DateTime      @default(now())
+
+  @@unique([equipmentId, capturedAt, source])
+  @@index([equipmentId, capturedAt(sort: Desc)])
 }
 
 model TelemetryReading {

@@ -9,6 +9,7 @@ import { ScaleSurplusDetector } from "@/modules/monitoring/domain/scale-surplus-
 import type { SignalSample } from "@/modules/monitoring/domain/sustained-run";
 import { TemperatureAlertPolicy } from "@/modules/monitoring/domain/temperature-alert-policy";
 import type { SensorLiveEvent } from "@/modules/realtime/domain/live-event";
+import { equipmentRange, inRange, shouldPersist, type ColdKind } from "@/modules/cold-chain/domain/cold-chain";
 import { notifyLiveSafe } from "@/modules/realtime/infrastructure/notify-event";
 import { mqttPayloadSchema, type MqttBridgeConfig, type MqttSensor } from "./mqtt-payload";
 
@@ -17,10 +18,12 @@ export type MqttProcessed = {
   flow?: IngestResult & { source: "DEVICE" | "SIMULATED"; sequence: number };
   temperature?: { alerted: boolean; occurrenceId?: string };
   donation?: { created: boolean; id: string; weightKg: number };
+  /** Leituras gravadas na série da cadeia do frio (equipamentos ligados a este sensor). */
+  coldStored?: number;
 };
 export type MqttOutcome = { status: "rejected"; reason: string } | MqttProcessed;
 
-type DeviceMemory = { sequence: number; lastFlowAt?: Date; temps: SignalSample[]; scale: ScaleSurplusDetector };
+type DeviceMemory = { sequence: number; lastFlowAt?: Date; temps: SignalSample[]; scale: ScaleSurplusDetector; cold: Map<string, { at: Date; inRange: boolean }> };
 /** No máximo um `message.rejected` por motivo neste intervalo: mensagem ruim em rajada não inunda o telão. */
 const REJECT_NOTICE_MS = 2_000;
 const br = (n: number, digits = 1) => n.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -50,7 +53,7 @@ export class MqttIngestion {
 
   private remember(deviceId: string): DeviceMemory {
     let m = this.memory.get(deviceId);
-    if (!m) { m = { sequence: 0, temps: [], scale: new ScaleSurplusDetector(this.cfg.scaleMinKg, this.cfg.scaleStableSeconds) }; this.memory.set(deviceId, m); }
+    if (!m) { m = { sequence: 0, temps: [], scale: new ScaleSurplusDetector(this.cfg.scaleMinKg, this.cfg.scaleStableSeconds), cold: new Map() }; this.memory.set(deviceId, m); }
     return m;
   }
   private source(sensor: MqttSensor): "DEVICE" | "SIMULATED" { return this.cfg.simulated.has(sensor) ? "SIMULATED" : "DEVICE"; }
@@ -107,6 +110,10 @@ export class MqttIngestion {
       await this.reportRejected("dispositivo não cadastrado");
       return { status: "rejected", reason: `dispositivo "${p.dispositivo_id}"${code !== p.dispositivo_id ? ` (apelido de ${code})` : ""} não cadastrado: cadastre o Device ou mapeie em MQTT_DEVICE_ALIASES` };
     }
+    // Equipamentos da cadeia do frio medidos por este sensor (canal TEMP do JSON). Leitura de banco ANTES da memória.
+    const equipments = p.TEMP !== undefined
+      ? await getDb().coldEquipment.findMany({ where: { sensorDeviceId: device.id, sensorChannel: "TEMP", active: true }, select: { id: true, kind: true, minC: true, maxC: true } })
+      : [];
     // Daqui para baixo nada lê o banco: a memória da ponte muda uma vez só por mensagem.
     // A hora da leitura é a da CHEGADA na ponte (o JSON não traz horário), nunca a do processamento: com o banco fora,
     // a mensagem espera na fila e é gravada depois com a hora em que chegou.
@@ -132,6 +139,15 @@ export class MqttIngestion {
       mem.temps = [...mem.temps.filter(s => s.at.getTime() >= horizon), { at, value: p.TEMP }].slice(-600);
       const d = this.temperature.evaluate(mem.temps);
       msg.temperature = { decision: d, c: p.TEMP, humidityPct: p.UMIDADE, source: this.source("TEMP") };
+      // Série da RDC 216 (item 4.8.18): uma por minuto por equipamento e toda virada de faixa. A hora é a da chegada.
+      const cold: ColdRow[] = [];
+      for (const e of equipments) {
+        const ok = inRange(p.TEMP, equipmentRange(e.kind as ColdKind, e));
+        if (!shouldPersist(mem.cold.get(e.id), at, ok, this.cfg.tempPersistSeconds)) continue;
+        mem.cold.set(e.id, { at, inRange: ok });
+        cold.push({ equipmentId: e.id, temperatureC: p.TEMP, humidityPct: p.UMIDADE ?? null, source: this.source("TEMP"), capturedAt: at });
+      }
+      if (cold.length) msg.cold = cold;
     }
     if (p.PESO !== undefined) msg.scale = { decision: mem.scale.push({ at, value: p.PESO }), kg: p.PESO, source: this.source("PESO") };
     return { status: "ready", message: msg };
@@ -174,6 +190,11 @@ export class MqttIngestion {
         done.temperature = { alerted: opened.created, occurrenceId: opened.occurrenceId };
       }
     }
+    if (msg.cold && done.cold === undefined) {
+      // Chave (equipamento, captura, origem): a retentativa com a mesma mensagem não duplica.
+      const r = await getDb().temperatureReading.createMany({ data: msg.cold, skipDuplicates: true });
+      done.cold = r.count;
+    }
     if (msg.scale?.decision.trigger && !done.donation) {
       const d = msg.scale.decision;
       const created = await this.donations.createFromScale({
@@ -193,6 +214,7 @@ export class MqttIngestion {
     if (msg.flow && done.flow) out.flow = { ...done.flow, source: msg.flow.source, sequence: msg.flow.sequence };
     if (done.temperature) out.temperature = done.temperature;
     if (done.donation) out.donation = done.donation;
+    if (done.cold !== undefined) out.coldStored = done.cold;
     const live: Pick<SensorLiveEvent, "temperature" | "scale"> = {};
     if (msg.temperature) {
       const d = msg.temperature.decision;
@@ -217,6 +239,8 @@ export class MqttIngestion {
   /** Desistiu da mensagem (prazo esgotado): a balança, se ia criar lote e não criou, rearma para a próxima pesagem estável. */
   abandon(msg: MqttMessage) {
     if (msg.scale?.decision.trigger && !msg.done.donation) this.remember(msg.device.id).scale.rearm();
+    // Não gravou a série: a próxima leitura desses equipamentos grava (sem esperar o minuto contado desta).
+    if (msg.cold && msg.done.cold === undefined) for (const c of msg.cold) this.remember(msg.device.id).cold.delete(c.equipmentId);
   }
 }
 
@@ -226,9 +250,14 @@ export type MqttMessage = {
   flow?: { source: "DEVICE" | "SIMULATED"; sequence: number; reading: IngestReading };
   temperature?: { decision: ReturnType<TemperatureAlertPolicy["evaluate"]>; c: number; humidityPct?: number; source: "DEVICE" | "SIMULATED" };
   scale?: { decision: ReturnType<ScaleSurplusDetector["push"]>; kg: number; source: "DEVICE" | "SIMULATED" };
+  cold?: ColdRow[];
   done: {
+    cold?: number;
     flow?: IngestResult; contact?: boolean; live?: boolean;
     temperature?: { alerted: boolean; occurrenceId?: string };
     donation?: { created: boolean; id: string; weightKg: number };
   };
 };
+
+/** Linha da série da cadeia do frio a gravar. */
+type ColdRow = { equipmentId: string; temperatureC: number; humidityPct: number | null; source: "DEVICE" | "SIMULATED"; capturedAt: Date };

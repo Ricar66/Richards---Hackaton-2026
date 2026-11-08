@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Bot, Activity, Bell, ChevronRight, Cpu, Droplets, ExternalLink, FileChartColumn, HeartHandshake, LayoutDashboard, MapPinned, Menu, MonitorPlay, TriangleAlert, X } from "lucide-react";
+import { Bot, Activity, Bell, ChevronRight, Cpu, Droplets, ExternalLink, FileChartColumn, HeartHandshake, LayoutDashboard, MapPinned, Menu, MonitorPlay, Snowflake, TriangleAlert, X } from "lucide-react";
 import { agoBR, hourBR, numBR } from "@/lib/format";
 import { notifyDataChanged, PREVIEW_OUTDATED, PREVIEW_REFRESH, useNow, usePrefersReducedMotion } from "./hooks";
 import { useLiveEvent, useLiveStream, useNewOccurrence, type LiveView } from "./live-stream";
@@ -15,6 +15,7 @@ const NAV = [
   { href: "/", label: "Centro de controle", Icon: LayoutDashboard },
   { href: "/monitoramento", label: "Monitoramento hídrico", Icon: Activity },
   { href: "/mapa", label: "Mapa hidráulico", Icon: MapPinned },
+  { href: "/frio", label: "Cadeia do frio", Icon: Snowflake },
   { href: "/ocorrencias", label: "Ocorrências", Icon: TriangleAlert },
   { href: "/doacoes", label: "Doações & impacto", Icon: HeartHandshake },
   { href: "/relatorios", label: "Relatórios", Icon: FileChartColumn },

@@ -28,6 +28,13 @@
   - **Estratégia, regras e fontes:** [`docs/empreenda/ESTRATEGIA_EMPREENDA_2027.md`](docs/empreenda/ESTRATEGIA_EMPREENDA_2027.md).
   - **Tese:** o registro de temperatura (RDC 216, item 4.8.18) é a garantia sanitária que torna o excedente doável (Lei 15.224/2025, art. 14, §1º), e a água entra no mesmo kit.
   - **Riscos de elegibilidade:** matrícula no Senac SP na mesma categoria; "ideia ainda não implementada". Confirmar com a Comissão Organizadora.
+- **Diferenciais em construção na develop** (escolha do Ricardo em 07/11: os quatro). Ordem: base → Passaporte do Alimento (QR) → Loja em 3D ao vivo → Placar de impacto → Relatório de 1 clique.
+  - **Fase 1 (base) feita, `/frio` "Cadeia do frio":**
+    - `ColdEquipment` (geladeira, freezer, câmara fria, balcão quente, ambiente) e série `TemperatureReading`, migração aditiva `20261108120000_cold_chain`.
+    - Faixas na letra da RDC 216 (< 5 °C, ≤ −18 °C, > 60 °C) em `src/modules/cold-chain/domain/cold-chain.ts`. Limite próprio só aperta a norma.
+    - A ponte MQTT grava 1 leitura por minuto por equipamento (`MQTT_TEMP_PERSIST_SECONDS`) e toda virada de faixa, de forma idempotente.
+    - Tempo na faixa conta só o período com dado; buraco nunca é "na faixa".
+    - O seed cadastra "Estoque · bancada (DHT11)" como AMBIENTE até 28 °C: o DHT11 mede a sala, não uma geladeira.
 
 ## Atualização 07/11/2026 — plateia QR + IoT (develop, NÃO main)
 Leia ANTES de atuar: docs/entrega/PLATEIA_QR_IOT_HANDOFF_2026-11-07.md.

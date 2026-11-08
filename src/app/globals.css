@@ -767,3 +767,36 @@ select option { background: var(--surface); color: var(--ink); }
 }
 @media (prefers-reduced-motion: reduce) { .robo-walker, .robo-walker * { animation: none !important; transition: none !important; } }
 @media print { .robo-strip { display: none !important; } }
+
+/* Cadeia do frio (/frio): cartões por equipamento com a faixa da RDC 216 sombreada no gráfico. */
+.cc { display: grid; gap: 18px; }
+.cc-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+.cc-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cc-kpis > div { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--muted); font-size: 12.5px; }
+.cc-kpis > div b { grid-column: 1 / -1; font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cc-kpis > div.warn b { color: var(--warn); }
+.cc-kpis > div .seal { grid-column: 1 / -1; justify-self: start; }
+.cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.cc-card { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.cc-card.out { border-color: #8a3b33; box-shadow: inset 0 0 0 1px #8a3b3355; }
+.cc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.cc-head h3 { margin: 0; font-size: 16px; }
+.cc-head .tag { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.cc-kind { font-size: 12px; color: var(--muted); }
+.cc-now { display: flex; align-items: center; gap: 16px; }
+.cc-now b { font-size: 40px; line-height: 1; font-weight: 750; letter-spacing: -.02em; white-space: nowrap; }
+.cc-now b small { font-size: 16px; color: var(--muted); font-weight: 600; }
+.cc-now-meta { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
+.cc-ref { font-size: 11px; color: var(--faint); }
+.cc-chart { margin: 0 -4px; }
+.cc-empty { margin: 0; padding: 26px 0; text-align: center; color: var(--muted); font-size: 12.5px; border: 1px dashed var(--line); border-radius: 10px; }
+.cc-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.cc-stats div { padding: 8px 10px; border-radius: 9px; background: var(--surface-2); }
+.cc-stats dt { font-size: 11px; color: var(--muted); }
+.cc-stats dd { margin: 3px 0 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cc-stats dd.warn { color: var(--warn); }
+.cc-excursion { margin: 0; font-size: 12.5px; color: var(--ink-2); padding: 8px 10px; border-radius: 9px; background: var(--warn-soft); border: 1px solid var(--warn-line); }
+.cc-foot { font-size: 11.5px; color: var(--faint); }
+.cc-note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+@media (max-width: 960px) { .cc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .cc-grid { grid-template-columns: minmax(0, 1fr); } .cc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cc-now b { font-size: 34px; } }
