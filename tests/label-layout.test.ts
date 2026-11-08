@@ -1,8 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hit, labelRect, layoutLabels, type LabelInput } from "../src/components/water-map/label-layout";
+import { fitLabelAnchor, hit, labelRect, layoutLabels, type LabelInput } from "../src/components/water-map/label-layout";
 
 const L = (id: string, x: number, y: number, priority = 400, selected = false): LabelInput => ({ id, x, y, title: `Ponto ${id}`, sub: "não instrumentado", priority, selected });
+
+test("selecionado: nome cabe nas bordas do celular, abaixo dos comandos, sem mover o ponto 3D", () => {
+  for (const width of [264, 304, 390, 900]) for (const x of [-100, 0, width, width + 100]) for (const y of [-200, 0, 500]) {
+    const l = L("a", x, y, 0, true), original = { ...l }, p = fitLabelAnchor(l, width, 430, 150);
+    const rect = labelRect({ ...l, ...p }, "full");
+    assert.ok(rect.x0 >= 7 && rect.x1 <= width - 7 && rect.y0 >= 150 && rect.y1 <= 390);
+    assert.deepEqual(l, original);
+  }
+});
 
 test("rótulos: separados ficam cheios; nenhum ponto some (no pior caso vira ponto colorido)", () => {
   const m = layoutLabels([L("a", 100, 200), L("b", 500, 200)], { narrow: false });

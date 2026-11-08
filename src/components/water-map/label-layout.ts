@@ -17,6 +17,13 @@ export function labelRect(l: Pick<LabelInput, "x" | "y" | "title" | "sub">, mode
   return { x0: l.x - w / 2, y0: l.y - 38, x1: l.x + w / 2, y1: l.y };
 }
 
+/** O selecionado continua legível junto às bordas no retrato e depois de aproximar a câmera.
+ * Só desloca o rótulo; a linha de chamada mantém a posição verdadeira do ponto na maquete. */
+export function fitLabelAnchor(l: Pick<LabelInput, "x" | "y" | "title" | "sub">, width: number, height: number, toolbarBottom: number) {
+  const rect = labelRect(l, "full"), half = Math.min((rect.x1 - rect.x0) / 2, Math.max(0, width / 2 - 8));
+  return { x: Math.max(half + 8, Math.min(width - half - 8, l.x)), y: Math.max(toolbarBottom + 42, Math.min(height - 40, l.y)) };
+}
+
 export function layoutLabels(items: LabelInput[], opts: { narrow: boolean; reserved?: Rect[] }): Map<string, LabelMode> {
   const reserved = opts.reserved ?? [], out = new Map<string, LabelMode>(), rect = new Map<string, Rect>();
   const order = [...items].sort((a, b) => (a.selected === b.selected ? a.priority - b.priority : a.selected ? -1 : 1));

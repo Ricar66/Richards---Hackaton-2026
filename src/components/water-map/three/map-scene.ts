@@ -178,6 +178,8 @@ class Batch {
       const mesh = new Mesh(merged, mat);
       const transparent = (mat as MeshStandardMaterial).transparent;
       mesh.castShadow = shadows && !transparent; mesh.receiveShadow = !transparent;
+      // Vidro/tela vazada não viram uma placa opaca no passe de normais do AO.
+      if (transparent || mat.alphaTest > 0) mesh.layers.set(OVERLAY);
       into.add(mesh);
     }
     this.parts.clear();
