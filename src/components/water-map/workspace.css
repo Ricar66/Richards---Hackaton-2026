@@ -32,3 +32,18 @@
 .hyd-3d-wrap.tall{aspect-ratio:1100/820}
 @media(max-width:650px){.hyd-3d-wrap.tall{aspect-ratio:auto;height:clamp(320px,104vw,480px)}}
 .hyd-3d-node.dot{width:12px;height:12px;padding:0;gap:0;transform:translate(-50%,-50%);background:var(--node);border:2px solid #0a1a22;box-shadow:0 0 0 1px var(--node),0 2px 6px #0008}.hyd-3d-node.dot b,.hyd-3d-node.dot span{display:none}
+
+/* Exploração arquitetônica: comandos com alvo de toque, nomes opcionais e o MESMO canvas em tela cheia. */
+.hyd-3d-presets{display:flex;gap:2px;background:#0a1820ed;border:1px solid #2a4750;border-radius:9px;padding:3px;box-shadow:0 6px 18px #0004}
+.hyd-3d-leaders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}.hyd-3d-leaders path{fill:none;stroke:#8af3d2;stroke-width:1;stroke-opacity:.65;vector-effect:non-scaling-stroke}
+.hyd-3d-presets button{min-height:38px;padding:0 12px;border:0;border-radius:6px;background:transparent;color:#b9ced4;font:600 12px var(--font-ui,system-ui);cursor:pointer}
+.hyd-3d-presets button[aria-pressed=true]{background:#204138;color:#b6f2dc}
+.hyd-3d-presets button:focus-visible{outline:2px solid #8af3d2;outline-offset:1px}
+.hyd-3d-cam button,.hyd-3d-floors button{min-height:38px;min-width:38px}
+.hyd-3d-floors{order:3;width:100%;box-shadow:none;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+.hyd-3d-floors button{flex:none}
+.hyd-3d-section-note{position:absolute;left:12px;bottom:32px;max-width:calc(100% - 24px);margin:0;color:#b2c6cc;font:10px var(--font-ui,system-ui);letter-spacing:.035em;background:#0a1820cc;padding:4px 7px;border-radius:5px;pointer-events:none}
+.hyd-3d-wrap:fullscreen{width:100vw;height:100dvh;max-width:none;min-height:0;aspect-ratio:auto;background:radial-gradient(ellipse at 50% 55%,#20353b,#0c1a20 75%)}
+.hyd-3d-wrap:fullscreen .hyd-3d{height:100%}
+@media(max-width:900px){.hyd-3d-tools{gap:5px}.hyd-3d-presets{width:100%;justify-content:center}.hyd-3d-cam{margin-left:0}.hyd-3d-floors{order:3}}
+@media(max-width:650px){.hyd-3d-wrap{height:clamp(360px,108vw,490px)}.hyd-3d-wrap.tall{height:clamp(430px,130vw,580px)}.hyd-3d-presets button{min-height:40px;flex:1;padding:0 10px}.hyd-3d-cam button,.hyd-3d-floors button{min-height:40px;min-width:40px}.hyd-3d-cam{gap:1px;max-width:100%}.hyd-3d-cam button{padding:0 6px}.hyd-3d-cam button:has(svg){min-width:36px}.hyd-3d-section-note{font-size:9px;bottom:28px}.hyd-3d-wrap:fullscreen,.hyd-3d-wrap.tall:fullscreen{height:100dvh}}

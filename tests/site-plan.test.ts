@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { template } from "../src/modules/water-map/domain/layout";
-import { fixturePose, FOOTPRINT, isClear, pipeRoute, planSite, roomRect, roomTypeOf, WALL_T, EXPLODE_STEP, PIPE_Y, type SitePlan } from "../src/components/water-map/three/site-plan";
+import { fixturePose, FIXTURE_DEPTH, FOOTPRINT, isClear, pipeRoute, planSite, roomRect, roomTypeOf, WALL_T, EXPLODE_STEP, PIPE_Y, type SitePlan } from "../src/components/water-map/three/site-plan";
 
 const near = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) < eps;
 function connected(plan: SitePlan, floor: number) {
@@ -44,7 +44,7 @@ test("louças encostam na parede certa, viradas para dentro; torneira de jardim 
   const jardim = ps.get(l.nodes.find(n => n.fixture === "GARDEN_TAP")!.id)!;
   const quintal = roomRect("HOUSE", l.rooms.find(r => r.type === "OUTDOOR")!);
   assert.equal(jardim.ry, 0);
-  assert.ok(near(jardim.z, quintal.z0 + 0.08), "encostada na face de fora da parede da casa");
+  assert.ok(near(jardim.z, quintal.z0 + FIXTURE_DEPTH.GARDEN_TAP / 2), "encostada na face de fora da parede da casa, incluindo a mangueira na pegada");
   // Peça solta (caixa d'água) não gira nem encosta.
   const caixa = ps.get(l.nodes.find(n => n.fixture === "WATER_TANK")!.id)!;
   assert.equal(caixa.ry, 0);

@@ -9,10 +9,10 @@
  */
 import {
   Box3, BoxGeometry, BufferGeometry, CanvasTexture, CapsuleGeometry, ClampToEdgeWrapping, Color, ConeGeometry, CurvePath,
-  CylinderGeometry, DirectionalLight, DoubleSide, Euler, Float32BufferAttribute, Group, HalfFloatType, HemisphereLight, LineBasicMaterial, LineCurve3,
+  CylinderGeometry, DirectionalLight, DoubleSide, Euler, Float32BufferAttribute, Group, HalfFloatType, HemisphereLight, IcosahedronGeometry, LineBasicMaterial, LineCurve3,
   LineSegments, Material, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, NeutralToneMapping, NoBlending, Object3D, PCFShadowMap, PerspectiveCamera,
   PlaneGeometry, PMREMGenerator, QuadraticBezierCurve3, Quaternion, RepeatWrapping, RingGeometry, Scene, SphereGeometry, SRGBColorSpace,
-  Texture, TorusGeometry, TubeGeometry, Vector3, WebGLRenderer, WebGLRenderTarget,
+  Texture, TubeGeometry, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
@@ -24,8 +24,13 @@ import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { budgetRestart, budgetStart, frameBudgetStep, median, type BudgetState } from "@/components/stage/stage-logic";
-import { floorOf, type Fixture, type WaterLayout } from "@/modules/water-map/domain/layout";
-import { FIXTURE_DEPTH, FIXTURE_WIDTH, FOOTPRINT, floorY, planSite, SLAB_T, WALL_H, type FloorMat, type Mat } from "./site-plan";
+import { floorOf, type WaterLayout } from "@/modules/water-map/domain/layout";
+import { EXPLODE_STEP, FIXTURE_DEPTH, FIXTURE_WIDTH, FOOTPRINT, PIPE_Y, planSite, SLAB_T, type FloorMat, type Mat } from "./site-plan";
+import { architecture, CEILING_H, floorElevation, upperWallVisible, type SectionMode, type WallAssembly, type ArchitectureMaterial } from "./architecture";
+import { surfaceMaps } from "./surface-maps";
+import { buildingDetails, furnitureDetails } from "./model-details";
+import { fitCamera, type CameraPreset } from "./camera-fit";
+import { fixtureModel } from "./fixture-model";
 
 export type MapNodeState = "FLOW" | "IDLE" | "STALE" | "NO_READING" | "UNMETERED";
 export type MapNodeView = { state: MapNodeState; flowLpm: number | null; alert: boolean };
@@ -42,11 +47,14 @@ export type MapSceneInput = {
   floor?: FloorMode;
   /** Girar e aproximar com o mouse/dedo. Desligado, o toque rola a página. */
   interactive?: boolean;
+  section?: SectionMode;
+  insetTop?: number;
 };
+export type { CameraPreset } from "./camera-fit";
 export type MapSceneStats = { fps: number; p50: number; p95: number; calls: number; triangles: number; dpr: number; level: number };
 export type ScreenPoint = { x: number; y: number };
 export type MapProjection = { nodes: Record<string, ScreenPoint>; rooms: Record<string, ScreenPoint>; floors: Record<string, ScreenPoint>; size: { w: number; h: number } };
-export type MapScene = { ready: Promise<void>; update(i: MapSceneInput): void; project(): MapProjection; resetView(): void; zoom(factor: number): void; dispose(): void };
+export type MapScene = { ready: Promise<void>; update(i: MapSceneInput): void; project(): MapProjection; resetView(): void; setCamera(preset: CameraPreset): void; focusNode(id: string): void; zoom(factor: number): void; dispose(): void };
 type Callbacks = { onLost(): void; onBudget(): void; onStats?(s: MapSceneStats): void; onFrame?(): void; onView?(): void };
 
 /** Planta normalizada (0..1) → mundo, na escala da casa (compatível com a versão esquemática). */
@@ -92,15 +100,15 @@ function floorTextures(aniso: number): Record<FloorMat, Texture> {
     wood: canvasTex(512, (g, s, r) => {
       const rows = 8, h = s / rows;
       for (let i = 0; i < rows; i++) {
-        let x = -r() * 200;
+        let x = -(i % 2) * s / 4;
         while (x < s) {
-          const len = 140 + r() * 220, base = shade("#b5845a", (r() - 0.5) * 0.12);
+          const len = s / 2, base = shade("#bd9a73", (r() - 0.5) * 0.075);
           g.fillStyle = base; g.fillRect(x, i * h, len, h);
           for (let k = 0; k < 9; k++) { g.strokeStyle = shade(base, -0.06 - r() * 0.06); g.globalAlpha = 0.35; g.lineWidth = 1; g.beginPath(); const y = i * h + r() * h; g.moveTo(x, y); g.bezierCurveTo(x + len / 3, y + (r() - 0.5) * 6, x + len * 2 / 3, y + (r() - 0.5) * 6, x + len, y); g.stroke(); }
-          g.globalAlpha = 1; g.fillStyle = "#5e4128"; g.fillRect(x, i * h, 2, h);
+          g.globalAlpha = 1; g.fillStyle = "#8c7157"; g.fillRect(x, i * h, 1.2, h);
           x += len;
         }
-        g.fillStyle = "#5e4128"; g.fillRect(0, i * h, s, 2);
+        g.fillStyle = "#8c7157"; g.fillRect(0, i * h, s, 1.5);
       }
     }, aniso),
     porcelain: canvasTex(512, (g, s, r) => {
@@ -113,7 +121,7 @@ function floorTextures(aniso: number): Record<FloorMat, Texture> {
       for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { g.fillStyle = shade("#e9eeee", (r() - 0.5) * 0.03); g.fillRect(i * t, j * t, t, t); }
       g.fillStyle = "#bcc6c8"; for (let i = 0; i <= n; i++) { g.fillRect(i * t - 1.5, 0, 3, s); g.fillRect(0, i * t - 1.5, s, 3); }
     }, aniso),
-    grass: canvasTex(256, (g, s, r) => speckle(g, s, r, "#4f7a39", 0.18, 9000, 2), aniso),
+    grass: canvasTex(256, (g, s, r) => speckle(g, s, r, "#657852", 0.1, 9000, 2), aniso),
     pavers: canvasTex(512, (g, s, r) => {
       const rows = 8, h = s / rows, w = s / 4;
       for (let i = 0; i < rows; i++) for (let k = -1; k < 5; k++) { const x = k * w + (i % 2) * w / 2; g.fillStyle = shade("#a29e95", (r() - 0.5) * 0.08); g.fillRect(x + 2, i * h + 2, w - 4, h - 4); }
@@ -170,6 +178,8 @@ class Batch {
       const mesh = new Mesh(merged, mat);
       const transparent = (mat as MeshStandardMaterial).transparent;
       mesh.castShadow = shadows && !transparent; mesh.receiveShadow = !transparent;
+      // Vidro/tela vazada não viram uma placa opaca no passe de normais do AO.
+      if (transparent || mat.alphaTest > 0) mesh.layers.set(OVERLAY);
       into.add(mesh);
     }
     this.parts.clear();
@@ -205,14 +215,12 @@ class CachedGTAO extends GTAOPass {
 }
 const OVERLAY = 1;
 /** Faixa da rua na frente do lote (calçada + pista), em metros. */
-const STREET = 4.6;
+const STREET = 2.8;
 const overlay = <T extends Object3D>(o: T): T => { o.layers.set(OVERLAY); return o; };
 
 const M4 = (x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) =>
   new Matrix4().compose(new Vector3(x, y, z), new Quaternion().setFromEuler(new Euler(rx, ry, rz)), new Vector3(sx, sy, sz));
 
-type Part = { geo: BufferGeometry; mat: Material; m: Matrix4 };
-type FixtureModel = { parts: Part[]; top: number; spouts: { a: Vector3; b: Vector3 }[]; sensor: Vector3 };
 
 export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   // Canvas novo a cada montagem: um canvas cujo contexto foi perdido nunca ganha outro.
@@ -231,6 +239,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   renderer.toneMapping = NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.outputColorSpace = SRGBColorSpace;
+  renderer.info.autoReset = false;  // diagnóstico soma cena + passes; o último passe sozinho só reportaria um quad
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = PCFShadowMap;
   renderer.shadowMap.autoUpdate = false;   // cena parada: a sombra é calculada só quando a maquete muda
@@ -241,12 +250,12 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   const room = new RoomEnvironment();
   const envRT = pmrem.fromScene(room, 0.04);
   scene.environment = envRT.texture;
-  scene.environmentIntensity = 0.55;
+  scene.environmentIntensity = 0.7;
   pmrem.dispose();
   room.traverse(o => { const m = o as Mesh; m.geometry?.dispose(); (m.material as Material | undefined)?.dispose?.(); });
 
-  scene.add(new HemisphereLight("#eef6ff", "#1a2a30", 0.75));
-  const sun = new DirectionalLight("#fff1dc", 2.5);
+  scene.add(new HemisphereLight("#eef6ff", "#7c8174", 1.0));
+  const sun = new DirectionalLight("#fff3e5", 2.7);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
@@ -273,11 +282,15 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   // ---------- materiais ----------
   const std = (color: string, roughness = 0.8, metalness = 0, extra: Partial<ConstructorParameters<typeof MeshStandardMaterial>[0]> = {}) => new MeshStandardMaterial({ color, roughness, metalness, ...extra });
   const ftex = floorTextures(aniso);
-  const floorMats: Record<FloorMat, MeshStandardMaterial> = Object.fromEntries(Object.entries(ftex).map(([k, t]) => [k, std("#ffffff", k === "stone" || k === "porcelain" ? 0.35 : k === "bathTile" ? 0.3 : 0.85, 0, { map: t })])) as Record<FloorMat, MeshStandardMaterial>;
+  const relief = Object.fromEntries(Object.keys(ftex).map(k => [k, surfaceMaps(k as FloorMat, aniso)])) as Record<FloorMat, ReturnType<typeof surfaceMaps>>;
+  const floorMats: Record<FloorMat, MeshStandardMaterial> = Object.fromEntries(Object.entries(ftex).map(([k, t]) => {
+    const maps = relief[k as FloorMat];
+    return [k, std("#ffffff", 1, 0, { map: t, bumpMap: maps.bump, bumpScale: maps.depth, roughnessMap: maps.roughness })];
+  })) as Record<FloorMat, MeshStandardMaterial>;
   const D: Record<Mat, MeshStandardMaterial> = {
     fabric: std("#8a97a0", 0.95), fabricDark: std("#56636b", 0.95), wood: std("#a87c52", 0.6), woodDark: std("#5c4130", 0.55), woodLight: std("#d8bc96", 0.6),
     white: std("#f1f0eb", 0.4), steel: std("#c4ccd0", 0.32, 0.85), black: std("#20262a", 0.45), stone: std("#e2ddd4", 0.28), rug: std("#c9b8a2", 1),
-    mattress: std("#f5f3ee", 0.9), pillow: std("#ebe5d9", 0.95), plant: std("#4c8a3f", 0.85), bark: std("#6a4a31", 0.9), pot: std("#b8693f", 0.75),
+    mattress: std("#f5f3ee", 0.9), pillow: std("#ebe5d9", 0.95), plant: std("#52734b", 0.92), plantLight: std("#789068", 0.9), plantDark: std("#354f3c", 0.95), bark: std("#65523f", 0.9), pot: std("#b17b5d", 0.85),
     cardboard: std("#c79c6b", 0.9), rackOrange: std("#e47a24", 0.5, 0.3), rackBlue: std("#2f5f9e", 0.5, 0.3), concrete: std("#a7a59e", 0.95),
     brick: std("#b6533b", 0.9), sand: std("#d9c08c", 1), net: std("#ff7a1a", 0.8, 0, { transparent: true, opacity: 0.35, side: DoubleSide, depthWrite: false }),
     container: std("#2f6fae", 0.55, 0.3), p0: std("#e04b3a", 0.6), p1: std("#f0b431", 0.6), p2: std("#3a8fd9", 0.6), p3: std("#48b06a", 0.6), p4: std("#9a5bb5", 0.6), p5: std("#f4f2ec", 0.6),
@@ -285,16 +298,29 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     glass: std("#cfeaf3", 0.05, 0, { transparent: true, opacity: 0.22, depthWrite: false }),
     figure: std("#ece8e0", 0.85),
   };
+  const netTex = canvasTex(128, (g, s) => {
+    g.fillStyle = "#000"; g.fillRect(0, 0, s, s); g.strokeStyle = "#fff"; g.lineWidth = 1.2;
+    for (let k = 0; k <= s; k += 8) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, s); g.moveTo(0, k); g.lineTo(s, k); g.stroke(); }
+  }, aniso, false);
+  netTex.repeat.set(5, 1);
+  D.net.alphaMap = netTex; D.net.alphaTest = 0.35; D.net.transparent = false; D.net.opacity = 1; D.net.depthWrite = true;
+  // A marcenaria também recebe veio/relevo, sem multiplicar materiais por móvel.
+  for (const mat of [D.wood, D.woodDark, D.woodLight]) { mat.map = ftex.wood; mat.bumpMap = relief.wood.bump; mat.bumpScale = 0.002; }
+  D.wood.color.set("#dfd0bd"); D.woodLight.color.set("#fff4df"); D.woodDark.color.set("#9e8b78");
+  D.concrete.map = ftex.concrete; D.concrete.bumpMap = relief.concrete.bump; D.concrete.bumpScale = 0.008;
+  D.stone.map = ftex.stone; D.stone.roughnessMap = relief.stone.roughness;
   const F = {
     ceramic: std("#f8f8f6", 0.22), chrome: std("#eef2f4", 0.12, 1), basinIn: std("#dfe5e7", 0.2), bronze: std("#a37b3c", 0.35, 0.8),
     tankBlue: std("#1f7fc4", 0.55), tankLid: std("#17639a", 0.5), dial: std("#e8f6ff", 0.05, 0, { transparent: true, opacity: 0.85 }),
     valveRed: std("#d33b2c", 0.5), valveBlue: std("#2f72c4", 0.5), hose: std("#2f8d3a", 0.6), orange: std("#ef7a1d", 0.5, 0.2), drain: std("#5c666b", 0.4, 0.7),
   };
   const wallMat = std("#efebe4", 0.92), capMat = std("#33424a", 0.7), slabMat = std("#cfccc4", 0.9), plinthMat = std("#0f1e25", 0.95), edgeMat = std("#9aa3a6", 0.9);
-  const asphalt = std("#3b4044", 0.95), sidewalk = std("#c9c5bc", 0.9), laneMat = std("#f2efe6", 0.6), frameMat = std("#5b666b", 0.45, 0.6);
+  const asphalt = std("#444a4b", 0.95), sidewalk = std("#c9c5bc", 0.9), laneMat = std("#f2efe6", 0.6), frameMat = std("#4c575b", 0.4, 0.6);
+  const wallTile = std("#ffffff", 0.7, 0, { map: ftex.bathTile, bumpMap: relief.bathTile.bump, bumpScale: 0.004 });
+  const architectureMats: Record<ArchitectureMaterial, Material> = { plaster: wallMat, cut: capMat, frame: frameMat, glass: D.glass, sill: D.stone, skirting: D.white, tile: wallTile, door: D.woodLight };
   const pipeMat = new MeshBasicMaterial({ color: "#8fd3ec", transparent: true, opacity: 0.5, depthTest: false, depthWrite: false });
   const guideMat = new LineBasicMaterial({ color: "#5b7b86", transparent: true, opacity: 0.45 });
-  const shared = new Set<{ dispose(): void }>([...Object.values(ftex), ...Object.values(floorMats), ...Object.values(D), ...Object.values(F), wallMat, capMat, slabMat, plinthMat, edgeMat, pipeMat, guideMat, asphalt, sidewalk, laneMat, frameMat]);
+  const shared = new Set<{ dispose(): void }>([netTex, ...Object.values(ftex), ...Object.values(relief).flatMap(m => [m.bump, m.roughness]), ...Object.values(floorMats), ...Object.values(D), ...Object.values(F), wallMat, wallTile, capMat, slabMat, plinthMat, edgeMat, pipeMat, guideMat, asphalt, sidewalk, laneMat, frameMat]);
   const stripe = stripeTexture(), water = waterTexture();
   shared.add(stripe); shared.add(water);
 
@@ -307,103 +333,19 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   let edgeParts: EdgeParts[] = [];
   let roomAnchors = new Map<string, { v: Vector3; floor: number }>();
   let floorAnchors = new Map<number, Vector3>();
+  let floorHeights = new Map<number, number>();
   let guides: LineSegments | null = null;
+  let cutWalls: { floor: number; outward: WallAssembly["outward"]; upper: Group; cap: Group }[] = [];
   const owned = new Set<{ dispose(): void }>();
   const own = <T extends { dispose(): void }>(r: T): T => { owned.add(r); return r; };
+  const floorY = (f: number) => floorElevation(f, state.section);
 
   function clearSite() {
     scene.remove(root);
     for (const r of owned) r.dispose();
     owned.clear();
     root = new Group(); scene.add(root);
-    floorGroups = new Map(); nodeParts = new Map(); edgeParts = []; roomAnchors = new Map(); floorAnchors = new Map(); guides = null;
-  }
-
-  function fixtureModel(fx: Fixture, kind: WaterLayout["kind"], floor: number): FixtureModel {
-    const parts: Part[] = [], d = FIXTURE_DEPTH[fx], w = FIXTURE_WIDTH[fx], back = -d / 2;
-    const put = (geo: BufferGeometry, mat: Material, m: Matrix4) => parts.push({ geo, mat, m });
-    const box = (sx: number, sy: number, sz: number, mat: Material, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) => put(new BoxGeometry(sx, sy, sz), mat, M4(x, y, z, rx, ry, rz));
-    const cyl = (rt: number, rb: number, h: number, mat: Material, x: number, y: number, z: number, rx = 0, rz = 0, seg = 20, sz = 1) => put(new CylinderGeometry(rt, rb, h, seg), mat, M4(x, y, z, rx, 0, rz, 1, 1, sz));
-    const tor = (r: number, t: number, mat: Material, x: number, y: number, z: number, rx = 0, ry = 0, arc = Math.PI * 2, sz = 1) => put(new TorusGeometry(r, t, 8, 24, arc), mat, M4(x, y, z, rx, ry, 0, 1, 1, sz));
-    const V = (x: number, y: number, z: number) => new Vector3(x, y, z);
-    let top = 1, spouts: FixtureModel["spouts"] = [], sensor = V(-w / 2 - 0.12, 0.14, back + 0.1);
-    switch (fx) {
-      case "KITCHEN_SINK":
-        box(1.2, 0.86, 0.58, D.woodLight, 0, 0.43, 0); box(1.22, 0.04, 0.6, D.stone, 0, 0.88, 0);
-        box(0.6, 0.006, 0.44, D.steel, 0, 0.903, 0.02); box(0.54, 0.008, 0.38, F.drain, 0, 0.906, 0.02);
-        box(0.005, 0.7, 0.003, D.woodDark, 0, 0.44, 0.292);
-        cyl(0.022, 0.026, 0.06, F.chrome, 0, 0.93, -0.2); cyl(0.013, 0.013, 0.3, F.chrome, 0, 1.08, -0.2);
-        tor(0.09, 0.013, F.chrome, 0, 1.23, -0.11, 0, Math.PI / 2, Math.PI);
-        spouts = [{ a: V(0, 1.21, -0.02), b: V(0, 0.91, -0.02) }]; top = 1.33; break;
-      case "PREP_SINK":
-        for (const [x, z] of [[-0.65, -0.3], [0.65, -0.3], [-0.65, 0.3], [0.65, 0.3]]) cyl(0.02, 0.02, 0.86, D.steel, x, 0.43, z);
-        box(1.4, 0.05, 0.7, D.steel, 0, 0.885, 0); box(1.34, 0.02, 0.62, D.steel, 0, 0.2, 0); box(1.4, 0.18, 0.03, D.steel, 0, 0.99, -0.335);
-        for (const x of [-0.33, 0.33]) box(0.52, 0.012, 0.44, F.drain, x, 0.912, 0.03);
-        cyl(0.015, 0.015, 0.55, F.chrome, -0.33, 1.17, -0.3); box(0.02, 0.02, 0.25, F.chrome, -0.33, 1.44, -0.19); cyl(0.012, 0.012, 0.14, F.chrome, -0.33, 1.37, -0.07);
-        spouts = [{ a: V(-0.33, 1.3, -0.07), b: V(-0.33, 0.915, -0.07) }]; top = 1.5; break;
-      case "BASIN":
-        cyl(0.08, 0.11, 0.7, F.ceramic, 0, 0.35, -0.08); put(new RoundedBoxGeometry(0.52, 0.16, 0.42, 2, 0.05), F.ceramic, M4(0, 0.78, 0));
-        cyl(0.18, 0.18, 0.01, F.basinIn, 0, 0.862, 0.02, 0, 0, 24, 0.8);
-        cyl(0.018, 0.02, 0.1, F.chrome, 0, 0.91, -0.16); box(0.02, 0.02, 0.1, F.chrome, 0, 0.95, -0.12);
-        spouts = [{ a: V(0, 0.94, -0.07), b: V(0, 0.865, -0.07) }]; top = 1.0; break;
-      case "TOILET":
-        box(0.4, 0.36, 0.17, F.ceramic, 0, 0.6, -0.255); cyl(0.13, 0.16, 0.36, F.ceramic, 0, 0.18, 0.04, 0, 0, 24, 1.2);
-        cyl(0.19, 0.17, 0.08, F.ceramic, 0, 0.4, 0.06, 0, 0, 28, 1.25); tor(0.14, 0.035, F.ceramic, 0, 0.45, 0.06, Math.PI / 2, 0, Math.PI * 2, 1.2);
-        cyl(0.025, 0.025, 0.012, F.chrome, 0, 0.785, -0.255); top = 0.85; break;
-      case "SHOWER":
-        box(0.92, 0.05, 0.92, F.ceramic, 0, 0.025, 0); cyl(0.04, 0.04, 0.006, F.drain, 0, 0.053, 0.1);
-        box(0.92, 1.15, 0.012, D.glass, 0, 0.63, 0.455); box(0.012, 1.15, 0.92, D.glass, 0.455, 0.63, 0);
-        cyl(0.012, 0.012, 1.7, F.chrome, 0, 0.9, -0.44); box(0.02, 0.02, 0.25, F.chrome, 0, 1.74, -0.33); cyl(0.1, 0.1, 0.025, F.chrome, 0, 1.72, -0.21);
-        cyl(0.03, 0.03, 0.06, F.chrome, 0, 1.0, -0.43, Math.PI / 2);
-        spouts = Array.from({ length: 9 }, (_, k) => { const t = (k / 9) * Math.PI * 2, rr = k === 0 ? 0 : 0.06; return { a: V(Math.cos(t) * rr, 1.7, -0.21 + Math.sin(t) * rr), b: V(Math.cos(t) * rr * 2.6, 0.06, -0.15 + Math.sin(t) * rr * 2.6) }; });
-        sensor = V(-0.55, 0.14, -0.4); top = 1.85; break;
-      case "TANK":
-        box(0.5, 0.62, 0.4, D.white, 0, 0.31, -0.02); box(0.6, 0.24, 0.56, D.white, 0, 0.74, 0); box(0.5, 0.01, 0.42, F.basinIn, 0, 0.865, 0.03);
-        cyl(0.015, 0.015, 0.12, F.chrome, 0, 1.02, -0.22, Math.PI / 2); cyl(0.012, 0.012, 0.05, F.chrome, 0, 1.0, -0.16);
-        spouts = [{ a: V(0, 0.975, -0.16), b: V(0, 0.87, -0.16) }]; top = 1.1; break;
-      case "WASHER":
-        box(0.6, 0.86, 0.6, D.white, 0, 0.43, 0); cyl(0.21, 0.21, 0.012, D.glass, 0, 0.866, 0.03); box(0.6, 0.08, 0.08, D.white, 0, 0.9, -0.26);
-        box(0.12, 0.03, 0.01, D.black, 0, 0.91, -0.215); cyl(0.015, 0.015, 0.08, F.chrome, 0.22, 1.0, -0.3, Math.PI / 2); top = 1.0; break;
-      case "GARDEN_TAP":
-        cyl(0.015, 0.015, 0.6, F.bronze, 0, 0.3, -0.06); cyl(0.02, 0.02, 0.08, F.chrome, 0, 0.62, -0.03, Math.PI / 2); box(0.07, 0.012, 0.012, F.chrome, 0, 0.66, -0.03);
-        cyl(0.012, 0.012, 0.06, F.chrome, 0, 0.6, 0.01); tor(0.22, 0.022, F.hose, 0.34, 0.03, 0.14, Math.PI / 2);
-        spouts = [{ a: V(0, 0.57, 0.015), b: V(0, 0.01, 0.06) }]; top = 0.75; break;
-      case "HOSE":
-        cyl(0.015, 0.015, 0.6, F.bronze, -0.14, 0.3, -0.07); cyl(0.02, 0.02, 0.08, F.chrome, -0.14, 0.62, -0.04, Math.PI / 2); box(0.07, 0.012, 0.012, F.chrome, -0.14, 0.66, -0.04);
-        cyl(0.2, 0.2, 0.1, D.rackOrange, 0.14, 0.55, -0.04, Math.PI / 2); cyl(0.12, 0.12, 0.11, F.hose, 0.14, 0.55, -0.04, Math.PI / 2);
-        spouts = [{ a: V(-0.14, 0.58, 0.0), b: V(-0.14, 0.01, 0.07) }]; top = 0.82; break;
-      case "DRINKING":
-        box(0.34, 0.92, 0.32, D.steel, 0, 0.46, 0); box(0.3, 0.03, 0.26, F.drain, 0, 0.935, 0.01); cyl(0.012, 0.012, 0.05, F.chrome, 0, 0.97, -0.05);
-        box(0.06, 0.06, 0.02, D.black, 0.1, 0.8, 0.165);
-        spouts = [{ a: V(0, 0.995, -0.05), b: V(0, 0.945, 0.03) }]; top = 1.05; break;
-      case "MIXER":
-        put(new CylinderGeometry(0.28, 0.42, 0.62, 28, 1, false), F.orange, M4(0, 0.98, 0.05, -0.6)); tor(0.42, 0.03, F.orange, 0, 0.98, 0.05, Math.PI / 2 - 0.6);
-        box(0.8, 0.06, 1.0, D.black, 0, 0.55, 0); for (const [x, z] of [[-0.35, -0.4], [0.35, -0.4], [-0.35, 0.4], [0.35, 0.4]]) box(0.06, 0.55, 0.06, D.black, x, 0.27, z);
-        for (const x of [-0.46, 0.46]) tor(0.17, 0.05, D.black, x, 0.18, -0.35, 0, Math.PI / 2);
-        box(0.25, 0.25, 0.3, D.black, 0.35, 0.72, -0.4); cyl(0.025, 0.025, 1.3, F.bronze, -0.55, 0.65, 0.4); box(0.02, 0.02, 0.22, F.chrome, -0.55, 1.3, 0.5);
-        spouts = [{ a: V(-0.55, 1.28, 0.6), b: V(-0.12, 1.12, 0.35) }]; sensor = V(-0.7, 0.14, 0.4); top = 1.45; break;
-      case "TAP":
-        cyl(0.02, 0.02, 0.7, F.bronze, 0, 0.35, -0.04); cyl(0.02, 0.02, 0.08, F.chrome, 0, 0.7, 0, Math.PI / 2); box(0.07, 0.012, 0.012, F.chrome, 0, 0.74, 0);
-        put(new CylinderGeometry(0.15, 0.12, 0.3, 20, 1, true), D.black, M4(0, 0.15, 0.13)); cyl(0.12, 0.12, 0.01, D.black, 0, 0.005, 0.13);
-        spouts = [{ a: V(0, 0.68, 0.045), b: V(0, 0.28, 0.12) }]; top = 0.85; break;
-      case "HYDROMETER":
-        box(0.56, 0.72, 0.06, D.concrete, 0, 0.36, -0.13); for (const x of [-0.18, 0.18]) cyl(0.022, 0.022, 0.5, D.steel, x, 0.25, -0.04);
-        cyl(0.022, 0.022, 0.4, D.steel, 0, 0.5, -0.04, 0, Math.PI / 2); cyl(0.07, 0.07, 0.14, D.black, 0, 0.5, -0.04, 0, Math.PI / 2);
-        cyl(0.075, 0.075, 0.06, F.bronze, 0, 0.56, -0.04); cyl(0.065, 0.065, 0.012, F.dial, 0, 0.596, -0.04); box(0.08, 0.015, 0.015, F.valveRed, 0.12, 0.56, -0.04);
-        sensor = V(0, 0.62, -0.04); top = 0.8; break;
-      case "WATER_TANK": {
-        const h = floor === 0 && (kind === "HOUSE" || kind === "CONSTRUCTION") ? 1.7 : 0.25;
-        for (const [x, z] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) box(0.09, h, 0.09, D.concrete, x, h / 2, z);
-        box(1.45, 0.08, 1.45, D.concrete, 0, h + 0.04, 0);
-        put(new CylinderGeometry(0.62, 0.5, 0.82, 40), F.tankBlue, M4(0, h + 0.49, 0)); cyl(0.66, 0.66, 0.06, F.tankLid, 0, h + 0.93, 0, 0, 0, 40); cyl(0.2, 0.2, 0.05, F.tankLid, 0, h + 0.98, 0);
-        cyl(0.025, 0.025, h + 0.12, D.steel, 0.3, (h + 0.12) / 2, 0.45);
-        sensor = V(0.5, h + 0.5, 0.45); top = h + 1.1; break;
-      }
-      default: // MANIFOLD
-        box(0.08, 0.45, 0.08, D.concrete, 0, 0.225, -0.05); cyl(0.025, 0.025, 0.5, D.steel, 0, 0.45, -0.05, 0, Math.PI / 2);
-        box(0.07, 0.02, 0.02, F.valveRed, -0.12, 0.5, -0.05); box(0.07, 0.02, 0.02, F.valveBlue, 0.12, 0.5, -0.05); top = 0.65;
-    }
-    return { parts, top, spouts, sensor };
+    floorGroups = new Map(); nodeParts = new Map(); edgeParts = []; roomAnchors = new Map(); floorAnchors = new Map(); floorHeights = new Map(); guides = null; cutWalls = [];
   }
 
   function buildSite(layout: WaterLayout) {
@@ -415,15 +357,16 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     const group = (f: number) => { let g = floorGroups.get(f); if (!g) { g = new Group(); floorGroups.set(f, g); root.add(g); } return g; };
 
     // Base da maquete (placa escura sob o térreo) e laje de cada pavimento.
-    // Base da maquete com a rua na frente do lote (calçada de 1,2 m, meio-fio e pista de 3 m com faixa tracejada).
+    // Recorte urbano discreto: calçada e só parte da pista. O lote ocupa o quadro; a rua é contexto.
     const plinth = own(new RoundedBoxGeometry(fp.w + 1.6, 0.32, fp.d + 1.6 + STREET, 2, 0.12));
     const base = new Mesh(plinth, plinthMat); base.position.set(0, -SLAB_T - 0.16, STREET / 2); base.receiveShadow = true; group(0).add(base);
     {
       const z0 = fp.d / 2 + 0.8, top = -SLAB_T, W = fp.w + 1.4;
-      batch(0).add(new BoxGeometry(W, 0.05, 1.2), sidewalk, M4(0, top + 0.025, z0 + 0.6));
-      batch(0).add(new BoxGeometry(W, 0.07, 0.1), sidewalk, M4(0, top + 0.035, z0 + 1.25));
-      batch(0).add(new BoxGeometry(W, 0.012, 3.0), asphalt, M4(0, top + 0.006, z0 + 2.8));
-      for (let x = -W / 2 + 0.6; x < W / 2 - 0.6; x += 2.2) batch(0).add(new BoxGeometry(1.1, 0.004, 0.1), laneMat, M4(x + 0.55, top + 0.014, z0 + 2.8));
+      batch(0).add(new BoxGeometry(W, 0.05, 0.9), sidewalk, M4(0, top + 0.025, z0 + 0.45));
+      batch(0).add(new BoxGeometry(W, 0.07, 0.1), sidewalk, M4(0, top + 0.035, z0 + 0.95));
+      batch(0).add(new BoxGeometry(W, 0.012, 1.65), asphalt, M4(0, top + 0.006, z0 + 1.825));
+      for (let x = -W / 2 + 0.6; x < W / 2 - 0.6; x += 2.2) batch(0).add(new BoxGeometry(1.1, 0.004, 0.07), laneMat, M4(x + 0.55, top + 0.014, z0 + 2.25));
+      for (let x = -W / 2 + 0.4; x < W / 2; x += 1.2) batch(0).add(new BoxGeometry(0.008, 0.002, 0.89), edgeMat, M4(x, top + 0.052, z0 + 0.45));
     }
     for (const f of p.floors) {
       const y = floorY(f);
@@ -452,48 +395,63 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       }
       roomAnchors.set(r.id, { v: new Vector3(r.rect.x0 + 0.25, floorY(r.floor) + 0.05, r.rect.z0 + 0.32), floor: r.floor });
     }
-    // Paredes cortadas na altura do peito, com a "tampa" escura do corte (padrão de planta humanizada).
-    // Parede EXTERNA (um lado dentro de cômodo coberto, o outro fora) com 1,8 m ou mais ganha janela: peitoril a 0,9 m,
-    // vidro e caixilho até o corte.
-    const indoor = (f: number, x: number, z: number) => p.rooms.some(r => r.floor === f && r.type !== "OUTDOOR" && r.type !== "SITE" && x > r.rect.x0 && x < r.rect.x1 && z > r.rect.z0 && z < r.rect.z1);
-    const SILL = 0.9;
-    for (const w of p.walls) {
-      const sx = w.x1 - w.x0, sz = w.z1 - w.z0, cx = (w.x0 + w.x1) / 2, cz = (w.z0 + w.z1) / 2, y = floorY(w.floor);
-      const alongX = sx >= sz, len = alongX ? sx : sz, t = alongX ? sz : sx, off = t / 2 + 0.2;
-      const a = alongX ? indoor(w.floor, cx, cz - off) : indoor(w.floor, cx - off, cz), b = alongX ? indoor(w.floor, cx, cz + off) : indoor(w.floor, cx + off, cz);
-      batch(w.floor).add(new BoxGeometry(sx + 0.002, 0.02, sz + 0.002), capMat, M4(cx, y + WALL_H + 0.01, cz));
-      if (a === b || len < 1.8) { batch(w.floor).add(new BoxGeometry(sx, WALL_H, sz), wallMat, M4(cx, y + WALL_H / 2, cz)); continue; }
-      const win = Math.min(1.6, len * 0.55), up = WALL_H - SILL;
-      const piece = (along: number, height: number, at: number, yc: number, mat: Material, thick = t) =>
-        batch(w.floor).add(alongX ? new BoxGeometry(along, height, thick) : new BoxGeometry(thick, height, along), mat, alongX ? M4(cx + at, y + yc, cz) : M4(cx, y + yc, cz + at));
-      piece(len, SILL, 0, SILL / 2, wallMat);
-      const side = (len - win) / 2;
-      piece(side, up, -(win + side) / 2, SILL + up / 2, wallMat); piece(side, up, (win + side) / 2, SILL + up / 2, wallMat);
-      piece(win, up - 0.02, 0, SILL + up / 2, D.glass, 0.012);
-      piece(win + 0.06, 0.03, 0, SILL + 0.015, frameMat, t + 0.05);
-      piece(0.03, up, 0, SILL + up / 2, frameMat, 0.04);
+    // Paredes em duas alturas, com corte dependente da câmera. Lotes por orientação/pavimento mantêm baixo o custo.
+    const upperBatches = new Map<string, { batch: Batch; caps: Batch; floor: number; outward: WallAssembly["outward"] }>();
+    for (const wall of architecture(p)) {
+      const key = `${wall.floor}:${wall.outward?.x ?? "i"}:${wall.outward?.z ?? "i"}`;
+      let entry = upperBatches.get(key);
+      if (!entry) { entry = { batch: new Batch(), caps: new Batch(), floor: wall.floor, outward: wall.outward }; upperBatches.set(key, entry); }
+      const add = (part: typeof wall.lower[number], into: Batch) => {
+        const geo = new BoxGeometry(part.sx, part.sy, part.sz);
+        if (part.material === "tile") {
+          const uv = geo.attributes.uv, pos = geo.attributes.position, normal = geo.attributes.normal;
+          for (let j = 0; j < uv.count; j++) uv.setXY(j, (Math.abs(normal.getX(j)) > 0.5 ? pos.getZ(j) : pos.getX(j)) / TILE_M.bathTile, pos.getY(j) / TILE_M.bathTile);
+        }
+        into.add(geo, architectureMats[part.material], M4(part.x, floorY(wall.floor) + part.y, part.z)); geo.dispose();
+      };
+      for (const part of wall.lower) add(part, part.material === "cut" ? entry.caps : batch(wall.floor));
+      for (const part of wall.upper) add(part, entry.batch);
     }
-    // Folha da porta aberta a 90° (portas comuns; a entrada larga do salão fica livre).
-    for (const d of p.doors) if (d.width <= 1.05) {
-      const r0 = p.rooms.find(r => r.id === d.rooms[0])!, y = floorY(d.floor), h = WALL_H - 0.06;
-      const inward = d.along === "x" ? Math.sign((r0.rect.z0 + r0.rect.z1) / 2 - d.z) || 1 : Math.sign((r0.rect.x0 + r0.rect.x1) / 2 - d.x) || 1;
-      if (d.along === "x") batch(d.floor).add(new BoxGeometry(0.04, h, d.width - 0.05), D.woodLight, M4(d.x - d.width / 2 + 0.03, y + h / 2, d.z + inward * (d.width / 2)));
-      else batch(d.floor).add(new BoxGeometry(d.width - 0.05, h, 0.04), D.woodLight, M4(d.x + inward * (d.width / 2), y + h / 2, d.z - d.width / 2 + 0.03));
+    for (const entry of upperBatches.values()) {
+      const upper = new Group(), cap = new Group(); group(entry.floor).add(upper, cap);
+      entry.batch.flush(upper, owned); entry.caps.flush(cap, owned);
+      cutWalls.push({ floor: entry.floor, outward: entry.outward, upper, cap });
     }
     // Móveis.
     // Móveis: cantos arredondados nos estofados e marcenaria (produto de gôndola e tapete ficam retos e leves).
     const SOFT: ReadonlySet<Mat> = new Set(["fabric", "fabricDark", "mattress", "pillow", "wood", "woodDark", "woodLight", "white", "stone", "container", "cardboard"]);
-    const unit = { sphere: new SphereGeometry(0.5, 14, 10), cone: new ConeGeometry(0.5, 1, 20), body: new CapsuleGeometry(0.15, 0.78, 4, 12), head: new SphereGeometry(0.115, 14, 10), helmet: new SphereGeometry(0.125, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2) };
-    for (const { floor, item: it } of p.items) {
+    const unit = { sphere: new SphereGeometry(0.5, 14, 10), leaf: new IcosahedronGeometry(0.5, 1), branch: new CylinderGeometry(0.018, 0.04, 1, 7), trunk: new CylinderGeometry(0.055, 0.095, 1.6, 10), cone: new ConeGeometry(0.5, 1, 20), body: new CapsuleGeometry(0.15, 0.42, 4, 10), limb: new CapsuleGeometry(0.045, 0.5, 3, 8), head: new SphereGeometry(0.105, 12, 8), helmet: new SphereGeometry(0.125, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2) };
+    // Escada aberta é um detalhe do pavimento em inspeção; não atravessa as lajes reunidas da vista de volume.
+    const items = [...p.items, ...(state.section === "inspection" ? buildingDetails(p) : [])];
+    for (const { floor, item: it } of items.flatMap(v => [v, ...furnitureDetails(v.item).map(item => ({ floor: v.floor, item }))])) {
+      floorHeights.set(floor, Math.max(floorHeights.get(floor) ?? CEILING_H, it.y + it.sy / 2));
       const y = floorY(floor) + it.y, mat = D[it.mat], small = Math.min(it.sx, it.sy, it.sz);
       if (it.shape === "box") {
         const geo = SOFT.has(it.mat) && small > 0.06 ? new RoundedBoxGeometry(it.sx, it.sy, it.sz, 2, Math.min(0.035, small * 0.25)) : new BoxGeometry(it.sx, it.sy, it.sz);
         batch(floor).add(geo, mat, M4(it.x, y, it.z, 0, it.ry ?? 0)); geo.dispose();
-      } else if (it.shape === "cyl") batch(floor).add(new CylinderGeometry(it.sx / 2, it.sx / 2, it.sy, 16), mat, M4(it.x, y, it.z, it.ry ? Math.PI / 2 : 0, 0, 0));
+      } else if (it.shape === "cyl") {
+        const geo = new CylinderGeometry(it.sx / 2, it.sx / 2, it.sy, 16);
+        batch(floor).add(geo, mat, M4(it.x, y, it.z, it.ry ? Math.PI / 2 : 0, 0, 0, 1, 1, it.sz / it.sx)); geo.dispose();
+      } else if (it.shape === "tree") {
+        const rand = lcg(Math.round((it.x + 30) * 1477 + (it.z + 30) * 1907)), scale = it.sx;
+        batch(floor).add(unit.trunk, D.bark, M4(it.x, y + 0.8 * scale, it.z, 0, it.ry ?? 0, 0, scale, scale, scale));
+        for (let k = 0; k < 7; k++) {
+          const a = k * 2.39996 + (it.ry ?? 0), radius = 0.24 + rand() * 0.3;
+          batch(floor).add(unit.branch, D.bark, M4(it.x + Math.cos(a) * radius / 2, y + (1.35 + rand() * 0.3) * scale, it.z + Math.sin(a) * radius / 2, 0.5, a, 0.55, scale, scale, scale));
+        }
+        for (let k = 0; k < 28; k++) {
+          const a = k * 2.39996, radius = Math.sqrt(rand()) * 0.65, h = 1.65 + rand() * 0.65, s = 0.36 + rand() * 0.22;
+          batch(floor).add(unit.leaf, [D.plant, D.plantLight, D.plantDark][k % 3], M4(it.x + Math.cos(a) * radius * scale, y + h * scale, it.z + Math.sin(a) * radius * scale, rand(), a, rand(), s * scale, s * scale * 0.85, s * scale));
+        }
+      }
       else if (it.shape === "person") {
-        // Figura de maquete (~1,65 m): corpo, cabeça e, na obra, capacete laranja.
+        // Silhueta articulada de escala humana, sem a cápsula única que parecia flutuar sobre o piso.
         const fy = floorY(floor);
-        batch(floor).add(unit.body, D.figure, M4(it.x, fy + 0.6, it.z, 0, it.ry ?? 0, 0, 1.08, 1, 0.72));
+        batch(floor).add(unit.body, D.figure, M4(it.x, fy + 1.08, it.z, 0, it.ry ?? 0, 0, 1.08, 1, 0.65));
+        for (const side of [-1, 1]) {
+          batch(floor).add(unit.limb, D.figure, M4(it.x + side * 0.085, fy + 0.42, it.z, 0, 0, side * 0.05, 1.15, 1.35, 1.15));
+          batch(floor).add(unit.limb, D.figure, M4(it.x + side * 0.21, fy + 1.02, it.z, 0, 0, side * 0.12));
+        }
         batch(floor).add(unit.head, D.figure, M4(it.x, fy + 1.47, it.z));
         if (it.mat !== "figure") batch(floor).add(unit.helmet, D[it.mat], M4(it.x, fy + 1.5, it.z));
       } else batch(floor).add(unit[it.shape], mat, M4(it.x, y, it.z, 0, 0, 0, it.sx, it.sy, it.sz));
@@ -505,7 +463,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     const ledGeo = own(new SphereGeometry(0.03, 12, 8)), sensorGeo = own(new CylinderGeometry(0.035, 0.035, 0.12, 14)), splashGeo = own(new RingGeometry(0.02, 0.07, 20));
     for (const n of layout.nodes) {
       const pose = p.poses.get(n.id)!, f = floorOf(n), y = floorY(f), g = group(f);
-      const model = fixtureModel(pose.fixture, layout.kind, f);
+      const model = fixtureModel(pose.fixture, layout.kind, f, D, F);
       const place = new Matrix4().compose(new Vector3(pose.x, y, pose.z), new Quaternion().setFromEuler(new Euler(0, pose.ry, 0)), new Vector3(1, 1, 1));
       for (const part of model.parts) { batch(f).add(part.geo, part.mat, place.clone().multiply(part.m)); part.geo.dispose(); }
       const toWorldPt = (v: Vector3) => v.clone().applyMatrix4(place);
@@ -545,7 +503,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     // Canos em "raio-x" (sempre visíveis, por cima de tudo) + manga com chevrons quando o destino mede fluxo.
     for (const pipe of p.pipes) {
       if (pipe.points.length < 2) continue;
-      const pts = pipe.points.map(q => new Vector3(q.x, q.y, q.z));
+      const pts = pipe.points.map(q => new Vector3(q.x, floorY((q.y - PIPE_Y) / EXPLODE_STEP) + PIPE_Y, q.z));
       const path = new CurvePath<Vector3>();
       let cur = pts[0].clone();
       for (let i = 1; i < pts.length; i++) {
@@ -576,7 +534,8 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   }
 
   // ---------- estado ----------
-  const state: Required<MapSceneInput> = { layout: { kind: "HOUSE", rooms: [], nodes: [], edges: [] }, nodes: {}, simulated: false, selected: "", still: false, visible: true, floor: "all", interactive: false };
+  const state: Required<MapSceneInput> = { layout: { kind: "HOUSE", rooms: [], nodes: [], edges: [] }, nodes: {}, simulated: false, selected: "", still: false, visible: true, floor: "all", interactive: false, section: "inspection", insetTop: 56 };
+  let cameraPreset: CameraPreset = "inspection";
   let raf = false, last = 0, disposed = false, siteKey = "", floorKey = "";
   let budget: BudgetState = budgetStart(performance.now());
   const deltas: number[] = [];
@@ -584,6 +543,16 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   const home = { target: new Vector3(), position: new Vector3(), dist: 10 };
 
   const floorVisible = (f: number) => state.floor === "all" || state.floor === f;
+  function applyCut() {
+    const view = camera.position.clone().sub(controls.target);
+    let changed = false;
+    for (const w of cutWalls) {
+      const visible = upperWallVisible(state.section, w.outward, view, w.upper.visible);
+      if (w.upper.visible !== visible) changed = true;
+      w.upper.visible = visible; w.cap.visible = !visible;
+    }
+    if (changed) { ao.dirty = true; renderer.shadowMap.needsUpdate = true; }
+  }
   const moving = () => edgeParts.some(e => e.sleeve.visible) || [...nodeParts.values()].some(n => n.streams.some(s => s.mesh.visible));
   const applyLook = () => {
     const flowColor = state.simulated ? COLORS.flowSim : COLORS.flow;
@@ -594,14 +563,14 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       parts.led?.color.set(v.state === "FLOW" || v.state === "IDLE" ? flowColor : v.state === "STALE" ? COLORS.stale : COLORS.none);
       parts.alert.visible = v.alert;
       parts.select.visible = state.selected === id;
-      const flowing = v.state === "FLOW" && stripeSpeed(v.flowLpm) > 0;
+      const flowing = !!state.layout.nodes.find(n => n.id === id)?.deviceId && v.state === "FLOW" && stripeSpeed(v.flowLpm) > 0;
       for (const s of parts.streams) { s.mesh.visible = flowing && floorVisible(parts.floor); s.mat.color.set(state.simulated ? COLORS.flowSim : COLORS.water); }
     }
     for (const e of edgeParts) {
       const v = state.nodes[e.to];
       const shown = floorVisible(e.floors[0]) || floorVisible(e.floors[1]);
       e.pipe.visible = shown;
-      e.sleeve.visible = shown && !!v && v.state === "FLOW" && stripeSpeed(v.flowLpm) > 0;
+      e.sleeve.visible = shown && !!state.layout.nodes.find(n => n.id === e.to)?.deviceId && !!v && v.state === "FLOW" && stripeSpeed(v.flowLpm) > 0;
       e.mat.color.set(v?.alert ? COLORS.warn : flowColor);
     }
   };
@@ -621,40 +590,18 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       const y = floorY(f), m = f === 0 ? 0.8 : 0.15;
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
         pts.push(new Vector3(sx * (fp.w / 2 + m), y - SLAB_T - (f === 0 ? 0.32 : 0), sz * (fp.d / 2 + m)));
-        pts.push(new Vector3(sx * fp.w / 2, y + WALL_H, sz * fp.d / 2));
+        pts.push(new Vector3(sx * fp.w / 2, y + (floorHeights.get(f) ?? CEILING_H), sz * fp.d / 2));
       }
     }
     for (const n of nodeParts.values()) if (floorVisible(n.floor)) pts.push(n.anchor.clone());
-    const box = pts.length ? new Box3().setFromPoints(pts) : visibleBox(), center = box.getCenter(new Vector3());
+    const box = pts.length ? new Box3().setFromPoints(pts) : visibleBox();
     const stacked = state.floor === "all" && floorGroups.size > 1;
-    // Prédio inteiro: câmera mais baixa (~29°) para enxergar dentro de cada andar sob a laje de cima.
-    const el = stacked ? 0.5 : camera.aspect < 1.2 ? 0.92 : 0.72, az = -0.5;
-    const dir = new Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
-    // Enquadramento exato: para cada canto da caixa, a distância mínima para ele caber no campo de visão (com margem
-    // em cima para os rótulos). Base da câmera: frente = -dir, direita e cima ortogonais.
-    const fwd = dir.clone().negate(), right = new Vector3().crossVectors(fwd, new Vector3(0, 1, 0)).normalize(), up = new Vector3().crossVectors(right, fwd);
-    const tanV = Math.tan((camera.fov * Math.PI) / 360), tanH = tanV * camera.aspect, TOP = 0.86, BOT = 0.97, SIDE = 0.95;
-    const fitPts = pts.length ? pts : [box.min, box.max];
-    // Distância mínima para todo ponto caber (profundidade na câmera = dist + along) e, em seguida, recentraliza:
-    // o centro da caixa não é o centro na tela (o que está perto da câmera desce mais). 5 rodadas equilibram as bordas.
-    const target = center.clone();
-    let dist = 1;
-    for (let k = 0; k < 5; k++) {
-      dist = 1;
-      for (const q of fitPts) {
-        const v = q.clone().sub(target), along = v.dot(fwd), sx = Math.abs(v.dot(right)), sy = v.dot(up);
-        dist = Math.max(dist, sx / (tanH * SIDE) - along, (sy > 0 ? sy / (tanV * TOP) : -sy / (tanV * BOT)) - along);
-      }
-      camera.position.copy(target).addScaledVector(dir, dist); camera.lookAt(target); camera.updateMatrixWorld();
-      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      for (const q of fitPts) { const s = q.clone().project(camera); x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); y0 = Math.min(y0, s.y); y1 = Math.max(y1, s.y); }
-      target.addScaledVector(right, ((x0 + x1) / 2) * tanH * dist).addScaledVector(up, ((y0 + y1) / 2 - (TOP - BOT) / 2) * tanV * dist);
-    }
-    home.target.copy(target);
-    home.position.copy(target).addScaledVector(dir, dist);
-    home.dist = dist;
+    const fit = fitCamera(pts.length ? pts : [box.min, box.max], camera.aspect, cameraPreset, stacked, camera.fov, { top: state.insetTop, height: host.clientHeight });
+    const dist = fit.distance;
+    home.target.copy(fit.target); home.position.copy(fit.position); home.dist = dist;
     controls.minDistance = dist * 0.25; controls.maxDistance = dist * 2.4;
     camera.position.copy(home.position); controls.target.copy(home.target); controls.update();
+    applyCut();
     camera.near = Math.max(0.05, dist / 200); camera.far = dist * 20; camera.updateProjectionMatrix();
     // Sombra: luz do sol enquadra a cena inteira (todos os pavimentos), calculada uma vez.
     const all = visibleBox(), c = all.getCenter(new Vector3()), r = all.getSize(new Vector3()).length() / 2;
@@ -670,7 +617,8 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
     camera.aspect = w / h; camera.updateProjectionMatrix();
   };
 
-  const draw = () => { if (!disposed && state.visible && document.visibilityState === "visible") { composer.render(); cb.onFrame?.(); } };
+  const render = () => { renderer.info.reset(); composer.render(); cb.onFrame?.(); };
+  const draw = () => { if (!disposed && state.visible && document.visibilityState === "visible") render(); };
   const wantsLoop = () => !disposed && state.visible && !state.still && document.visibilityState === "visible" && moving();
   const tick = (now: number) => {
     const dtMs = last ? Math.max(0, now - last) : 16.7;
@@ -687,14 +635,14 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       s.phase = (s.phase + stripeSpeed(state.nodes[id]?.flowLpm ?? null) * 1.6 * dt) % 1;
       s.tex.offset.y = s.phase;
     }
-    composer.render();
+    render();
     deltas.push(dtMs); if (deltas.length > 90) deltas.shift();
     if (now - lastBudgetAt > 500) {
       lastBudgetAt = now;
       const next = frameBudgetStep(budget, now, median(deltas));
       if (next.level !== budget.level) {
         budget = next;
-        if (budget.level === 1) { dpr = 1; renderer.setPixelRatio(1); fit(); }
+        if (budget.level === 1) { dpr = 1; renderer.setPixelRatio(1); ao.enabled = false; fit(); }
         else if (budget.level === 2) { stopLoop(); cb.onBudget(); return; }
       } else budget = next;
     }
@@ -709,7 +657,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   function stopLoop() { if (!raf) return; raf = false; renderer.setAnimationLoop(null); }
   const refresh = () => { if (wantsLoop()) startLoop(); else { stopLoop(); draw(); } };
 
-  controls.addEventListener("change", () => { ao.dirty = true; if (!raf) draw(); cb.onView?.(); });
+  controls.addEventListener("change", () => { applyCut(); ao.dirty = true; if (!raf) draw(); cb.onView?.(); });
   const zoom = (factor: number) => {
     const dir = camera.position.clone().sub(controls.target);
     const len = Math.min(controls.maxDistance, Math.max(controls.minDistance, dir.length() * factor));
@@ -722,7 +670,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   document.addEventListener("visibilitychange", onVisibility);
   const onLost = (e: Event) => { e.preventDefault(); stopLoop(); if (!disposed) cb.onLost(); };
   canvas.addEventListener("webglcontextlost", onLost);
-  const ro = new ResizeObserver(() => { fit(); draw(); cb.onView?.(); });
+  const ro = new ResizeObserver(() => { fit(); if (siteKey) fitView(); draw(); cb.onView?.(); });
   ro.observe(host);
   fit();
 
@@ -733,8 +681,8 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
   return {
     ready,
     update(i) {
-      Object.assign(state, { floor: "all", interactive: false, ...i });
-      const keyNow = JSON.stringify([i.layout.kind, i.layout.rooms, i.layout.nodes.map(n => [n.id, n.kind, n.x, n.y, n.fixture, n.floor, !!n.deviceId]), i.layout.edges]);
+      Object.assign(state, { floor: "all", interactive: false, section: "inspection", insetTop: 56, ...i });
+      const keyNow = JSON.stringify([i.layout.kind, i.layout.rooms, i.layout.nodes.map(n => [n.id, n.kind, n.x, n.y, n.fixture, n.floor, !!n.deviceId]), i.layout.edges, state.section]);
       let refit = false;
       if (keyNow !== siteKey) {
         siteKey = keyNow;
@@ -743,7 +691,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
         // Peças novas: compila antes do próximo desenho (sem travar o primeiro quadro com a cena nova).
         void renderer.compileAsync(scene, camera).then(() => { if (!disposed) { applyLook(); refresh(); } });
       }
-      const fk = String(state.floor);
+      const fk = `${state.floor}:${state.insetTop}`;
       if (fk !== floorKey || refit) {
         floorKey = fk;
         for (const [f, g] of floorGroups) g.visible = floorVisible(f);
@@ -754,6 +702,7 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       canvas.style.touchAction = state.interactive ? "none" : "pan-y";
       canvas.style.cursor = state.interactive ? "grab" : "default";
       applyLook();
+      applyCut();
       ao.dirty = true;
       refresh();
       if (refit) cb.onView?.();
@@ -766,7 +715,15 @@ export function createMapScene(host: HTMLElement, cb: Callbacks): MapScene {
       if (state.floor === "all" && floorAnchors.size > 1) for (const [f, v] of floorAnchors) if (inFront(v)) floors[String(f)] = toScreen(v);
       return { nodes, rooms, floors, size: { w: host.clientWidth, h: host.clientHeight } };
     },
-    resetView() { camera.position.copy(home.position); controls.target.copy(home.target); controls.update(); },
+    resetView() { cameraPreset = "inspection"; fitView(); ao.dirty = true; refresh(); cb.onView?.(); },
+    setCamera(preset) { cameraPreset = preset; fitView(); ao.dirty = true; refresh(); cb.onView?.(); },
+    focusNode(id) {
+      const n = nodeParts.get(id); if (!n || !floorVisible(n.floor)) return;
+      const dir = camera.position.clone().sub(controls.target).normalize();
+      controls.target.copy(n.anchor).add(new Vector3(0, -0.5, 0));
+      camera.position.copy(controls.target).addScaledVector(dir, Math.max(4, Math.min(12, home.dist * 0.42)));
+      controls.update(); ao.dirty = true; refresh(); cb.onView?.();
+    },
     zoom,
     dispose() {
       if (disposed) return;

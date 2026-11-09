@@ -167,8 +167,8 @@ export function walls(kind: Kind, layout: Pick<WaterLayout, "rooms">, doors: Doo
 // ---------------------------------------------------------------------------------------------------------------
 /** Profundidade de cada peça (frente-fundo), em metros. */
 export const FIXTURE_DEPTH: Record<Fixture, number> = {
-  HYDROMETER: 0.32, WATER_TANK: 1.3, MANIFOLD: 0.2, KITCHEN_SINK: 0.6, PREP_SINK: 0.7, BASIN: 0.48, TOILET: 0.68, SHOWER: 0.95,
-  TANK: 0.56, WASHER: 0.62, GARDEN_TAP: 0.16, HOSE: 0.22, DRINKING: 0.36, MIXER: 1.3, TAP: 0.16,
+  HYDROMETER: 0.32, WATER_TANK: 1.5, MANIFOLD: 0.2, KITCHEN_SINK: 0.6, PREP_SINK: 0.7, BASIN: 0.48, TOILET: 0.68, SHOWER: 0.95,
+  TANK: 0.56, WASHER: 0.62, GARDEN_TAP: 0.8, HOSE: 0.28, DRINKING: 0.36, MIXER: 1.3, TAP: 0.6,
 };
 /** Peças que ficam soltas no meio (não encostam). */
 const FREE: ReadonlySet<Fixture> = new Set(["WATER_TANK", "MIXER"]);
@@ -219,10 +219,10 @@ export function pipeRoute(a: Pose, b: Pose): P3[] {
 // ---------------------------------------------------------------------------------------------------------------
 export type Mat =
   | "fabric" | "fabricDark" | "wood" | "woodDark" | "woodLight" | "white" | "steel" | "black" | "stone" | "rug" | "mattress" | "pillow"
-  | "plant" | "bark" | "pot" | "cardboard" | "rackOrange" | "rackBlue" | "concrete" | "brick" | "sand" | "net" | "container"
+  | "plant" | "plantLight" | "plantDark" | "bark" | "pot" | "cardboard" | "rackOrange" | "rackBlue" | "concrete" | "brick" | "sand" | "net" | "container"
   | "p0" | "p1" | "p2" | "p3" | "p4" | "p5" | "fruitR" | "fruitO" | "fruitG" | "tile" | "glass" | "figure";
 /** "person": figura de maquete (corpo e cabeça na cor neutra; `mat` diferente de "figure" pinta o capacete). */
-export type Item = { shape: "box" | "cyl" | "sphere" | "cone" | "person"; mat: Mat; x: number; y: number; z: number; sx: number; sy: number; sz: number; ry?: number };
+export type Item = { shape: "box" | "cyl" | "sphere" | "cone" | "person" | "tree"; mat: Mat; x: number; y: number; z: number; sx: number; sy: number; sz: number; ry?: number };
 
 function rng(seed: string) {
   let h = 2166136261;
@@ -249,13 +249,15 @@ export function furnish(i: FloorPlanInput): Item[] {
   /** Peça só entra se couber livre; devolve se entrou. */
   const place = (hx: number, hz: number, x: number, z: number, add: () => void) => { if (!isClear(i, x, z, hx, hz)) return false; add(); i.obstacles.push({ x, z, r: Math.max(hx, hz) * 0.75 }); return true; };
   const tree = (x: number, z: number, s = 1) => place(0.6 * s, 0.6 * s, x, z, () => {
-    items.push({ shape: "cyl", mat: "bark", x, y: 0.55 * s, z, sx: 0.16 * s, sy: 1.1 * s, sz: 0.16 * s });
-    items.push({ shape: "sphere", mat: "plant", x, y: 1.35 * s, z, sx: 1.2 * s, sy: 1.1 * s, sz: 1.2 * s });
-    items.push({ shape: "sphere", mat: "plant", x: x + 0.3 * s, y: 1.05 * s, z: z + 0.2 * s, sx: 0.8 * s, sy: 0.7 * s, sz: 0.8 * s });
+    items.push({ shape: "tree", mat: "plant", x, y: 0, z, sx: s, sy: s, sz: s, ry: rand() * Math.PI });
   });
   const pot = (x: number, z: number) => place(0.25, 0.25, x, z, () => {
     items.push({ shape: "cyl", mat: "pot", x, y: 0.2, z, sx: 0.36, sy: 0.4, sz: 0.36 });
-    items.push({ shape: "sphere", mat: "plant", x, y: 0.62, z, sx: 0.55, sy: 0.6, sz: 0.55 });
+    items.push({ shape: "cyl", mat: "bark", x, y: 0.405, z, sx: 0.28, sy: 0.018, sz: 0.28 });
+    for (let k = 0; k < 7; k++) {
+      const a = k * 2.39996, radius = 0.1 + rand() * 0.1;
+      items.push({ shape: "sphere", mat: k % 2 ? "plantDark" : "plantLight", x: x + Math.cos(a) * radius, y: 0.56 + rand() * 0.2, z: z + Math.sin(a) * radius, sx: 0.12, sy: 0.35, sz: 0.08, ry: a });
+    }
   });
   /** Pessoas de maquete (escala humana, como nas maquetes de arquitetura): até `n`, em pontos livres sorteados. */
   const people = (n: number, area: Rect = i.rect, helmet: Mat = "figure") => {
@@ -406,13 +408,30 @@ export function furnish(i: FloorPlanInput): Item[] {
     }
     case "SITE": {
       // Laje de obra: pilares, fôrmas e tela de proteção na borda dos pavimentos de cima.
-      for (let x = x0 + 0.4; x <= x1 - 0.3; x += Math.max(3, (W - 0.8) / Math.max(1, Math.round((W - 0.8) / 4)))) for (const z of [z0 + 0.4, z1 - 0.4]) box("concrete", x, 0, z, 0.3, WALL_H + 0.4, 0.3);
+      const columns: number[] = [];
+      for (let x = x0 + 0.4; x <= x1 - 0.3; x += Math.max(3, (W - 0.8) / Math.max(1, Math.round((W - 0.8) / 4)))) {
+        columns.push(x);
+        for (const z of [z0 + 0.4, z1 - 0.4]) {
+          box("concrete", x, 0, z, 0.3, 2.7, 0.3);
+          for (const dx of [-0.07, 0.07]) for (const dz of [-0.07, 0.07]) box("steel", x + dx, 2.65, z + dz, 0.012, 0.48, 0.012);
+        }
+      }
+      if (columns.length > 1) for (const z of [z0 + 0.4, z1 - 0.4]) box("concrete", (columns[0] + columns.at(-1)!) / 2, 2.4, z, columns.at(-1)! - columns[0] + 0.3, 0.3, 0.25);
       if (floorOf(i.room) > 0) {
-        box("net", cx, 0, z1 - 0.05, W, 1.1, 0.03); box("net", x0 + 0.05, 0, cz, 0.03, 1.1, D); box("net", x1 - 0.05, 0, cz, 0.03, 1.1, D);
+        // Guarda-corpo e tela vazada, em vez de três placas alaranjadas maciças.
+        for (let x = x0 + 0.15; x < x1; x += 1.5) box("rackOrange", x, 0, z1 - 0.1, 0.035, 1.12, 0.035);
+        for (const h of [0.15, 0.6, 1.08]) box("rackOrange", cx, h, z1 - 0.1, W, 0.025, 0.025);
+        box("net", cx, 0.12, z1 - 0.08, W, 0.94, 0.008);
         place(0.6, 0.4, cx - W * 0.25, cz, () => { for (let k = 0; k < 6; k++) items.push({ shape: "cyl", mat: "rackOrange", x: cx - W * 0.25 - 0.5 + k * 0.2, y: 0.05, z: cz, sx: 0.04, sy: 1.6, sz: 0.04, ry: Math.PI / 2 }); });
         place(0.5, 0.5, cx + W * 0.28, cz - 0.4, () => box("woodLight", cx + W * 0.28, 0, cz - 0.4, 1.0, 0.5, 1.0));
       } else {
-        place(1.25, 3.0, x0 + 1.7, cz, () => { box("container", x0 + 1.7, 0, cz, 2.4, 1.15, 5.8); box("white", x0 + 1.7 + 1.21, 0.3, cz, 0.02, 0.5, 1.2); });
+        place(1.25, 3.0, x0 + 1.7, cz, () => {
+          box("container", x0 + 1.7, 0, cz, 2.4, 2.5, 5.8);
+          for (let zz = cz - 2.7; zz < cz + 2.8; zz += 0.18) box("rackBlue", x0 + 2.91, 0.08, zz, 0.025, 2.32, 0.04);
+          box("white", x0 + 2.93, 0.85, cz - 0.9, 0.025, 0.85, 1.2);
+          box("glass", x0 + 2.95, 0.9, cz - 0.9, 0.01, 0.75, 1.1);
+          box("white", x0 + 1.7, 2.5, cz, 2.5, 0.08, 5.9);
+        });
       }
       break;
     }
@@ -428,8 +447,8 @@ export function furnish(i: FloorPlanInput): Item[] {
 // ---------------------------------------------------------------------------------------------------------------
 /** Largura (lado a lado) de cada peça: obstáculo para os móveis. */
 export const FIXTURE_WIDTH: Record<Fixture, number> = {
-  HYDROMETER: 0.5, WATER_TANK: 1.3, MANIFOLD: 0.5, KITCHEN_SINK: 1.2, PREP_SINK: 1.4, BASIN: 0.55, TOILET: 0.42, SHOWER: 0.95,
-  TANK: 0.6, WASHER: 0.6, GARDEN_TAP: 0.2, HOSE: 0.45, DRINKING: 0.36, MIXER: 1.0, TAP: 0.2,
+  HYDROMETER: 0.56, WATER_TANK: 1.5, MANIFOLD: 0.5, KITCHEN_SINK: 1.22, PREP_SINK: 1.4, BASIN: 0.55, TOILET: 0.42, SHOWER: 0.95,
+  TANK: 0.6, WASHER: 0.6, GARDEN_TAP: 1.2, HOSE: 0.72, DRINKING: 0.36, MIXER: 1.2, TAP: 0.35,
 };
 export type FloorMat = "wood" | "porcelain" | "bathTile" | "grass" | "pavers" | "dirt" | "concrete" | "stone";
 export function floorMat(kind: Kind, t: RoomType): FloorMat {

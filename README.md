@@ -74,6 +74,8 @@ No mesmo painel, uma calculadora estima exposição financeira de um cenário de
 
 ## Telas
 
+O **Mapa hidráulico** (`/mapa`) tem quatro maquetes: casa, comércio, prédio e obra. A vista 3D oferece **Inspeção**, **Volume**, **Superior**, foco no ponto, nomes opcionais e tela cheia. Os modelos continuam ilustrativos, com escala aproximada; cada leitura pertence somente ao medidor vinculado. [Alterações, testes e ensaio local das maquetes](docs/empreenda/MAQUETES_3D_2026-11-08.md). Aceite em GPU integrada (Intel) feito em 08/11; celular físico e projetor ainda não foram ensaiados.
+
 | | |
 |---|---|
 | <img src="docs/imagens/bi-centro-de-controle.webp" alt="Centro de controle do BI com KPIs, gráfico de volume por intervalo e fila de atenção"> | <img src="docs/imagens/bi-ocorrencia-evidencia.webp" alt="Gaveta da ocorrência com o gráfico da evidência, a regra aplicada e a linha do tempo"> |
